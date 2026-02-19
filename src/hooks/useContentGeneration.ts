@@ -5,10 +5,19 @@ import { postJSON } from "@/lib/api";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import type { GeneratedResult, ReviewStatus } from "@/components/generate/OutputReview";
 import type { BriefFields } from "@/components/generate/ContentBrief";
+import type { ABVariant } from "@/components/generate/ABVariants";
 
 interface GenerateResponse {
   success: boolean;
   generated: { id: string; output: string };
+  error?: string;
+}
+
+interface ABResponse {
+  success: boolean;
+  variantA: { id: string; output: string };
+  variantB: { id: string; output: string };
+  category: string;
   error?: string;
 }
 
@@ -23,6 +32,7 @@ export function useContentGeneration() {
   const [result, setResult] = useState<GeneratedResult | null>(null);
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [abVariants, setAbVariants] = useState<{ a: ABVariant; b: ABVariant } | null>(null);
 
   const generate = useCallback(async (cat: string, prompt: string, brief?: BriefFields) => {
     setLoading(true);
@@ -123,10 +133,61 @@ export function useContentGeneration() {
     }
   }, [result, generate]);
 
+  const generateAB = useCallback(async (cat: string, brief: BriefFields) => {
+    setLoading(true);
+    setError(null);
+    setAbVariants(null);
+    try {
+      const data = await postJSON<ABResponse>("/api/content/generate-ab", {
+        companyId: DEMO_COMPANY_ID,
+        prompt: brief.topic,
+        category: cat,
+        brief: {
+          audience: brief.audience || undefined,
+          goal: brief.goal || undefined,
+          cta: brief.cta || undefined,
+          keywords: brief.keywords || undefined,
+          tone: brief.tone,
+          length: brief.length,
+          platform: brief.platform || undefined,
+        },
+      });
+      if (data.success) {
+        setAbVariants({
+          a: { id: data.variantA.id, output: data.variantA.output, category: cat },
+          b: { id: data.variantB.id, output: data.variantB.output, category: cat },
+        });
+      } else {
+        setError(data.error ?? "A/B generation failed");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to generate A/B");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleABPick = useCallback(async (chosen: ABVariant, rejected: ABVariant) => {
+    await Promise.all([
+      postJSON("/api/content/review", {
+        contentId: chosen.id,
+        category: chosen.category,
+        action: "approve",
+      }),
+      postJSON("/api/content/review", {
+        contentId: rejected.id,
+        category: rejected.category,
+        action: "reject",
+        feedback: "A/B test — other version preferred",
+      }),
+    ]);
+  }, []);
+
   const reset = useCallback(() => {
     setResult(null);
     setReviewStatus("idle");
     setError(null);
+    setAbVariants(null);
   }, []);
 
   return {
@@ -135,7 +196,10 @@ export function useContentGeneration() {
     result,
     reviewStatus,
     error,
+    abVariants,
     generate,
+    generateAB,
+    handleABPick,
     handleApprove,
     handleReject,
     handleRevise,
