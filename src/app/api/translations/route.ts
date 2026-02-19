@@ -44,8 +44,9 @@ export async function POST(req: NextRequest) {
         originalText: originalText ?? "",
         translatedText,
         language,
-        category: category ?? "general",
+        category: category ?? "General",
         publishedAt: publishedAt ?? new Date().toISOString(),
+        status: "draft",
       })
       .select()
       .single();
@@ -54,6 +55,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, translation: data });
   } catch (err) {
     return handleApiError(err, "Translations POST");
+  }
+}
+
+// PATCH /api/translations?id=xxx — update status or content
+export async function PATCH(req: NextRequest) {
+  try {
+    const { response: authError } = await requireAuth();
+    if (authError) return authError;
+
+    const id = req.nextUrl.searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+    const body = await req.json();
+    const allowed = ["status", "title", "translatedText", "category", "publishedAt", "feedback"];
+    const updates: Record<string, unknown> = {};
+    for (const key of allowed) {
+      if (key in body) updates[key] = body[key];
+    }
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+    }
+
+    const { data, error } = await db
+      .from("Translation")
+      .update(updates)
+      .eq("id", id)
+      .eq("companyId", DEMO_COMPANY_ID)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    return NextResponse.json({ success: true, translation: data });
+  } catch (err) {
+    return handleApiError(err, "Translations PATCH");
   }
 }
 
