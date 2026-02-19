@@ -35,6 +35,7 @@ export function useGrants() {
     setLoading(true);
     setError(null);
     try {
+      // TODO: replace DEMO_COMPANY_ID with session companyId when multi-tenancy lands
       const [grantsRes, companyRes] = await Promise.all([
         fetch(`/api/grants?companyId=${DEMO_COMPANY_ID}`),
         fetch(`/api/company?companyId=${DEMO_COMPANY_ID}`),

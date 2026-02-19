@@ -5,6 +5,7 @@ import {
   Users, Search, Plus, Trash2, ExternalLink, Loader2, X,
   ChevronDown, ChevronUp, Linkedin, Globe, Zap, Save,
   Mail, Phone, Building2, MapPin, Star, Tag, RefreshCw,
+  AlertCircle, Code2,
 } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import {
@@ -67,33 +68,53 @@ function ScraperModal({ onClose, onImported }: { onClose: () => void; onImported
   const [selectedSource, setSelectedSource] = useState<ScrapeSrc>(SOURCES[0]);
   const [fields, setFields] = useState<Record<string, unknown>>({});
   const [running, setRunning] = useState(false);
+  const [runStatus, setRunStatus] = useState<string>(""); // e.g. "Starting…" | "Running…" | "Fetching results…"
   const [results, setResults] = useState<Partial<Lead>[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [imported, setImported] = useState(false);
-  const [timedOut, setTimedOut] = useState(false);
 
   const setField = (key: string, value: unknown) => setFields((p) => ({ ...p, [key]: value }));
 
   const handleRun = async () => {
-    setRunning(true); setError(null); setResults([]); setImported(false); setTimedOut(false);
+    setRunning(true); setError(null); setResults([]); setImported(false); setRunStatus("Starting actor…");
     try {
-      const res = await fetch("/api/leads/scrape", {
+      // 1. Start the run — returns immediately with runId
+      const startRes = await fetch("/api/leads/scrape", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sourceId: selectedSource.id, inputFields: fields }),
       });
-      const data = await res.json();
-      if (data.timedOut) {
-        setTimedOut(true);
-        setError("Run timed out — Apify is still processing. Try with fewer results or check Apify console.");
-      } else if (data.error) {
-        setError(data.error);
-      } else {
-        setResults(data.leads ?? []);
+      const startData = await startRes.json();
+      if (startData.error) { setError(startData.error); return; }
+
+      const { runId, datasetId, sourceId } = startData;
+      setRunStatus("Actor running…");
+
+      // 2. Poll GET /api/leads/scrape?runId=xxx every 3s until done
+      let attempts = 0;
+      while (attempts < 60) { // max 3 min client-side
+        await new Promise((r) => setTimeout(r, 3000));
+        attempts++;
+
+        const pollRes = await fetch(
+          `/api/leads/scrape?runId=${runId}&datasetId=${datasetId}&sourceId=${encodeURIComponent(sourceId)}`
+        );
+        const pollData = await pollRes.json();
+
+        if (pollData.error) { setError(pollData.error); return; }
+        if (pollData.running) {
+          setRunStatus(`Actor running… (${attempts * 3}s)`);
+          continue;
+        }
+        // SUCCEEDED
+        setRunStatus("Fetching results…");
+        setResults(pollData.leads ?? []);
+        return;
       }
+      setError("Timed out after 3 minutes. Check Apify console for run status.");
     } catch { setError("Network error"); }
-    finally { setRunning(false); }
+    finally { setRunning(false); setRunStatus(""); }
   };
 
   const handleImport = async () => {
@@ -183,13 +204,11 @@ function ScraperModal({ onClose, onImported }: { onClose: () => void; onImported
             onClick={handleRun} disabled={running}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
           >
-            {running ? <><Loader2 className="h-4 w-4 animate-spin" /> Running Apify actor…</> : <><Zap className="h-4 w-4" /> Run Scraper</>}
+            {running ? <><Loader2 className="h-4 w-4 animate-spin" /> {runStatus || "Running…"}</> : <><Zap className="h-4 w-4" /> Run Scraper</>}
           </button>
 
           {error && (
-            <div className={`rounded-lg px-3 py-2 text-sm ${timedOut ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}>
-              {error}
-            </div>
+            <div className="rounded-lg px-3 py-2 text-sm bg-red-50 text-red-700">{error}</div>
           )}
 
           {/* Preview results */}
@@ -231,6 +250,7 @@ function LeadRow({ lead, onUpdate, onDelete }: {
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [showRaw, setShowRaw] = useState(false);
   const [form, setForm] = useState<Partial<Lead>>({ ...lead });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -328,9 +348,20 @@ function LeadRow({ lead, onUpdate, onDelete }: {
                 {lead.location && <div className="flex items-center gap-2 text-gray-700"><MapPin className="h-4 w-4 text-gray-400 shrink-0" />{lead.location}</div>}
                 {lead.specialties?.length ? <div className="flex items-start gap-2 text-gray-700 sm:col-span-2"><Tag className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" /><span>{lead.specialties.join(", ")}</span></div> : null}
                 {lead.notes && <div className="sm:col-span-3 text-gray-600 text-xs whitespace-pre-wrap bg-white rounded-lg border border-gray-100 px-3 py-2">{lead.notes}</div>}
-                <div className="sm:col-span-3">
+                <div className="sm:col-span-3 flex items-center gap-4">
                   <button onClick={() => setEditing(true)} className="text-xs text-brand-600 hover:underline">Edit all fields →</button>
+                  {lead.rawData && (
+                    <button onClick={() => setShowRaw(v => !v)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600">
+                      <Code2 className="h-3.5 w-3.5" />
+                      {showRaw ? "Hide raw data" : "View raw data"}
+                    </button>
+                  )}
                 </div>
+                {showRaw && lead.rawData && (
+                  <div className="sm:col-span-3">
+                    <pre className="overflow-x-auto rounded-lg border border-gray-200 bg-gray-900 p-3 text-xs text-green-400 max-h-64">{JSON.stringify(lead.rawData, null, 2)}</pre>
+                  </div>
+                )}
               </div>
             )}
           </td>
@@ -343,7 +374,7 @@ function LeadRow({ lead, onUpdate, onDelete }: {
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function LeadsPage() {
   const {
-    leads, loading, total,
+    leads, loading, error, total,
     search, setSearch,
     statusFilter, setStatusFilter,
     sourceFilter, setSourceFilter,
@@ -351,6 +382,7 @@ export default function LeadsPage() {
   } = useLeads();
 
   const [showScraper, setShowScraper] = useState(false);
+  const [dismissedError, setDismissedError] = useState<string | null>(null);
 
   const statusCounts = LEAD_STATUSES.reduce((acc, s) => {
     acc[s] = leads.filter((l) => l.status === s).length;
@@ -364,6 +396,15 @@ export default function LeadsPage() {
           onClose={() => setShowScraper(false)}
           onImported={(newLeads) => { addLeads(newLeads); setShowScraper(false); }}
         />
+      )}
+
+      {/* Error banner */}
+      {error && error !== dismissedError && (
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+          <p className="flex-1 text-sm text-amber-800">{error}</p>
+          <button onClick={() => setDismissedError(error)} className="text-amber-500 hover:text-amber-700"><X className="h-4 w-4" /></button>
+        </div>
       )}
 
       {/* Header */}

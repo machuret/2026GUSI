@@ -45,7 +45,12 @@ ${JSON.stringify(existingData ?? {}, null, 2)}
 Fill in as many fields as you can based on your knowledge of this grant or organisation.`;
 
     const content = await callOpenAI({ systemPrompt, userPrompt, maxTokens: 800, temperature: 0.2 });
-    const result = JSON.parse(content);
+    let result: Record<string, unknown>;
+    try {
+      result = JSON.parse(content);
+    } catch {
+      return NextResponse.json({ error: "AI returned malformed JSON — please try again" }, { status: 500 });
+    }
 
     // Strip null values so we don't overwrite existing data with nulls
     const filled: Record<string, string> = {};

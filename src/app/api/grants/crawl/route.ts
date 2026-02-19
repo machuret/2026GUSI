@@ -104,13 +104,19 @@ PAGE CONTENT:
 ${html}`;
 
     const content = await callOpenAI({ systemPrompt, userPrompt, maxTokens: 4000, temperature: 0.1 });
-    const result = JSON.parse(content);
+    let result: Record<string, unknown>;
+    try {
+      result = JSON.parse(content);
+    } catch {
+      return NextResponse.json({ error: "AI returned malformed JSON — please try again" }, { status: 500 });
+    }
 
+    const grants = Array.isArray(result.grants) ? result.grants : [];
     return NextResponse.json({
       success: true,
-      grants: result.grants ?? [],
-      totalFound: result.totalFound ?? (result.grants?.length ?? 0),
-      pageTitle: result.pageTitle ?? siteName ?? url,
+      grants,
+      totalFound: typeof result.totalFound === "number" ? result.totalFound : grants.length,
+      pageTitle: typeof result.pageTitle === "string" ? result.pageTitle : (siteName ?? url),
     });
   } catch (err) {
     return NextResponse.json({

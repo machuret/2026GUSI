@@ -80,8 +80,13 @@ ${filters.join("\n")}${dnaSection}
 Return up to 10 real, relevant grants that match ALL the filters above. Strictly filter by org type and eligibility if specified.`;
 
     const content = await callOpenAI({ systemPrompt, userPrompt, maxTokens: 3000, temperature: 0.15 });
-    const result = JSON.parse(content);
-    return NextResponse.json({ success: true, results: result.results ?? [] });
+    let result: Record<string, unknown>;
+    try {
+      result = JSON.parse(content);
+    } catch {
+      return NextResponse.json({ error: "AI returned malformed JSON — please try again" }, { status: 500 });
+    }
+    return NextResponse.json({ success: true, results: (result.results as unknown[]) ?? [] });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });
   }

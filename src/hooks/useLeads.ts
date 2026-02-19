@@ -78,6 +78,7 @@ export function useLeads(initialFilters?: { status?: string; source?: string }) 
     setLoading(true);
     setError(null);
     try {
+      // TODO: replace DEMO_COMPANY_ID with session companyId when multi-tenancy lands
       const params = new URLSearchParams({ companyId: DEMO_COMPANY_ID, page: String(page), limit: "50" });
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter) params.set("status", statusFilter);
