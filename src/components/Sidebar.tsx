@@ -21,6 +21,7 @@ import {
   Vault,
   LayoutTemplate,
   Languages,
+  Mic2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -32,6 +33,7 @@ const mainNav = [
 const contentNav = [
   { href: "/generate", label: "Generate", icon: Sparkles },
   { href: "/bulk", label: "Bulk Generate", icon: Layers },
+  { href: "/voices", label: "Voices", icon: Mic2 },
   { href: "/translations", label: "Translations", icon: Languages },
   { href: "/history", label: "History", icon: History },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
