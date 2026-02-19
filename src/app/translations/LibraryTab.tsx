@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ChevronDown, ChevronUp, Copy, Check, ThumbsUp, Archive,
-  Trash2, Pencil, Save, Loader2, X, RefreshCw, MessageSquare,
+  Trash2, Pencil, Save, Loader2, X, RefreshCw, MessageSquare, Search,
 } from "lucide-react";
 import type { Translation, TranslationStatus } from "./types";
 import { CONTENT_CATEGORIES, LANG_COLORS, STATUS_STYLES } from "./types";
@@ -39,9 +39,13 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
   const [filterStatus, setFilterStatus] = useState<"all" | TranslationStatus>("all");
   const [filterLang, setFilterLang] = useState("all");
   const [filterCat, setFilterCat] = useState("all");
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sort, setSort] = useState<"newest" | "oldest">("newest");
 
-  const usedLangs = Array.from(new Set(translations.map((t) => t.language)));
-  const usedCats = Array.from(new Set(translations.map((t) => t.category)));
+  const usedLangs = useMemo(() => Array.from(new Set(translations.map((t) => t.language))).sort(), [translations]);
+  const usedCats = useMemo(() => Array.from(new Set(translations.map((t) => t.category))).sort(), [translations]);
 
   const counts = {
     draft: translations.filter((t) => t.status === "draft").length,
@@ -49,12 +53,32 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
     archived: translations.filter((t) => t.status === "archived").length,
   };
 
-  const filtered = translations.filter((t) => {
-    if (filterStatus !== "all" && t.status !== filterStatus) return false;
-    if (filterLang !== "all" && t.language !== filterLang) return false;
-    if (filterCat !== "all" && t.category !== filterCat) return false;
-    return true;
-  });
+  const hasActiveFilters = filterStatus !== "all" || filterLang !== "all" || filterCat !== "all" || search || dateFrom || dateTo || sort !== "newest";
+
+  const clearFilters = () => {
+    setFilterStatus("all"); setFilterLang("all"); setFilterCat("all");
+    setSearch(""); setDateFrom(""); setDateTo(""); setSort("newest");
+  };
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const from = dateFrom ? new Date(dateFrom).getTime() : null;
+    const to = dateTo ? new Date(dateTo + "T23:59:59").getTime() : null;
+
+    let result = translations.filter((t) => {
+      if (filterStatus !== "all" && t.status !== filterStatus) return false;
+      if (filterLang !== "all" && t.language !== filterLang) return false;
+      if (filterCat !== "all" && t.category !== filterCat) return false;
+      if (q && !t.title.toLowerCase().includes(q) && !t.translatedText.toLowerCase().includes(q) && !t.originalText?.toLowerCase().includes(q)) return false;
+      const ts = new Date(t.publishedAt).getTime();
+      if (from && ts < from) return false;
+      if (to && ts > to) return false;
+      return true;
+    });
+
+    if (sort === "oldest") result = [...result].reverse();
+    return result;
+  }, [translations, filterStatus, filterLang, filterCat, search, dateFrom, dateTo, sort]);
 
   const handleCopy = (t: Translation) => {
     navigator.clipboard.writeText(t.translatedText);
@@ -113,28 +137,58 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
         ))}
       </div>
 
-      {/* Filters */}
-      <div className="mb-4 flex flex-wrap gap-2 items-center">
-        <span className="text-xs font-medium text-gray-600">Filter:</span>
-        {usedLangs.length > 1 && (
+      {/* Search + filters */}
+      <div className="mb-4 space-y-2">
+        {/* Search bar */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by title or content…"
+            className="w-full rounded-lg border border-gray-300 pl-9 pr-9 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-200"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Dropdowns row */}
+        <div className="flex flex-wrap items-center gap-2">
           <select value={filterLang} onChange={(e) => setFilterLang(e.target.value)}
             className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-700 focus:outline-none bg-white">
             <option value="all">All Languages</option>
             {usedLangs.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
-        )}
-        {usedCats.length > 1 && (
           <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)}
             className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-700 focus:outline-none bg-white">
             <option value="all">All Categories</option>
             {usedCats.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
-        )}
-        {(filterStatus !== "all" || filterLang !== "all" || filterCat !== "all") && (
-          <button onClick={() => { setFilterStatus("all"); setFilterLang("all"); setFilterCat("all"); }}
-            className="text-xs text-brand-600 hover:underline">Clear filters</button>
-        )}
-        <span className="ml-auto text-xs text-gray-500">{filtered.length} of {translations.length}</span>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500">From</label>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+              className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-600 focus:border-brand-500 focus:outline-none" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500">To</label>
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+              className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-600 focus:border-brand-500 focus:outline-none" />
+          </div>
+          <select value={sort} onChange={(e) => setSort(e.target.value as "newest" | "oldest")}
+            className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-700 focus:outline-none bg-white">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+          {hasActiveFilters && (
+            <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-brand-600 hover:underline">
+              <X className="h-3 w-3" /> Clear all
+            </button>
+          )}
+          <span className="ml-auto text-xs text-gray-500">{filtered.length} of {translations.length}</span>
+        </div>
       </div>
 
       {loading ? (
