@@ -1,14 +1,64 @@
-export const runtime = 'edge';
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
-import { requireEdgeAuth } from "@/lib/edgeAuth";
-import { handleOptions } from "@/lib/cors";
+import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 
-export async function OPTIONS() { return handleOptions(); }
+const CHUNK_WORDS = 800; // translate in chunks if text is very long
 
-// POST /api/translations/translate — edge function, calls OpenAI directly
+async function translateChunk(
+  chunk: string,
+  targetLanguage: string,
+  systemPrompt: string,
+  apiKey: string
+): Promise<string> {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: chunk },
+      ],
+      temperature: 0.2,
+      max_tokens: 2000,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`OpenAI error (${res.status}): ${err.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  return (data.choices?.[0]?.message?.content ?? "").trim();
+}
+
+function splitIntoChunks(text: string, maxWords: number): string[] {
+  const paragraphs = text.split(/\n{2,}/);
+  const chunks: string[] = [];
+  let current = "";
+  let wordCount = 0;
+  for (const para of paragraphs) {
+    const words = para.split(/\s+/).length;
+    if (wordCount + words > maxWords && current) {
+      chunks.push(current.trim());
+      current = para;
+      wordCount = words;
+    } else {
+      current = current ? current + "\n\n" + para : para;
+      wordCount += words;
+    }
+  }
+  if (current.trim()) chunks.push(current.trim());
+  return chunks.length ? chunks : [text];
+}
+
+// POST /api/translations/translate
 export async function POST(req: NextRequest) {
   try {
-    const { error: authError } = await requireEdgeAuth(req);
+    const { response: authError } = await requireAuth();
     if (authError) return authError;
 
     const { text, targetLanguage, rules } = await req.json();
@@ -22,8 +72,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 500 });
     }
 
-    const rulesBlock = rules && rules.trim()
-      ? `\n\nTRANSLATION RULES — follow these strictly:\n${rules}`
+    const rulesBlock = rules?.trim()
+      ? `\n\nTRANSLATION RULES — follow these strictly:\n${rules.trim()}`
       : "";
 
     const systemPrompt = `You are a professional translator. Translate the provided content accurately into ${targetLanguage}.${rulesBlock}
@@ -34,33 +84,26 @@ Guidelines:
 - Do not add explanations or commentary
 - Output ONLY the translated text`;
 
-    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: text },
-        ],
-        temperature: 0.2,
-        max_tokens: 4000,
-      }),
-    });
+    const wordCount = text.trim().split(/\s+/).length;
+    let translated: string;
 
-    if (!openaiRes.ok) {
-      const errText = await openaiRes.text();
-      return NextResponse.json(
-        { error: `OpenAI error (${openaiRes.status}): ${errText.slice(0, 200)}` },
-        { status: 502 }
-      );
+    if (wordCount <= CHUNK_WORDS) {
+      // Short text — single call
+      translated = await translateChunk(text, targetLanguage, systemPrompt, apiKey);
+    } else {
+      // Long text — split into chunks and translate in parallel batches of 3
+      const chunks = splitIntoChunks(text, CHUNK_WORDS);
+      const results: string[] = new Array(chunks.length);
+      const BATCH = 3;
+      for (let i = 0; i < chunks.length; i += BATCH) {
+        const batch = chunks.slice(i, i + BATCH);
+        const batchResults = await Promise.all(
+          batch.map((c) => translateChunk(c, targetLanguage, systemPrompt, apiKey))
+        );
+        batchResults.forEach((r, j) => { results[i + j] = r; });
+      }
+      translated = results.join("\n\n");
     }
-
-    const data = await openaiRes.json();
-    const translated = (data.choices?.[0]?.message?.content ?? "").trim();
 
     if (!translated) {
       return NextResponse.json({ error: "OpenAI returned an empty translation" }, { status: 502 });
@@ -73,9 +116,6 @@ Guidelines:
       wordCount: translated.split(/\s+/).filter(Boolean).length,
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Translation failed" },
-      { status: 500 }
-    );
+    return handleApiError(err, "Translation");
   }
 }

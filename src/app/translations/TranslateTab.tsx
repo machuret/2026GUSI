@@ -151,7 +151,7 @@ export function TranslateTab({
           />
           <div className="mt-1 flex items-center justify-between">
             <p className="text-xs text-gray-500">{wordCount(translated)} words</p>
-            {edgeConfirmed && <p className="text-xs text-brand-600 font-medium">✓ GPT-4o · Edge Function</p>}
+            {edgeConfirmed && <p className="text-xs text-brand-600 font-medium">✓ GPT-4o</p>}
           </div>
         </div>
       </div>
