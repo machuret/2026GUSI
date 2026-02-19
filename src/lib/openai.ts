@@ -8,9 +8,17 @@ type CallOptions = {
   jsonMode?: boolean;
 };
 
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
+const MAX_RETRIES = 2;
+
+async function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 /**
  * Edge-compatible OpenAI chat completion — returns raw string.
  * Works in both edge and Node runtimes (uses fetch, not the Node SDK).
+ * Retries up to 2 times on transient errors (429, 5xx) with exponential backoff.
  */
 export async function callOpenAI({
   systemPrompt,
@@ -19,31 +27,44 @@ export async function callOpenAI({
   temperature = 0.3,
   jsonMode = true,
 }: CallOptions): Promise<string> {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature,
-      max_tokens: maxTokens,
-      ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-    }),
-  });
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`OpenAI error (${res.status}): ${err.slice(0, 300)}`);
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) await sleep(Math.pow(2, attempt) * 500); // 1s, 2s
+
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature,
+        max_tokens: maxTokens,
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content ?? "{}";
+    }
+
+    const errText = await res.text();
+    lastError = new Error(`OpenAI error (${res.status}): ${errText.slice(0, 300)}`);
+
+    if (!RETRYABLE_STATUSES.has(res.status)) break; // don't retry 400/401/403
   }
 
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? "{}";
+  throw lastError ?? new Error("OpenAI request failed");
 }
 
 /**

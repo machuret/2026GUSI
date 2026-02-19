@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { logActivity } from "@/lib/activity";
-import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { requireAuth, requireAdminAuth, handleApiError } from "@/lib/apiHelpers";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
 
@@ -39,10 +39,10 @@ export async function GET() {
   }
 }
 
-// PUT /api/company — upsert company info
+// PUT /api/company — upsert company info (ADMIN+ only)
 export async function PUT(req: NextRequest) {
   try {
-    const { user, response: authError } = await requireAuth();
+    const { user, response: authError } = await requireAdminAuth();
     if (authError) return authError;
 
     const body = await req.json();

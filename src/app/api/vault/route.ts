@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { requireAuth, requireAdminAuth, handleApiError } from "@/lib/apiHelpers";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 
 // GET /api/vault — list all vault items
@@ -23,10 +23,10 @@ export async function GET() {
   }
 }
 
-// POST /api/vault — add a manual text item
+// POST /api/vault — add a manual text item (ADMIN+ only)
 export async function POST(req: NextRequest) {
   try {
-    const { response: authError } = await requireAuth();
+    const { response: authError } = await requireAdminAuth();
     if (authError) return authError;
 
     const body = await req.json();
@@ -54,10 +54,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE /api/vault?id=xxx
+// DELETE /api/vault?id=xxx (ADMIN+ only)
 export async function DELETE(req: NextRequest) {
   try {
-    const { response: authError } = await requireAuth();
+    const { response: authError } = await requireAdminAuth();
     if (authError) return authError;
 
     const id = req.nextUrl.searchParams.get("id");

@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { openai } from "@/lib/openai";
+import { callOpenAI } from "@/lib/openai";
 import { logActivity } from "@/lib/activity";
 import { createContent, CATEGORIES } from "@/lib/content";
 import { buildGenerationPrompt } from "@/lib/contentContext";
@@ -62,22 +62,25 @@ export async function POST(req: NextRequest) {
       `Bulk ${catLabel}: ${data.topics.length} topics`
     );
 
-    // Generate all topics sequentially to avoid rate limits
+    // Generate all topics sequentially — each with a 30s timeout
     const results: { topic: string; id: string; output: string; error?: string }[] = [];
+    const TOPIC_TIMEOUT_MS = 30_000;
 
     for (const topic of data.topics) {
       try {
-        const response = await openai.chat.completions.create({
-          model: "gpt-4o",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: topic },
-          ],
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Topic timed out after 30s")), TOPIC_TIMEOUT_MS)
+        );
+
+        const generatePromise = callOpenAI({
+          systemPrompt,
+          userPrompt: topic,
+          maxTokens: 2500,
           temperature: 0.65,
-          max_tokens: 2500,
+          jsonMode: false,
         });
 
-        const output = response.choices[0]?.message?.content?.trim() ?? "";
+        const output = (await Promise.race([generatePromise, timeoutPromise])).trim();
 
         const saved = await createContent(data.category, {
           companyId: data.companyId,
