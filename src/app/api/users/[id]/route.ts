@@ -17,8 +17,14 @@ export async function PATCH(
     await requireRole(user.id, "SUPER_ADMIN");
 
     const body = await req.json();
+    const VALID_ROLES = ["SUPER_ADMIN", "EDITOR"];
     const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
-    if (body.role) patch.role = body.role;
+    if (body.role !== undefined) {
+      if (!VALID_ROLES.includes(body.role)) {
+        return NextResponse.json({ error: `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}` }, { status: 400 });
+      }
+      patch.role = body.role;
+    }
     if (typeof body.active === "boolean") patch.active = body.active;
     if (body.name) patch.name = body.name;
 

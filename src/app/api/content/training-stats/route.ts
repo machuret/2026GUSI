@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     if (!companyId) return NextResponse.json({ error: "companyId required" }, { status: 400 });
 
     const [postsRes, styleRes] = await Promise.all([
-      db.from("ContentPost").select("*").eq("companyId", companyId),
+      db.from("ContentPost").select("id, body, contentType").eq("companyId", companyId).limit(500),
       db.from("StyleProfile").select("*").eq("companyId", companyId).maybeSingle(),
     ]);
 

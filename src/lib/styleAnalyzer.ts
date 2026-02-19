@@ -37,7 +37,7 @@ export async function analyzeCompanyStyle(
   }
 
   const totalWords = postList.reduce(
-    (sum: number, p: any) => sum + p.body.split(/\s+/).length,
+    (sum: number, p: any) => sum + (p.body ? p.body.split(/\s+/).length : 0),
     0
   );
   const avgWordCount = postList.length > 0 ? Math.round(totalWords / postList.length) : 0;

@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     const domain = new URL(url).hostname.replace("www.", "");
 
     return NextResponse.json({ success: true, title, body: clean, platform: domain, url });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to scrape URL" }, { status: 500 });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to scrape URL" }, { status: 500 });
   }
 }

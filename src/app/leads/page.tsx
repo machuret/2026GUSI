@@ -86,7 +86,7 @@ function ScraperModal({ onClose, onImported }: { onClose: () => void; onImported
         body: JSON.stringify({ sourceId: selectedSource.id, inputFields: fields }),
       });
       const startData = await startRes.json();
-      if (startData.error) { setError(startData.error); return; }
+      if (startData.error) { setError(startData.error); setRunStatus(""); return; }
 
       const { runId, datasetId, sourceId } = startData;
       setRunStatus("Actor running…");
@@ -102,7 +102,7 @@ function ScraperModal({ onClose, onImported }: { onClose: () => void; onImported
         );
         const pollData = await pollRes.json();
 
-        if (pollData.error) { setError(pollData.error); return; }
+        if (pollData.error) { setError(pollData.error); setRunStatus(""); return; }
         if (pollData.running) {
           setRunStatus(`Actor running… (${attempts * 3}s)`);
           continue;

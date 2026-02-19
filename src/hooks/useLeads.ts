@@ -99,23 +99,37 @@ export function useLeads(initialFilters?: { status?: string; source?: string }) 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
   const updateLead = useCallback(async (id: string, data: Partial<Lead>) => {
-    const res = await fetch(`/api/leads/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const result = await res.json();
-    if (result.success) {
-      setLeads((prev) => prev.map((l) => l.id === id ? { ...l, ...result.lead } : l));
+    try {
+      const res = await fetch(`/api/leads/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setLeads((prev) => prev.map((l) => l.id === id ? { ...l, ...result.lead } : l));
+      } else {
+        setError(result.error || "Failed to update lead");
+      }
+      return result;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update lead");
     }
-    return result;
   }, []);
 
   const deleteLead = useCallback(async (id: string) => {
-    const res = await fetch(`/api/leads/${id}`, { method: "DELETE" });
-    const result = await res.json();
-    if (result.success) setLeads((prev) => prev.filter((l) => l.id !== id));
-    return result;
+    try {
+      const res = await fetch(`/api/leads/${id}`, { method: "DELETE" });
+      const result = await res.json();
+      if (result.success) {
+        setLeads((prev) => prev.filter((l) => l.id !== id));
+      } else {
+        setError(result.error || "Failed to delete lead");
+      }
+      return result;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete lead");
+    }
   }, []);
 
   const addLeads = useCallback((newLeads: Lead[]) => {

@@ -35,6 +35,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const body = await req.json();
     const data = updateSchema.parse(body);
 
+    const { data: existing, error: fetchError } = await db
+      .from("Lead")
+      .select("companyId")
+      .eq("id", params.id)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!existing) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+
     const { data: lead, error } = await db
       .from("Lead")
       .update({ ...data, updatedAt: new Date().toISOString() })
@@ -53,6 +62,15 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   try {
     const { response: authError } = await requireAuth();
     if (authError) return authError;
+
+    const { data: existing, error: fetchError } = await db
+      .from("Lead")
+      .select("companyId")
+      .eq("id", params.id)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!existing) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
     const { error } = await db.from("Lead").delete().eq("id", params.id);
     if (error) throw error;

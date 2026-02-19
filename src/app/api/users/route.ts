@@ -45,24 +45,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = createUserSchema.parse(body);
 
-    // Create the user in Supabase Auth via admin API
-    // Note: this requires the service_role key on the server side
-    // For now, we'll create the Prisma record and the admin creates the Supabase auth user from the dashboard
-    // In production, you'd use supabase.auth.admin.createUser() with the service role key
-
-    const { data: newUser } = await db
-      .from("User")
-      .insert({
-        authId: `pending-${Date.now()}`,
-        email: data.email,
-        name: data.name,
-        role: data.role,
-        updatedAt: new Date().toISOString(),
-      })
-      .select("id, email, name, role, active, createdAt")
-      .single();
-
-    return NextResponse.json({ success: true, user: newUser });
+    // Users must be created via Supabase Auth (dashboard or admin.createUser).
+    // Creating a User record with a fake authId would break authentication for that user.
+    return NextResponse.json(
+      { error: "User creation must be done via Supabase Auth dashboard. This endpoint is disabled." },
+      { status: 501 }
+    );
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Validation failed", details: error.errors }, { status: 400 });

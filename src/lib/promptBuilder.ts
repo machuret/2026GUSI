@@ -137,9 +137,9 @@ export function buildSystemPrompt({
     ? `\n\nANALYSED STYLE PROFILE (from ingested content):
 - Tone: ${styleProfile.tone}
 - Avg word count: ${styleProfile.avgWordCount}
-- Signature vocabulary: ${styleProfile.vocabulary.join(", ")}
-- Common phrases: ${styleProfile.commonPhrases.join(" | ")}
-- Preferred formats: ${styleProfile.preferredFormats.join(", ")}
+- Signature vocabulary: ${Array.isArray(styleProfile.vocabulary) ? styleProfile.vocabulary.join(", ") : ""}
+- Common phrases: ${Array.isArray(styleProfile.commonPhrases) ? styleProfile.commonPhrases.join(" | ") : ""}
+- Preferred formats: ${Array.isArray(styleProfile.preferredFormats) ? styleProfile.preferredFormats.join(", ") : ""}
 ${styleProfile.summary ? `- Summary: ${styleProfile.summary}` : ""}`
     : "";
 
