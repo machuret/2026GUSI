@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { callOpenAI } from "@/lib/openai";
 import { logActivity } from "@/lib/activity";
+import { logAiUsage } from "@/lib/aiUsage";
 import { createContent, CATEGORIES } from "@/lib/content";
 import { buildGenerationPrompt } from "@/lib/contentContext";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
@@ -89,6 +90,7 @@ export async function POST(req: NextRequest) {
           output,
         });
 
+        logAiUsage({ model: "gpt-4o", feature: "generate_bulk", promptTokens: 0, completionTokens: output.split(/\s+/).length, userId: authUser.id });
         results.push({ topic, id: saved.id, output });
       } catch (err) {
         results.push({ topic, id: "", output: "", error: err instanceof Error ? err.message : "Failed" });

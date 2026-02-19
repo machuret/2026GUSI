@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { logAiUsage } from "@/lib/aiUsage";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const MAX_SAMPLE_WORDS = 12000; // token budget for samples fed to GPT
@@ -108,6 +109,13 @@ Return ONLY valid JSON, no markdown fences.`;
     let parsed: Record<string, unknown>;
     try { parsed = JSON.parse(raw); }
     catch { return NextResponse.json({ error: "AI returned invalid JSON" }, { status: 502 }); }
+
+    logAiUsage({
+      model: "gpt-4o",
+      feature: "voice_analyse",
+      promptTokens:     aiData.usage?.prompt_tokens     ?? 0,
+      completionTokens: aiData.usage?.completion_tokens ?? tokenCount,
+    });
 
     // Upsert style profile
     const { data: style, error: upsertErr } = await db

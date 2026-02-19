@@ -1,8 +1,9 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { openai } from "@/lib/openai";
+import { callOpenAI } from "@/lib/openai";
 import { logActivity } from "@/lib/activity";
+import { logAiUsage } from "@/lib/aiUsage";
 import { createContent, CATEGORIES } from "@/lib/content";
 import { buildGenerationPrompt } from "@/lib/contentContext";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
@@ -56,17 +57,13 @@ export async function POST(req: NextRequest) {
     const catLabel = CATEGORIES.find((c) => c.key === data.category)?.label ?? data.category;
     const systemPrompt = await buildGenerationPrompt(company, data.companyId, data.category, data.brief);
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: data.prompt },
-      ],
+    const output = await callOpenAI({
+      systemPrompt,
+      userPrompt: data.prompt,
+      maxTokens: 2500,
       temperature: 0.65,
-      max_tokens: 2500,
+      jsonMode: false,
     });
-
-    const output = response.choices[0]?.message?.content?.trim() ?? "";
 
     // Get or create app user for tracking
     const appUser = await logActivity(
@@ -84,6 +81,8 @@ export async function POST(req: NextRequest) {
       output,
       ...(data.extraFields || {}),
     });
+
+    logAiUsage({ model: "gpt-4o", feature: "generate", promptTokens: 0, completionTokens: output.split(/\s+/).length, userId: authUser.id });
 
     return NextResponse.json({ success: true, generated, category: data.category });
   } catch (error) {
