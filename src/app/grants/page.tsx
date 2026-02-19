@@ -3,9 +3,33 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Plus, ExternalLink, Trash2, ChevronDown, ChevronUp,
-  Search, FileText, Loader2, X, Save,
+  Search, FileText, Loader2, X, Save, Sparkles, FlaskConical,
+  CheckCircle2, AlertCircle, TrendingUp,
 } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+
+// ─── Dropdown options ─────────────────────────────────────────────────────────
+const GEO_SCOPES = [
+  "Global", "United States", "UK", "Australia", "Europe", "Asia",
+  "Africa", "Sub-Saharan Africa", "Latin America", "Middle East", "Canada",
+  "New Zealand", "Singapore", "India", "Germany", "France",
+];
+
+const PROJECT_DURATIONS = [
+  "Up to 6 months", "6–12 months", "6–18 months", "6–24 months",
+  "1–2 years", "1–3 years", "2–3 years", "Up to 3 years",
+  "Up to 5 years", "Ongoing",
+];
+
+// ─── AI Analysis types ────────────────────────────────────────────────────────
+interface GrantAnalysis {
+  score: number;
+  verdict: string;
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  recommendation: string;
+}
 
 interface Grant {
   id: string;
@@ -86,13 +110,33 @@ function DeadlineBadge({ date }: { date?: string | null }) {
 const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
 const labelCls = "mb-1 block text-xs font-medium text-gray-600";
 
-function GrantFormFields({ form, set }: { form: Partial<Grant>; set: (k: keyof Grant, v: unknown) => void }) {
+function GrantFormFields({
+  form, set, onResearch,
+}: {
+  form: Partial<Grant>;
+  set: (k: keyof Grant, v: unknown) => void;
+  onResearch?: () => void;
+  researching?: boolean;
+}) {
   return (
     <div className="space-y-4">
+      {/* Name + Research button */}
       <div>
-        <label className={labelCls}>Grant Name <span className="text-red-400">*</span></label>
+        <div className="mb-1 flex items-center justify-between">
+          <label className={labelCls}>Grant Name <span className="text-red-400">*</span></label>
+          {onResearch && (
+            <button
+              type="button"
+              onClick={onResearch}
+              className="flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100"
+            >
+              <Sparkles className="h-3.5 w-3.5" /> AI Auto-fill
+            </button>
+          )}
+        </div>
         <input value={form.name ?? ""} onChange={(e) => set("name", e.target.value)} className={inputCls} placeholder="e.g. Innovate UK Smart Grant" />
       </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelCls}>Founder / Organisation</label>
@@ -103,6 +147,7 @@ function GrantFormFields({ form, set }: { form: Partial<Grant>; set: (k: keyof G
           <input value={form.url ?? ""} onChange={(e) => set("url", e.target.value)} className={inputCls} placeholder="https://..." />
         </div>
       </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelCls}>Deadline Date</label>
@@ -113,24 +158,34 @@ function GrantFormFields({ form, set }: { form: Partial<Grant>; set: (k: keyof G
           <input value={form.amount ?? ""} onChange={(e) => set("amount", e.target.value)} className={inputCls} placeholder="e.g. Up to $50,000" />
         </div>
       </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelCls}>Geographic Scope</label>
-          <input value={form.geographicScope ?? ""} onChange={(e) => set("geographicScope", e.target.value)} className={inputCls} placeholder="e.g. Australia-wide" />
+          <select value={form.geographicScope ?? ""} onChange={(e) => set("geographicScope", e.target.value || null)} className={inputCls}>
+            <option value="">— Select —</option>
+            {GEO_SCOPES.map((s) => <option key={s}>{s}</option>)}
+          </select>
         </div>
         <div>
           <label className={labelCls}>Project Duration Allowed</label>
-          <input value={form.projectDuration ?? ""} onChange={(e) => set("projectDuration", e.target.value)} className={inputCls} placeholder="e.g. 6–24 months" />
+          <select value={form.projectDuration ?? ""} onChange={(e) => set("projectDuration", e.target.value || null)} className={inputCls}>
+            <option value="">— Select —</option>
+            {PROJECT_DURATIONS.map((d) => <option key={d}>{d}</option>)}
+          </select>
         </div>
       </div>
+
       <div>
         <label className={labelCls}>Eligibility</label>
         <textarea value={form.eligibility ?? ""} onChange={(e) => set("eligibility", e.target.value)} rows={2} className={inputCls} placeholder="Who can apply?" />
       </div>
+
       <div>
         <label className={labelCls}>How to Apply</label>
         <textarea value={form.howToApply ?? ""} onChange={(e) => set("howToApply", e.target.value)} rows={2} className={inputCls} placeholder="Application process, portal, steps…" />
       </div>
+
       <div className="grid grid-cols-3 gap-3">
         <div>
           <label className={labelCls}>Fit Score (1–5)</label>
@@ -150,6 +205,7 @@ function GrantFormFields({ form, set }: { form: Partial<Grant>; set: (k: keyof G
           </select>
         </div>
       </div>
+
       <div>
         <label className={labelCls}>Notes</label>
         <textarea value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} rows={3} className={inputCls} placeholder="Internal notes, contacts, strategy…" />
@@ -161,8 +217,28 @@ function GrantFormFields({ form, set }: { form: Partial<Grant>; set: (k: keyof G
 function AddGrantModal({ onClose, onSaved }: { onClose: () => void; onSaved: (g: Grant) => void }) {
   const [form, setForm] = useState<Partial<Grant>>(EMPTY_FORM());
   const [saving, setSaving] = useState(false);
+  const [researching, setResearching] = useState(false);
+  const [researchMsg, setResearchMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const set = (k: keyof Grant, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
+
+  const handleResearch = async () => {
+    if (!form.name?.trim() && !form.url?.trim()) { setError("Enter a grant name or URL first"); return; }
+    setResearching(true); setResearchMsg(null); setError(null);
+    try {
+      const res = await fetch("/api/grants/research", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: form.name, url: form.url, founder: form.founder, existingData: form }),
+      });
+      const data = await res.json();
+      if (data.success && data.filled) {
+        setForm((p) => ({ ...p, ...data.filled }));
+        const count = Object.keys(data.filled).length;
+        setResearchMsg(`✓ AI filled ${count} field${count !== 1 ? "s" : ""}`);
+      } else setError(data.error || "Research failed");
+    } catch { setError("Network error"); }
+    finally { setResearching(false); }
+  };
 
   const save = async () => {
     if (!form.name?.trim()) { setError("Grant name is required"); return; }
@@ -185,7 +261,9 @@ function AddGrantModal({ onClose, onSaved }: { onClose: () => void; onSaved: (g:
         </div>
         <div className="p-6">
           {error && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-          <GrantFormFields form={form} set={set} />
+          {researchMsg && <p className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{researchMsg}</p>}
+          {researching && <div className="mb-4 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700"><Loader2 className="h-4 w-4 animate-spin" /> AI is researching this grant…</div>}
+          <GrantFormFields form={form} set={set} onResearch={handleResearch} researching={researching} />
         </div>
         <div className="sticky bottom-0 flex justify-end gap-3 border-t border-gray-100 bg-white px-6 py-4">
           <button onClick={onClose} className="rounded-lg border border-gray-200 px-5 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
@@ -198,12 +276,83 @@ function AddGrantModal({ onClose, onSaved }: { onClose: () => void; onSaved: (g:
   );
 }
 
-function GrantRow({ grant, onUpdate, onDelete }: { grant: Grant; onUpdate: (id: string, d: Partial<Grant>) => Promise<void>; onDelete: (id: string) => Promise<void> }) {
+const VERDICT_STYLES: Record<string, string> = {
+  "Strong Fit":   "bg-green-100 text-green-800 border-green-300",
+  "Good Fit":     "bg-emerald-100 text-emerald-800 border-emerald-300",
+  "Possible Fit": "bg-yellow-100 text-yellow-800 border-yellow-300",
+  "Weak Fit":     "bg-orange-100 text-orange-800 border-orange-300",
+  "Not Eligible": "bg-red-100 text-red-700 border-red-300",
+};
+
+function ScoreRing({ score }: { score: number }) {
+  const color = score >= 70 ? "#16a34a" : score >= 50 ? "#ca8a04" : score >= 30 ? "#ea580c" : "#dc2626";
+  const r = 20, circ = 2 * Math.PI * r, dash = (score / 100) * circ;
+  return (
+    <div className="relative flex h-16 w-16 shrink-0 items-center justify-center">
+      <svg className="absolute" width="64" height="64" viewBox="0 0 64 64">
+        <circle cx="32" cy="32" r={r} fill="none" stroke="#e5e7eb" strokeWidth="5" />
+        <circle cx="32" cy="32" r={r} fill="none" stroke={color} strokeWidth="5"
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" transform="rotate(-90 32 32)" />
+      </svg>
+      <span className="text-sm font-bold" style={{ color }}>{score}%</span>
+    </div>
+  );
+}
+
+function AnalysisPanel({ analysis, onClose }: { analysis: GrantAnalysis; onClose: () => void }) {
+  const verdictCls = VERDICT_STYLES[analysis.verdict] ?? "bg-gray-100 text-gray-700 border-gray-300";
+  return (
+    <div className="mb-4 rounded-xl border border-brand-200 bg-brand-50 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-4">
+          <ScoreRing score={analysis.score} />
+          <div>
+            <span className={`rounded-full border px-2.5 py-0.5 text-xs font-bold ${verdictCls}`}>{analysis.verdict}</span>
+            <p className="mt-1.5 text-sm text-gray-700 max-w-lg">{analysis.summary}</p>
+          </div>
+        </div>
+        <button onClick={onClose} className="shrink-0 text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
+      </div>
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {analysis.strengths.length > 0 && (
+          <div>
+            <p className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-green-700"><CheckCircle2 className="h-3.5 w-3.5" /> Strengths</p>
+            <ul className="space-y-1">{analysis.strengths.map((s, i) => <li key={i} className="text-xs text-gray-700">• {s}</li>)}</ul>
+          </div>
+        )}
+        {analysis.gaps.length > 0 && (
+          <div>
+            <p className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-red-600"><AlertCircle className="h-3.5 w-3.5" /> Gaps</p>
+            <ul className="space-y-1">{analysis.gaps.map((g, i) => <li key={i} className="text-xs text-gray-700">• {g}</li>)}</ul>
+          </div>
+        )}
+      </div>
+      {analysis.recommendation && (
+        <div className="mt-3 rounded-lg border border-brand-200 bg-white px-3 py-2">
+          <p className="text-xs font-semibold text-brand-700 flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5" /> Recommendation</p>
+          <p className="mt-0.5 text-xs text-gray-700">{analysis.recommendation}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GrantRow({ grant, onUpdate, onDelete, companyDNA }: {
+  grant: Grant;
+  onUpdate: (id: string, d: Partial<Grant>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  companyDNA: string;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Grant>>({ ...grant });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [analysing, setAnalysing] = useState(false);
+  const [researching, setResearching] = useState(false);
+  const [analysis, setAnalysis] = useState<GrantAnalysis | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [researchMsg, setResearchMsg] = useState<string | null>(null);
   const set = (k: keyof Grant, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
 
   const save = async () => {
@@ -217,6 +366,40 @@ function GrantRow({ grant, onUpdate, onDelete }: { grant: Grant; onUpdate: (id: 
     setDeleting(true);
     try { await onDelete(grant.id); }
     finally { setDeleting(false); }
+  };
+
+  const handleAnalyse = async () => {
+    if (!companyDNA) { setAiError("No company DNA found. Add company info first."); setExpanded(true); return; }
+    setAnalysing(true); setAiError(null); setAnalysis(null); setExpanded(true);
+    try {
+      const res = await fetch("/api/grants/analyse", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grant, companyDNA }),
+      });
+      const data = await res.json();
+      if (data.success) setAnalysis(data.analysis);
+      else setAiError(data.error || "Analysis failed");
+    } catch { setAiError("Network error"); }
+    finally { setAnalysing(false); }
+  };
+
+  const handleResearch = async () => {
+    setResearching(true); setAiError(null); setResearchMsg(null); setExpanded(true);
+    try {
+      const res = await fetch("/api/grants/research", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: grant.name, url: grant.url, founder: grant.founder, existingData: grant }),
+      });
+      const data = await res.json();
+      if (data.success && data.filled) {
+        await onUpdate(grant.id, data.filled);
+        setForm((p) => ({ ...p, ...data.filled }));
+        const count = Object.keys(data.filled).length;
+        setResearchMsg(`✓ AI filled ${count} field${count !== 1 ? "s" : ""}`);
+        setEditing(true);
+      } else setAiError(data.error || "Research failed");
+    } catch { setAiError("Network error"); }
+    finally { setResearching(false); }
   };
 
   return (
@@ -239,10 +422,22 @@ function GrantRow({ grant, onUpdate, onDelete }: { grant: Grant; onUpdate: (id: 
         <td className="px-3 py-3"><EffortBadge value={grant.submissionEffort as Effort | null} /></td>
         <td className="px-3 py-3"><DecisionBadge value={grant.decision as Decision | null} /></td>
         <td className="px-3 py-3">
-          <div className="flex items-center gap-2">
-            {grant.url && <a href={grant.url} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:text-brand-800"><ExternalLink className="h-4 w-4" /></a>}
-            <button onClick={() => { setEditing(true); setExpanded(true); }} className="text-gray-400 hover:text-brand-600"><FileText className="h-4 w-4" /></button>
-            <button onClick={del} disabled={deleting} className="text-gray-300 hover:text-red-500 disabled:opacity-50">
+          <div className="flex items-center gap-1.5">
+            {grant.url && (
+              <a href={grant.url} target="_blank" rel="noopener noreferrer" title="Open URL" className="text-brand-500 hover:text-brand-700">
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            )}
+            <button onClick={handleAnalyse} disabled={analysing} title="AI Fit Calculator" className="text-purple-400 hover:text-purple-600 disabled:opacity-40">
+              {analysing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
+            </button>
+            <button onClick={handleResearch} disabled={researching} title="AI Auto-fill missing fields" className="text-brand-400 hover:text-brand-600 disabled:opacity-40">
+              {researching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            </button>
+            <button onClick={() => { setEditing(true); setExpanded(true); }} title="Edit" className="text-gray-400 hover:text-brand-600">
+              <FileText className="h-4 w-4" />
+            </button>
+            <button onClick={del} disabled={deleting} title="Delete" className="text-gray-300 hover:text-red-500 disabled:opacity-40">
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             </button>
           </div>
@@ -252,9 +447,18 @@ function GrantRow({ grant, onUpdate, onDelete }: { grant: Grant; onUpdate: (id: 
       {expanded && (
         <tr className="border-b border-gray-100 bg-gray-50">
           <td colSpan={7} className="px-6 py-5">
+            {aiError && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{aiError}</p>}
+            {researchMsg && <p className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{researchMsg}</p>}
+            {(analysing || researching) && (
+              <div className="mb-3 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {analysing ? "AI is analysing your fit for this grant…" : "AI is researching and filling missing fields…"}
+              </div>
+            )}
+            {analysis && <AnalysisPanel analysis={analysis} onClose={() => setAnalysis(null)} />}
             {editing ? (
               <div>
-                <GrantFormFields form={form} set={set} />
+                <GrantFormFields form={form} set={set} onResearch={handleResearch} researching={researching} />
                 <div className="mt-4 flex gap-2">
                   <button onClick={save} disabled={saving} className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Changes
@@ -272,10 +476,18 @@ function GrantRow({ grant, onUpdate, onDelete }: { grant: Grant; onUpdate: (id: 
                 </div>
                 <div className="space-y-3">
                   {grant.notes && <div><p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Notes</p><p className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{grant.notes}</p></div>}
-                  {!grant.eligibility && !grant.howToApply && !grant.notes && <p className="text-sm text-gray-400">No additional details yet.</p>}
+                  {!grant.eligibility && !grant.howToApply && !grant.notes && (
+                    <p className="text-sm text-gray-400">No details yet — click <span className="text-brand-600">✦ Auto-fill</span> to let AI research this grant.</p>
+                  )}
                 </div>
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-2 flex items-center gap-4">
                   <button onClick={() => setEditing(true)} className="text-xs text-brand-600 hover:underline">Edit all fields →</button>
+                  <button onClick={handleAnalyse} disabled={analysing} className="flex items-center gap-1 text-xs text-purple-600 hover:underline disabled:opacity-50">
+                    <FlaskConical className="h-3 w-3" /> Run fit analysis
+                  </button>
+                  <button onClick={handleResearch} disabled={researching} className="flex items-center gap-1 text-xs text-brand-600 hover:underline disabled:opacity-50">
+                    <Sparkles className="h-3 w-3" /> AI auto-fill missing fields
+                  </button>
                 </div>
               </div>
             )}
@@ -294,13 +506,30 @@ export default function GrantsPage() {
   const [decisionFilter, setDecisionFilter] = useState("All");
   const [sortField, setSortField] = useState<"deadlineDate" | "fitScore" | "name">("deadlineDate");
   const [sortAsc, setSortAsc] = useState(true);
+  const [companyDNA, setCompanyDNA] = useState("");
 
   const fetchGrants = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/grants?companyId=${DEMO_COMPANY_ID}`);
-      const data = await res.json();
-      setGrants(data.grants ?? []);
+      const [grantsRes, companyRes] = await Promise.all([
+        fetch(`/api/grants?companyId=${DEMO_COMPANY_ID}`),
+        fetch(`/api/company?companyId=${DEMO_COMPANY_ID}`),
+      ]);
+      const grantsData = await grantsRes.json();
+      const companyData = await companyRes.json();
+      setGrants(grantsData.grants ?? []);
+      // Build DNA string from company info for AI analysis
+      const info = companyData.companyInfo;
+      if (info) {
+        const parts = [
+          info.bulkContent,
+          info.values ? `Values: ${info.values}` : null,
+          info.corePhilosophy ? `Philosophy: ${info.corePhilosophy}` : null,
+          info.founders ? `Founders: ${info.founders}` : null,
+          info.achievements ? `Achievements: ${info.achievements}` : null,
+        ].filter(Boolean);
+        setCompanyDNA(parts.join("\n"));
+      }
     } finally { setLoading(false); }
   }, []);
 
@@ -420,7 +649,7 @@ export default function GrantsPage() {
             </thead>
             <tbody>
               {filtered.map((grant) => (
-                <GrantRow key={grant.id} grant={grant} onUpdate={handleUpdate} onDelete={handleDelete} />
+                <GrantRow key={grant.id} grant={grant} onUpdate={handleUpdate} onDelete={handleDelete} companyDNA={companyDNA} />
               ))}
             </tbody>
           </table>
