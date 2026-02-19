@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 
 const CONTENT_TYPES = [
   "blog", "newsletter", "announcement", "linkedin",
@@ -9,7 +10,11 @@ const CONTENT_TYPES = [
 
 export async function GET(req: NextRequest) {
   try {
-    const companyId = req.nextUrl.searchParams.get("companyId") ?? "demo";
+    const { response: authError } = await requireAuth();
+    if (authError) return authError;
+
+    const companyId = req.nextUrl.searchParams.get("companyId");
+    if (!companyId) return NextResponse.json({ error: "companyId required" }, { status: 400 });
 
     const [postsRes, styleRes] = await Promise.all([
       db.from("ContentPost").select("*").eq("companyId", companyId),

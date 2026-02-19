@@ -41,14 +41,21 @@ export async function POST(req: NextRequest) {
     // Build lessons context
     const lessonsContext = lessonsList.length > 0
       ? "\n\nLESSONS LEARNED (apply these strictly — these come from past feedback):\n" +
-        lessonsList.map((l, i) => `${i + 1}. [${(l as any).severity.toUpperCase()}] ${(l as any).feedback}`).join("\n")
+        lessonsList.map((l, i) => {
+          const lesson = l as { severity?: string; feedback?: string };
+          return `${i + 1}. [${(lesson.severity ?? "medium").toUpperCase()}] ${lesson.feedback ?? ""}`;
+        }).join("\n")
       : "";
 
     // Build revision prompt
     const allFeedback = [
-      original.feedback,
-      data.additionalFeedback,
-    ].filter(Boolean).join("\n\nAdditional feedback: ");
+      original.feedback ?? "",
+      data.additionalFeedback ?? "",
+    ].filter((s) => s.trim()).join("\n\nAdditional feedback: ");
+
+    if (!allFeedback.trim()) {
+      return NextResponse.json({ error: "Cannot revise: no rejection feedback found on this content" }, { status: 400 });
+    }
 
     const company = original.company as { name: string } | null;
     const systemPrompt = `You are revising ${categoryLabel} content for ${company?.name ?? "this company"}. The previous version was REJECTED with specific feedback. You must fix ALL issues mentioned in the feedback while maintaining the company's voice.
@@ -97,7 +104,7 @@ IMPORTANT:
       prompt: original.prompt,
       output,
       revisionOf: original.id,
-      revisionNumber: original.revisionNumber + 1,
+      revisionNumber: (typeof original.revisionNumber === "number" ? original.revisionNumber : 0) + 1,
     });
 
     return NextResponse.json({

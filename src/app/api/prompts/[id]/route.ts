@@ -21,6 +21,10 @@ export async function PATCH(
     if (body.contentType) patch.contentType = body.contentType;
     if (typeof body.active === "boolean") patch.active = body.active;
 
+    if (Object.keys(patch).length === 1) {
+      return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+    }
+
     const { data: updated } = await db
       .from("PromptTemplate")
       .update(patch)

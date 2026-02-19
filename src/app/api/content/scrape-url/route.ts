@@ -1,19 +1,34 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/apiHelpers";
 
 export async function POST(req: NextRequest) {
   try {
+    const { response: authError } = await requireAuth();
+    if (authError) return authError;
+
     const { url } = await req.json();
     if (!url) return NextResponse.json({ error: "url is required" }, { status: 400 });
 
-    const res = await fetch(url, {
+    let parsedUrl: URL;
+    try { parsedUrl = new URL(url); } catch {
+      return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
+    }
+
+    const res = await fetch(parsedUrl.toString(), {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; GUSIBot/1.0)" },
       signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) return NextResponse.json({ error: `Failed to fetch URL: ${res.status}` }, { status: 400 });
 
+    const contentLength = res.headers.get("content-length");
+    if (contentLength && parseInt(contentLength) > 5_000_000) {
+      return NextResponse.json({ error: "Page too large (>5MB)" }, { status: 400 });
+    }
+
     const html = await res.text();
+    if (html.length > 5_000_000) return NextResponse.json({ error: "Page too large (>5MB)" }, { status: 400 });
 
     // Strip HTML tags, scripts, styles, nav, footer
     const clean = html

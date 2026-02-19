@@ -14,10 +14,14 @@ export async function PATCH(
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const patch: Record<string, any> = {};
+    const patch: Record<string, unknown> = {};
     if (typeof body.active === "boolean") patch.active = body.active;
     if (body.feedback) patch.feedback = body.feedback;
     if (body.severity) patch.severity = body.severity;
+
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+    }
 
     const { data: updated } = await db
       .from("Lesson")

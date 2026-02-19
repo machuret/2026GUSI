@@ -57,6 +57,7 @@ export default function CompanyPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -82,13 +83,21 @@ export default function CompanyPage() {
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
+    setSaveError(null);
     try {
       const res = await fetch("/api/company", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      if (res.ok) setSaved(true);
+      if (res.ok) {
+        setSaved(true);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setSaveError(data.error || `Save failed (${res.status})`);
+      }
+    } catch {
+      setSaveError("Network error — could not reach server");
     } finally { setSaving(false); }
   };
 
@@ -163,15 +172,22 @@ export default function CompanyPage() {
           />
         </div>
 
-        <div className="flex items-center gap-4">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-          >
-            <Save className="h-4 w-4" /> {saving ? "Saving..." : "Save Company Info"}
-          </button>
-          {saved && <span className="text-sm font-medium text-green-600">✓ Saved</span>}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" /> {saving ? "Saving..." : "Save Company Info"}
+            </button>
+            {saved && <span className="text-sm font-medium text-green-600">✓ Saved</span>}
+          </div>
+          {saveError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+              {saveError}
+            </div>
+          )}
         </div>
       </div>
     </div>

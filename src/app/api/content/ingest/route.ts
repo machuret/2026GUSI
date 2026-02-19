@@ -39,8 +39,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = ingestSchema.parse(body);
 
-    // Auto-create company if it doesn't exist
-    await db.from("Company").upsert({ id: data.companyId, name: "My Company" }, { onConflict: "id" });
+    // Auto-create company if it doesn't exist — ignoreDuplicates preserves existing name/industry
+    await db.from("Company").upsert({ id: data.companyId, name: "My Company" }, { onConflict: "id", ignoreDuplicates: true });
 
     const results = { postsCreated: 0, documentsCreated: 0 };
 

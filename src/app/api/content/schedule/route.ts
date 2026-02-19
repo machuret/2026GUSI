@@ -7,7 +7,7 @@ import { z } from "zod";
 
 const scheduleSchema = z.object({
   contentId: z.string().min(1),
-  scheduledAt: z.string().nullable(), // ISO date string or null to clear
+  scheduledAt: z.string().datetime({ offset: true }).nullable(),
 });
 
 // POST /api/content/schedule

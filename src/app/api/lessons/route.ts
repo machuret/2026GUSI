@@ -16,7 +16,7 @@ const lessonSchema = z.object({
 // GET /api/lessons
 export async function GET() {
   try {
-    const { user, response: authError } = await requireAuth();
+    const { response: authError } = await requireAuth();
     if (authError) return authError;
 
     const { data: lessons } = await db
