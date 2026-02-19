@@ -10,9 +10,29 @@ const bodySchema = z.object({
   url: z.string().url("A valid URL is required"),
   siteName: z.string().optional(),
   extractionHint: z.string().optional(),
+  siteId: z.string().optional(),
 });
 
 export async function OPTIONS() { return handleOptions(); }
+
+function stripHtml(raw: string): string {
+  return raw
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+    .replace(/<header[\s\S]*?<\/header>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<(a|button)[^>]*href=["']([^"']+)["'][^>]*>/gi, " [$2] ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/\s{3,}/g, "\n")
+    .trim();
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,72 +43,87 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
     }
-    const { url, siteName, extractionHint } = parsed.data;
+    const { url, siteName, extractionHint, siteId } = parsed.data;
 
-    // Fetch the page HTML
+    // Look up known site config for crawlHint and jsHeavy flag
+    const knownSite = siteId ? KNOWN_GRANT_SITES.find((s) => s.id === siteId) : null;
+    const isJsHeavy = knownSite?.jsHeavy ?? false;
+    const siteHint = knownSite?.crawlHint ?? extractionHint ?? "";
+
+    // Warn early for JS-heavy sites but still attempt
+    let jsWarning: string | null = null;
+    if (isJsHeavy) {
+      jsWarning = "This site is JavaScript-rendered and may return limited results. Try pasting a specific search results URL instead.";
+    }
+
+    // Fetch the page HTML with longer timeout and better headers
     let html = "";
+    let fetchStatus = 200;
     try {
       const pageRes = await fetch(url, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; GrantResearchBot/1.0)",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.5",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Accept-Encoding": "gzip, deflate, br",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache",
         },
-        signal: AbortSignal.timeout(12000),
+        signal: AbortSignal.timeout(20000),
       });
 
+      fetchStatus = pageRes.status;
+
       if (!pageRes.ok) {
-        return NextResponse.json({
-          error: `Could not fetch page (HTTP ${pageRes.status}). The site may block automated access.`,
-          grants: [],
-          partial: true,
-        });
+        const errMsg = fetchStatus === 403
+          ? `Access denied (HTTP 403). This site blocks automated access. Try a different URL or paste the grant details manually.`
+          : fetchStatus === 429
+          ? `Rate limited (HTTP 429). Wait a few minutes and try again.`
+          : `Could not fetch page (HTTP ${fetchStatus}). The site may block automated access.`;
+        return NextResponse.json({ error: errMsg, grants: [], partial: true, jsWarning });
       }
 
       const rawHtml = await pageRes.text();
-      // Strip scripts, styles, nav, footer to reduce tokens — keep main content
-      html = rawHtml
-        .replace(/<script[\s\S]*?<\/script>/gi, "")
-        .replace(/<style[\s\S]*?<\/style>/gi, "")
-        .replace(/<nav[\s\S]*?<\/nav>/gi, "")
-        .replace(/<footer[\s\S]*?<\/footer>/gi, "")
-        .replace(/<header[\s\S]*?<\/header>/gi, "")
-        .replace(/<!--[\s\S]*?-->/g, "")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/\s{3,}/g, "\n")
-        .trim()
-        .slice(0, 12000); // cap at ~3k tokens
+      html = stripHtml(rawHtml).slice(0, 20000); // increased to ~5k tokens
     } catch (fetchErr) {
+      const msg = fetchErr instanceof Error ? fetchErr.message : "Network error";
+      const isTimeout = msg.toLowerCase().includes("timeout") || msg.toLowerCase().includes("abort");
       return NextResponse.json({
-        error: `Failed to fetch page: ${fetchErr instanceof Error ? fetchErr.message : "Network error"}. The site may require a browser or block bots.`,
+        error: isTimeout
+          ? `Page timed out after 20 seconds. The site may be slow or blocking bots. Try a more specific URL.`
+          : `Failed to fetch page: ${msg}`,
         grants: [],
         partial: true,
+        jsWarning,
       });
     }
 
-    if (html.length < 100) {
+    if (html.length < 200) {
       return NextResponse.json({
-        error: "Page returned no readable content. It may be JavaScript-rendered (SPA) and requires a browser to load.",
+        error: isJsHeavy
+          ? "Page returned no readable content — this site requires a browser to render. Try copying a direct search results URL with filters applied."
+          : "Page returned no readable content. It may be JavaScript-rendered or empty.",
         grants: [],
         partial: true,
+        jsWarning,
       });
     }
 
-    const systemPrompt = `You are a grant data extraction specialist. You will be given the text content of a grant listing webpage. Extract all grant opportunities you can find.
+    const systemPrompt = `You are a grant data extraction specialist. Extract ALL grant opportunities from the webpage text provided.
 
-Return ONLY valid JSON in this exact format:
+Return ONLY valid JSON in this exact format — no markdown, no explanation:
 {
   "grants": [
     {
-      "name": "<full grant name>",
-      "founder": "<granting organisation>",
-      "url": "<direct link to this specific grant, or the page URL if not available>",
+      "name": "<full official grant name>",
+      "founder": "<granting organisation or agency>",
+      "url": "<direct URL to this grant if found in text, otherwise use the source URL>",
       "deadlineDate": "<ISO date YYYY-MM-DD or null>",
-      "geographicScope": "<Global | United States | UK | Australia | Europe | Asia | Africa | or specific country>",
-      "amount": "<funding amount or range, or null>",
-      "eligibility": "<brief eligibility summary>",
-      "howToApply": "<brief application process>",
-      "projectDuration": "<allowed duration or null>",
+      "geographicScope": "<Global | United States | UK | Australia | Europe | Asia | Africa | Canada | or specific country/state>",
+      "amount": "<funding amount or range as string, e.g. '$50,000' or 'Up to $200,000', or null>",
+      "eligibility": "<1-2 sentence eligibility summary>",
+      "howToApply": "<brief application process or null>",
+      "projectDuration": "<e.g. '12 months', '2 years', or null>",
       "submissionEffort": "<Low | Medium | High>",
       "confidence": "<High | Medium | Low>"
     }
@@ -97,33 +132,71 @@ Return ONLY valid JSON in this exact format:
   "pageTitle": "<title of the page>"
 }
 
-RULES:
-- Extract ONLY grants clearly visible in the text. Do not invent grants.
-- If a field is not present in the text, return null.
-- Return up to 15 grants maximum.
-- Set confidence to "High" only if name + org + URL are all clearly present.`;
+STRICT RULES:
+- Extract ONLY grants/funding opportunities explicitly mentioned in the text. Never invent.
+- If a field is absent, use null — never guess.
+- Return up to 30 grants.
+- confidence=High: name + org + clear details all present.
+- confidence=Medium: name + org present but details sparse.
+- confidence=Low: only partial info available.
+- For URLs found in text like [/grants/xyz], prepend the source domain.
+- submissionEffort: Low=simple online form, Medium=proposal required, High=complex multi-stage.`;
 
-    const userPrompt = `Extract all grants from this page content.
-Source: ${siteName || url}
-${extractionHint ? `Hint: ${extractionHint}` : ""}
+    const userPrompt = `Extract all grant opportunities from this page.
+Source URL: ${url}
+Site name: ${siteName || "Unknown"}
+${siteHint ? `Focus: ${siteHint}` : ""}
 
 PAGE CONTENT:
 ${html}`;
 
-    const content = await callOpenAI({ systemPrompt, userPrompt, maxTokens: 4000, temperature: 0.1 });
+    let content: string;
+    try {
+      content = await callOpenAI({ systemPrompt, userPrompt, maxTokens: 6000, temperature: 0.05 });
+    } catch (aiErr) {
+      return NextResponse.json({
+        error: `AI extraction failed: ${aiErr instanceof Error ? aiErr.message : "Unknown error"}`,
+        grants: [],
+        partial: true,
+        jsWarning,
+      });
+    }
+
+    // Strip markdown code fences if present
+    const cleaned = content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+
     let result: Record<string, unknown>;
     try {
-      result = JSON.parse(content);
+      result = JSON.parse(cleaned);
     } catch {
-      return NextResponse.json({ error: "AI returned malformed JSON — please try again" }, { status: 500 });
+      // Try to extract JSON from the response
+      const jsonMatch = cleaned.match(/\{[\s\S]+\}/);
+      if (jsonMatch) {
+        try { result = JSON.parse(jsonMatch[0]); }
+        catch { return NextResponse.json({ error: "AI returned malformed JSON — please try again", partial: true }, { status: 500 }); }
+      } else {
+        return NextResponse.json({ error: "AI returned malformed JSON — please try again", partial: true }, { status: 500 });
+      }
     }
 
     const grants = Array.isArray(result.grants) ? result.grants : [];
+
+    // Resolve relative URLs
+    const baseUrl = new URL(url);
+    const resolvedGrants = grants.map((g: Record<string, unknown>) => ({
+      ...g,
+      url: typeof g.url === "string" && g.url.startsWith("/")
+        ? `${baseUrl.origin}${g.url}`
+        : (g.url || url),
+    }));
+
     return NextResponse.json({
       success: true,
-      grants,
-      totalFound: typeof result.totalFound === "number" ? result.totalFound : grants.length,
+      grants: resolvedGrants,
+      totalFound: typeof result.totalFound === "number" ? result.totalFound : resolvedGrants.length,
       pageTitle: typeof result.pageTitle === "string" ? result.pageTitle : (siteName ?? url),
+      jsWarning,
+      htmlLength: html.length,
     });
   } catch (err) {
     return NextResponse.json({
