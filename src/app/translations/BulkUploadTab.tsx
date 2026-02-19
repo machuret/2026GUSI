@@ -79,6 +79,25 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
   const updateFile = (id: string, patch: Partial<FileItem>) =>
     setFiles((prev) => prev.map((f) => f.id === id ? { ...f, ...patch } : f));
 
+  const translateOne = async (item: FileItem, rules: string): Promise<void> => {
+    updateFile(item.id, { status: "translating", error: "" });
+    try {
+      const res = await authFetch("/api/translations/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: item.text, targetLanguage, rules }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        updateFile(item.id, { status: "error", error: data.error || "Translation failed" });
+      } else {
+        updateFile(item.id, { status: "done", translated: data.translated });
+      }
+    } catch (err) {
+      updateFile(item.id, { status: "error", error: err instanceof Error ? err.message : "Network error" });
+    }
+  };
+
   const handleTranslateAll = async () => {
     const pending = files.filter((f) => f.status === "pending" || f.status === "error");
     if (pending.length === 0) return;
@@ -86,31 +105,14 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
     setProgress(0);
 
     const rules = buildCombinedRules(targetLanguage);
+    const CHUNK = 3;
+    let completed = 0;
 
-    for (let i = 0; i < pending.length; i++) {
-      const item = pending[i];
-      updateFile(item.id, { status: "translating", error: "" });
-
-      try {
-        const res = await authFetch("/api/translations/translate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: item.text, targetLanguage, rules }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          updateFile(item.id, { status: "error", error: data.error || "Translation failed" });
-        } else {
-          updateFile(item.id, { status: "done", translated: data.translated });
-        }
-      } catch (err) {
-        updateFile(item.id, {
-          status: "error",
-          error: err instanceof Error ? err.message : "Network error",
-        });
-      }
-
-      setProgress(Math.round(((i + 1) / pending.length) * 100));
+    for (let i = 0; i < pending.length; i += CHUNK) {
+      const chunk = pending.slice(i, i + CHUNK);
+      await Promise.allSettled(chunk.map((item) => translateOne(item, rules)));
+      completed += chunk.length;
+      setProgress(Math.round((completed / pending.length) * 100));
     }
 
     setRunning(false);
@@ -120,7 +122,7 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
     if (!item.translated) return;
     setSavingId(item.id);
     try {
-      const res = await fetch("/api/translations", {
+      const res = await authFetch("/api/translations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
