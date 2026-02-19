@@ -707,6 +707,7 @@ function GrantRow({ grant, onUpdate, onDelete, companyDNA }: {
             <div className="min-w-0">
               <p className="font-medium text-gray-900 text-sm">{grant.name}</p>
               {grant.founder && <p className="text-xs text-gray-400 mt-0.5">{grant.founder}</p>}
+              <p className="text-xs text-gray-300 mt-0.5">Added {new Date(grant.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</p>
             </div>
           </div>
         </td>
@@ -774,7 +775,8 @@ function GrantRow({ grant, onUpdate, onDelete, companyDNA }: {
                     <p className="text-sm text-gray-400">No details yet — click <span className="text-brand-600">✦ Auto-fill</span> to let AI research this grant.</p>
                   )}
                 </div>
-                <div className="lg:col-span-2 flex items-center gap-4">
+                <div className="lg:col-span-2 flex items-center gap-4 flex-wrap">
+                  <span className="text-xs text-gray-400">Added {new Date(grant.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })} · Last updated {new Date(grant.updatedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</span>
                   <button onClick={() => setEditing(true)} className="text-xs text-brand-600 hover:underline">Edit all fields →</button>
                   <button onClick={handleAnalyse} disabled={analysing} className="flex items-center gap-1 text-xs text-purple-600 hover:underline disabled:opacity-50">
                     <FlaskConical className="h-3 w-3" /> Run fit analysis
