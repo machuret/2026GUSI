@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Plus, ExternalLink, Trash2, ChevronDown, ChevronUp,
   Search, FileText, Loader2, X, Save, Sparkles, FlaskConical,
-  CheckCircle2, AlertCircle, TrendingUp,
+  CheckCircle2, AlertCircle, TrendingUp, Globe, BadgeCheck, ShieldAlert,
 } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 
@@ -47,8 +47,25 @@ interface Grant {
   submissionEffort?: "Low" | "Medium" | "High" | null;
   decision?: "Apply" | "Maybe" | "No" | null;
   notes?: string | null;
+  aiScore?: number | null;
+  aiVerdict?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface SearchResult {
+  name: string;
+  founder: string;
+  url: string;
+  deadlineDate?: string | null;
+  geographicScope?: string;
+  amount?: string;
+  eligibility?: string;
+  howToApply?: string;
+  projectDuration?: string;
+  submissionEffort?: "Low" | "Medium" | "High";
+  fitReason?: string;
+  confidence?: "High" | "Medium" | "Low";
 }
 
 type Decision = "Apply" | "Maybe" | "No";
@@ -209,6 +226,213 @@ function GrantFormFields({
       <div>
         <label className={labelCls}>Notes</label>
         <textarea value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} rows={3} className={inputCls} placeholder="Internal notes, contacts, strategy…" />
+      </div>
+    </div>
+  );
+}
+
+const CONFIDENCE_STYLES: Record<string, string> = {
+  High:   "bg-green-100 text-green-700 border-green-300",
+  Medium: "bg-yellow-100 text-yellow-700 border-yellow-300",
+  Low:    "bg-gray-100 text-gray-500 border-gray-300",
+};
+
+function GrantSearchModal({
+  onClose,
+  onAdded,
+  companyDNA,
+  existingNames,
+}: {
+  onClose: () => void;
+  onAdded: (g: Grant) => void;
+  companyDNA: string;
+  existingNames: Set<string>;
+}) {
+  const [query, setQuery] = useState("");
+  const [sector, setSector] = useState("");
+  const [geoFilter, setGeoFilter] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [adding, setAdding] = useState<Record<number, boolean>>({});
+  const [added, setAdded] = useState<Record<number, boolean>>({});
+
+  const handleSearch = async () => {
+    if (!query.trim() && !sector.trim()) { setError("Enter a search query or sector"); return; }
+    setSearching(true); setError(null); setResults([]);
+    try {
+      const res = await fetch("/api/grants/search", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, sector, geographicScope: geoFilter || undefined, companyDNA }),
+      });
+      const data = await res.json();
+      if (data.success) setResults(data.results ?? []);
+      else setError(data.error || "Search failed");
+    } catch { setError("Network error"); }
+    finally { setSearching(false); }
+  };
+
+  const handleAdd = async (result: SearchResult, idx: number) => {
+    setAdding((p) => ({ ...p, [idx]: true }));
+    try {
+      const res = await fetch("/api/grants", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId: DEMO_COMPANY_ID,
+          name: result.name,
+          founder: result.founder,
+          url: result.url,
+          deadlineDate: result.deadlineDate || null,
+          geographicScope: result.geographicScope || null,
+          amount: result.amount || null,
+          eligibility: result.eligibility || null,
+          howToApply: result.howToApply || null,
+          projectDuration: result.projectDuration || null,
+          submissionEffort: result.submissionEffort || null,
+          decision: "Maybe",
+          notes: result.fitReason ? `AI search note: ${result.fitReason}` : null,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        onAdded(data.grant);
+        setAdded((p) => ({ ...p, [idx]: true }));
+      } else setError(data.error || "Failed to add");
+    } catch { setError("Network error"); }
+    finally { setAdding((p) => ({ ...p, [idx]: false })); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl bg-white shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Grant Search</h2>
+            <p className="text-xs text-gray-400 mt-0.5">AI-powered discovery — find grants, add to your list, research deeper later</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-gray-100"><X className="h-5 w-5 text-gray-500" /></button>
+        </div>
+
+        {/* Search inputs */}
+        <div className="border-b border-gray-100 px-6 py-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="sm:col-span-1">
+              <label className={labelCls}>Keywords / Topic</label>
+              <input
+                value={query} onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                className={inputCls} placeholder="e.g. health innovation, women founders…"
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Sector / Focus</label>
+              <input
+                value={sector} onChange={(e) => setSector(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                className={inputCls} placeholder="e.g. healthcare, education, tech…"
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Geographic Scope</label>
+              <select value={geoFilter} onChange={(e) => setGeoFilter(e.target.value)} className={inputCls}>
+                <option value="">Any location</option>
+                {GEO_SCOPES.map((s) => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              onClick={handleSearch} disabled={searching}
+              className="flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            >
+              {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              {searching ? "Searching…" : "Search Grants"}
+            </button>
+            {!companyDNA && (
+              <p className="text-xs text-amber-600 flex items-center gap-1">
+                <ShieldAlert className="h-3.5 w-3.5" /> Add company info for personalised results
+              </p>
+            )}
+          </div>
+          {error && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        </div>
+
+        {/* Results */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {searching && (
+            <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+              <Loader2 className="h-8 w-8 animate-spin mb-3 text-brand-400" />
+              <p className="text-sm">AI is searching for matching grants…</p>
+            </div>
+          )}
+
+          {!searching && results.length === 0 && !error && (
+            <div className="flex flex-col items-center justify-center py-16 text-gray-300">
+              <Globe className="h-10 w-10 mb-3" />
+              <p className="text-sm text-gray-400">Enter a topic and click Search to discover grants</p>
+            </div>
+          )}
+
+          {!searching && results.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-400">{results.length} result{results.length !== 1 ? "s" : ""} found</p>
+              {results.map((r, idx) => {
+                const alreadyInList = existingNames.has(r.name.toLowerCase());
+                const isAdded = added[idx] || alreadyInList;
+                const confidenceCls = CONFIDENCE_STYLES[r.confidence ?? "Low"] ?? CONFIDENCE_STYLES.Low;
+                return (
+                  <div key={idx} className={`rounded-xl border p-4 transition-colors ${isAdded ? "border-green-200 bg-green-50" : "border-gray-200 bg-white hover:border-brand-200"}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <p className="font-semibold text-gray-900 text-sm">{r.name}</p>
+                          {r.confidence && (
+                            <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${confidenceCls}`}>
+                              {r.confidence} confidence
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mb-2">{r.founder}</p>
+                        <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                          {r.geographicScope && <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{r.geographicScope}</span>}
+                          {r.amount && <span className="font-medium text-gray-700">{r.amount}</span>}
+                          {r.deadlineDate && <span>Deadline: {new Date(r.deadlineDate).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</span>}
+                          {r.submissionEffort && <EffortBadge value={r.submissionEffort} />}
+                        </div>
+                        {r.fitReason && (
+                          <p className="mt-2 text-xs text-brand-700 bg-brand-50 rounded-lg px-2.5 py-1.5 border border-brand-100">
+                            ✦ {r.fitReason}
+                          </p>
+                        )}
+                        {r.eligibility && <p className="mt-1.5 text-xs text-gray-500 line-clamp-2">{r.eligibility}</p>}
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        {r.url && (
+                          <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-brand-500 hover:text-brand-700" title="Open URL">
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        )}
+                        <button
+                          onClick={() => !isAdded && handleAdd(r, idx)}
+                          disabled={isAdded || adding[idx]}
+                          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                            isAdded
+                              ? "bg-green-100 text-green-700 cursor-default"
+                              : "bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
+                          }`}
+                        >
+                          {adding[idx] ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isAdded ? <BadgeCheck className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                          {isAdded ? "Added" : "Add to List"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -502,6 +726,7 @@ export default function GrantsPage() {
   const [grants, setGrants] = useState<Grant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [decisionFilter, setDecisionFilter] = useState("All");
   const [sortField, setSortField] = useState<"deadlineDate" | "fitScore" | "name">("deadlineDate");
@@ -575,9 +800,19 @@ export default function GrantsPage() {
     </button>
   );
 
+  const existingNames = new Set(grants.map((g) => g.name.toLowerCase()));
+
   return (
     <div className="mx-auto max-w-7xl">
       {showAdd && <AddGrantModal onClose={() => setShowAdd(false)} onSaved={(g) => setGrants(p => [g, ...p])} />}
+      {showSearch && (
+        <GrantSearchModal
+          onClose={() => setShowSearch(false)}
+          onAdded={(g) => setGrants((p) => [g, ...p])}
+          companyDNA={companyDNA}
+          existingNames={existingNames}
+        />
+      )}
 
       {/* Header */}
       <div className="mb-6 flex items-start justify-between">
@@ -585,9 +820,14 @@ export default function GrantsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Grants</h1>
           <p className="mt-1 text-gray-500">Track, research, and prioritise grant opportunities</p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700">
-          <Plus className="h-4 w-4" /> Add Grant
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowSearch(true)} className="flex items-center gap-2 rounded-lg border border-brand-300 bg-brand-50 px-4 py-2.5 text-sm font-medium text-brand-700 hover:bg-brand-100">
+            <Search className="h-4 w-4" /> Search Grants
+          </button>
+          <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700">
+            <Plus className="h-4 w-4" /> Add Grant
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
