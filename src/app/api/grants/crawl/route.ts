@@ -1,7 +1,8 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { callOpenAI } from "@/lib/openai";
+import { callOpenAIJson } from "@/lib/openai";
+import { stripHtml } from "@/lib/htmlUtils";
 import { KNOWN_GRANT_SITES } from "@/lib/grantSites";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { handleOptions } from "@/lib/cors";
@@ -14,25 +15,6 @@ const bodySchema = z.object({
 });
 
 export async function OPTIONS() { return handleOptions(); }
-
-function stripHtml(raw: string): string {
-  return raw
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<nav[\s\S]*?<\/nav>/gi, "")
-    .replace(/<footer[\s\S]*?<\/footer>/gi, "")
-    .replace(/<header[\s\S]*?<\/header>/gi, "")
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<(a|button)[^>]*href=["']([^"']+)["'][^>]*>/gi, " [$2] ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/\s{3,}/g, "\n")
-    .trim();
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -150,33 +132,16 @@ ${siteHint ? `Focus: ${siteHint}` : ""}
 PAGE CONTENT:
 ${html}`;
 
-    let content: string;
+    let result: Record<string, unknown>;
     try {
-      content = await callOpenAI({ systemPrompt, userPrompt, maxTokens: 6000, temperature: 0.05 });
+      result = await callOpenAIJson({ systemPrompt, userPrompt, maxTokens: 6000, temperature: 0.05 });
     } catch (aiErr) {
       return NextResponse.json({
-        error: `AI extraction failed: ${aiErr instanceof Error ? aiErr.message : "Unknown error"}`,
+        error: aiErr instanceof Error ? aiErr.message : "AI extraction failed",
         grants: [],
         partial: true,
         jsWarning,
       });
-    }
-
-    // Strip markdown code fences if present
-    const cleaned = content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-
-    let result: Record<string, unknown>;
-    try {
-      result = JSON.parse(cleaned);
-    } catch {
-      // Try to extract JSON from the response
-      const jsonMatch = cleaned.match(/\{[\s\S]+\}/);
-      if (jsonMatch) {
-        try { result = JSON.parse(jsonMatch[0]); }
-        catch { return NextResponse.json({ error: "AI returned malformed JSON — please try again", partial: true }, { status: 500 }); }
-      } else {
-        return NextResponse.json({ error: "AI returned malformed JSON — please try again", partial: true }, { status: 500 });
-      }
     }
 
     const grants = Array.isArray(result.grants) ? result.grants : [];

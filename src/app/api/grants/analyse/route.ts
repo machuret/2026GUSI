@@ -1,9 +1,9 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { callOpenAI } from "@/lib/openai";
+import { callOpenAIJson } from "@/lib/openai";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
-import { corsHeaders, handleOptions } from "@/lib/cors";
+import { handleOptions } from "@/lib/cors";
 
 
 const bodySchema = z.object({
@@ -76,12 +76,11 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation:
 
     const userPrompt = `COMPANY DNA:\n${companyDNA}\n\nGRANT DETAILS:\nName: ${grant.name}\nFounder/Organisation: ${grant.founder ?? "Unknown"}\nGeographic Scope: ${grant.geographicScope ?? "Not specified"}\nEligibility: ${grant.eligibility ?? "Not specified"}\nAmount: ${grant.amount ?? "Not specified"}\nProject Duration: ${grant.projectDuration ?? "Not specified"}\nHow to Apply: ${grant.howToApply ?? "Not specified"}\nNotes: ${grant.notes ?? "None"}\n\nAssess the likelihood of this company winning this grant.`;
 
-    const content = await callOpenAI({ systemPrompt, userPrompt, maxTokens: 600, temperature: 0.3 });
     let result: Record<string, unknown>;
     try {
-      result = JSON.parse(content);
-    } catch {
-      return NextResponse.json({ error: "AI returned malformed JSON — please try again" }, { status: 500 });
+      result = await callOpenAIJson({ systemPrompt, userPrompt, maxTokens: 600, temperature: 0.3 });
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : "AI failed" }, { status: 500 });
     }
 
     if (grant.id && typeof result.score === "number") {

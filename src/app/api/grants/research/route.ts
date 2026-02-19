@@ -1,7 +1,7 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { callOpenAI } from "@/lib/openai";
+import { callOpenAIJson } from "@/lib/openai";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { handleOptions } from "@/lib/cors";
 
@@ -51,12 +51,11 @@ ${JSON.stringify(existingData ?? {}, null, 2)}
 
 Fill in as many fields as you can based on your knowledge of this grant or organisation.`;
 
-    const content = await callOpenAI({ systemPrompt, userPrompt, maxTokens: 800, temperature: 0.2 });
     let result: Record<string, unknown>;
     try {
-      result = JSON.parse(content);
-    } catch {
-      return NextResponse.json({ error: "AI returned malformed JSON — please try again" }, { status: 500 });
+      result = await callOpenAIJson({ systemPrompt, userPrompt, maxTokens: 800, temperature: 0.2 });
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : "AI failed" }, { status: 500 });
     }
 
     // Strip null values so we don't overwrite existing data with nulls

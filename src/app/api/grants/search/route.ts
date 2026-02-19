@@ -1,7 +1,7 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { callOpenAI } from "@/lib/openai";
+import { callOpenAIJson } from "@/lib/openai";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { handleOptions } from "@/lib/cors";
 
@@ -90,12 +90,11 @@ ${filters.join("\n")}${dnaSection}${excludeSection}
 
 Be exhaustive — search your knowledge across government grants, foundations, corporate programs, EU funds, UN programs, bilateral aid, and private philanthropy. Return as many real matches as you can find (up to 20).`;
 
-    const content = await callOpenAI({ systemPrompt, userPrompt, maxTokens: 5000, temperature: 0.2 });
     let result: Record<string, unknown>;
     try {
-      result = JSON.parse(content);
-    } catch {
-      return NextResponse.json({ error: "AI returned malformed JSON — please try again" }, { status: 500 });
+      result = await callOpenAIJson({ systemPrompt, userPrompt, maxTokens: 5000, temperature: 0.2 });
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : "AI failed" }, { status: 500 });
     }
     return NextResponse.json({ success: true, results: (result.results as unknown[]) ?? [] });
   } catch (err) {

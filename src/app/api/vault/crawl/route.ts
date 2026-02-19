@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { handleOptions } from "@/lib/cors";
 import { callOpenAI } from "@/lib/openai";
+import { stripHtml } from "@/lib/htmlUtils";
 
 export async function OPTIONS() { return handleOptions(); }
 
@@ -32,14 +33,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Strip HTML tags to get readable text
-    const text = html
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s{2,}/g, " ")
-      .trim()
-      .slice(0, 12000);
+    const text = stripHtml(html).slice(0, 12000);
 
     if (text.length < 100) {
       return NextResponse.json({ error: "Page content too short or could not be extracted" }, { status: 422 });
