@@ -7,12 +7,19 @@ import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
 
 const companyInfoSchema = z.object({
-  values: z.string().optional(),
+  companyName:  z.string().optional(),
+  website:      z.string().optional(),
+  linkedinUrl:  z.string().optional(),
+  youtubeUrl:   z.string().optional(),
+  facebookUrl:  z.string().optional(),
+  hashtags:     z.string().optional(),
+  products:     z.string().optional(),
+  values:       z.string().optional(),
   corePhilosophy: z.string().optional(),
-  founders: z.string().optional(),
-  history: z.string().optional(),
+  founders:     z.string().optional(),
+  history:      z.string().optional(),
   achievements: z.string().optional(),
-  bulkContent: z.string().optional(),
+  bulkContent:  z.string().optional(),
 });
 
 // GET /api/company
@@ -41,15 +48,19 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const data = companyInfoSchema.parse(body);
 
-    // Ensure company row exists before inserting CompanyInfo (FK constraint)
+    // Upsert Company row (name + website from form)
+    const companyPatch: Record<string, string> = { id: DEMO_COMPANY_ID, name: data.companyName || "My Company" };
+    if (data.website) companyPatch.website = data.website;
     const { error: companyError } = await db
       .from("Company")
-      .upsert({ id: DEMO_COMPANY_ID, name: "My Company" }, { onConflict: "id" });
+      .upsert(companyPatch, { onConflict: "id" });
     if (companyError) throw new Error(`Company upsert failed: ${companyError.message}`);
 
+    // Upsert CompanyInfo (all fields)
+    const { companyName: _n, ...infoData } = data;
     const { data: info, error: upsertError } = await db
       .from("CompanyInfo")
-      .upsert({ companyId: DEMO_COMPANY_ID, ...data }, { onConflict: "companyId" })
+      .upsert({ companyId: DEMO_COMPANY_ID, ...infoData }, { onConflict: "companyId" })
       .select()
       .single();
 

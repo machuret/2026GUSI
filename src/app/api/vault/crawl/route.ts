@@ -2,7 +2,6 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from "next/server";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { handleOptions } from "@/lib/cors";
-import { callOpenAI } from "@/lib/openai";
 import { stripHtml } from "@/lib/htmlUtils";
 
 export async function OPTIONS() { return handleOptions(); }
@@ -15,6 +14,11 @@ export async function POST(req: NextRequest) {
     const { url } = await req.json();
     if (!url || typeof url !== "string") {
       return NextResponse.json({ error: "url is required" }, { status: 400 });
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 500 });
     }
 
     // Fetch the page
@@ -39,7 +43,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Page content too short or could not be extracted" }, { status: 422 });
     }
 
-    // Use AI to extract a clean, structured summary for the vault
     const systemPrompt = `You are a content extraction specialist. Given raw webpage text, extract and structure the most useful information for an AI content generator to learn from.
 
 Return a clean, well-structured summary that captures:
@@ -51,12 +54,37 @@ Return a clean, well-structured summary that captures:
 
 Format as clear paragraphs. Be thorough — this will be used as training context for an AI. Aim for 300-800 words.`;
 
-    const extracted = await callOpenAI({
-      systemPrompt,
-      userPrompt: `Extract and structure the key content from this webpage:\n\nURL: ${url}\n\nRAW TEXT:\n${text}`,
-      maxTokens: 1200,
-      temperature: 0.1,
+    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Extract and structure the key content from this webpage:\n\nURL: ${url}\n\nRAW TEXT:\n${text}` },
+        ],
+        temperature: 0.1,
+        max_tokens: 1200,
+      }),
     });
+
+    if (!openaiRes.ok) {
+      const errText = await openaiRes.text();
+      return NextResponse.json(
+        { error: `OpenAI error (${openaiRes.status}): ${errText.slice(0, 200)}` },
+        { status: 502 }
+      );
+    }
+
+    const aiData = await openaiRes.json();
+    const extracted = (aiData.choices?.[0]?.message?.content ?? "").trim();
+
+    if (!extracted) {
+      return NextResponse.json({ error: "AI returned empty content" }, { status: 502 });
+    }
 
     // Extract page title from HTML
     const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
