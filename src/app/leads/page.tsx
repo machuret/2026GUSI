@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Users, Search, Plus, Trash2, ExternalLink, Loader2, X,
   ChevronDown, ChevronUp, Linkedin, Globe, Zap, Save,
@@ -62,6 +62,54 @@ const SOURCES: ScrapeSrc[] = [
 
 const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
 const labelCls = "mb-1 block text-xs font-medium text-gray-600";
+
+// ─── Tag Input ─────────────────────────────────────────────────────────────────
+function TagInput({ tags, onChange, placeholder }: { tags: string[]; onChange: (tags: string[]) => void; placeholder?: string }) {
+  const [input, setInput] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const addTag = (val: string) => {
+    const trimmed = val.trim();
+    if (trimmed && !tags.includes(trimmed)) onChange([...tags, trimmed]);
+    setInput("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addTag(input);
+    } else if (e.key === "Backspace" && !input && tags.length > 0) {
+      onChange(tags.slice(0, -1));
+    }
+  };
+
+  const handleBlur = () => { if (input.trim()) addTag(input); };
+
+  return (
+    <div
+      onClick={() => inputRef.current?.focus()}
+      className="flex min-h-[42px] flex-wrap gap-1.5 rounded-lg border border-gray-300 px-3 py-2 cursor-text focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500"
+    >
+      {tags.map((tag) => (
+        <span key={tag} className="flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-medium text-brand-800">
+          {tag}
+          <button type="button" onClick={(e) => { e.stopPropagation(); onChange(tags.filter((t) => t !== tag)); }} className="text-brand-500 hover:text-brand-800">
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+      <input
+        ref={inputRef}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
+        placeholder={tags.length === 0 ? (placeholder ?? "Type and press Enter or comma") : "Add more…"}
+        className="min-w-[140px] flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400"
+      />
+    </div>
+  );
+}
 
 // ─── Scraper Modal ─────────────────────────────────────────────────────────────
 function ScraperModal({ onClose, onImported }: { onClose: () => void; onImported: (leads: Lead[]) => void }) {
@@ -181,11 +229,10 @@ function ScraperModal({ onClose, onImported }: { onClose: () => void; onImported
                     className={inputCls}
                   />
                 ) : f.type === "tags" ? (
-                  <input
-                    type="text"
-                    value={Array.isArray(fields[f.key]) ? (fields[f.key] as string[]).join(", ") : (fields[f.key] as string) ?? ""}
-                    onChange={(e) => setField(f.key, e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
-                    className={inputCls} placeholder={f.placeholder}
+                  <TagInput
+                    tags={Array.isArray(fields[f.key]) ? (fields[f.key] as string[]) : []}
+                    onChange={(tags) => setField(f.key, tags)}
+                    placeholder={f.placeholder}
                   />
                 ) : (
                   <input
