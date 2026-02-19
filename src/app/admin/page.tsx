@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Shield, UserPlus, ToggleLeft, ToggleRight } from "lucide-react";
+import { Shield, ToggleLeft, ToggleRight, ExternalLink } from "lucide-react";
 
 interface AppUser {
   id: string;
@@ -17,9 +17,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ email: "", name: "", role: "EDITOR", password: "" });
-  const [saving, setSaving] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -37,29 +35,6 @@ export default function AdminPage() {
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-  const handleCreate = useCallback(async () => {
-    setSaving(true);
-    setActionError(null);
-    try {
-      const res = await fetch("/api/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setShowForm(false);
-        setForm({ email: "", name: "", role: "EDITOR", password: "" });
-        fetchUsers();
-      } else {
-        setActionError(data.error || `Failed to create user (${res.status})`);
-      }
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Failed to create user");
-    } finally {
-      setSaving(false);
-    }
-  }, [form, fetchUsers]);
 
   const toggleActive = useCallback((user: AppUser) => {
     setUsers((prev) =>
@@ -106,53 +81,24 @@ export default function AdminPage() {
           <p className="mt-1 text-gray-500">Manage editors and administrators</p>
         </div>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => setShowInstructions(!showInstructions)}
           className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700"
         >
-          <UserPlus className="h-4 w-4" /> Add User
+          <ExternalLink className="h-4 w-4" /> Add User
         </button>
       </div>
 
-      {showForm && (
-        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6">
-          <h3 className="mb-4 font-semibold text-gray-800">New User</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <input
-              placeholder="Name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            />
-            <input
-              placeholder="Email"
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            />
-            <input
-              placeholder="Password (min 6 chars)"
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            />
-            <select
-              value={form.role}
-              onChange={(e) => setForm({ ...form, role: e.target.value })}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            >
-              <option value="EDITOR">Editor</option>
-              <option value="SUPER_ADMIN">Super Admin</option>
-            </select>
-          </div>
-          <button
-            onClick={handleCreate}
-            disabled={saving || !form.email || !form.name}
-            className="mt-4 rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-          >
-            {saving ? "Creating..." : "Create User"}
-          </button>
+      {showInstructions && (
+        <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-5">
+          <h3 className="mb-2 font-semibold text-blue-900">How to add a new user</h3>
+          <ol className="list-decimal list-inside space-y-1 text-sm text-blue-800">
+            <li>Go to your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-600">Supabase dashboard <ExternalLink className="inline h-3 w-3" /></a></li>
+            <li>Navigate to <strong>Authentication → Users</strong></li>
+            <li>Click <strong>Invite user</strong> and enter their email</li>
+            <li>They will receive a magic link to set their password</li>
+            <li>Their account will appear here automatically on first login</li>
+          </ol>
+          <p className="mt-3 text-xs text-blue-600">Role and active status can be managed from this page once they have logged in.</p>
         </div>
       )}
 

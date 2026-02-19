@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { Upload, Plus, Trash2, Send, Sparkles, CheckCircle2, Link2, FileText, AlignLeft, BarChart3, RefreshCw, X, ChevronDown, ChevronUp } from "lucide-react";
 
 const CONTENT_TYPES = [
@@ -20,7 +21,7 @@ interface PostEntry { title: string; body: string; contentType: string; platform
 interface TrainingStats { totalPosts: number; totalWords: number; avgWords: number; coverage: Record<string, number>; readiness: number; styleProfile: any; recommendations: string[]; }
 
 const emptyPost = (): PostEntry => ({ title: "", body: "", contentType: "blog", platform: "website", tags: "" });
-const CID = "demo";
+const CID = DEMO_COMPANY_ID;
 const IC = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
 
 function ReadinessRing({ score }: { score: number }) {

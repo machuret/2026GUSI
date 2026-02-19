@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { callOpenAI } from "@/lib/openai";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
+import { handleOptions } from "@/lib/cors";
 
 const bodySchema = z.object({
   query: z.string().optional(),
@@ -19,6 +20,8 @@ const bodySchema = z.object({
   (d) => d.query || d.sector || d.grantType || d.orgType,
   { message: "At least one search filter is required" }
 );
+
+export async function OPTIONS() { return handleOptions(); }
 
 export async function POST(req: NextRequest) {
   try {

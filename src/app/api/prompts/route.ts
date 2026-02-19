@@ -13,18 +13,25 @@ const promptSchema = z.object({
 });
 
 // GET /api/prompts
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const { response: authError } = await requireAuth();
     if (authError) return authError;
 
-    const { data: prompts } = await db
-      .from("PromptTemplate")
-      .select("*")
-      .eq("companyId", DEMO_COMPANY_ID)
-      .order("updatedAt", { ascending: false });
+    const p = req.nextUrl.searchParams;
+    const rawLimit = parseInt(p.get("limit") ?? "100", 10);
+    const rawOffset = parseInt(p.get("offset") ?? "0", 10);
+    const limit = Math.min(200, Math.max(1, isNaN(rawLimit) ? 100 : rawLimit));
+    const offset = Math.max(0, isNaN(rawOffset) ? 0 : rawOffset);
 
-    return NextResponse.json({ prompts: prompts ?? [] });
+    const { data: prompts, count } = await db
+      .from("PromptTemplate")
+      .select("*", { count: "exact" })
+      .eq("companyId", DEMO_COMPANY_ID)
+      .order("updatedAt", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    return NextResponse.json({ prompts: prompts ?? [], total: count ?? 0, limit, offset });
   } catch (error) {
     return handleApiError(error, "Prompts GET");
   }

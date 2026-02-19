@@ -123,10 +123,22 @@ export async function getAllHistory(
 }
 
 /**
- * Find a content record across ALL tables by id.
- * Runs all 9 queries in parallel — much faster than sequential loop.
+ * Find a content record by id.
+ * If categoryHint is provided, queries only that table (1 query).
+ * Otherwise falls back to searching all 9 tables in parallel.
  */
-export async function findContentById(id: string) {
+export async function findContentById(id: string, categoryHint?: string) {
+  if (categoryHint) {
+    const cat = CATEGORIES.find((c) => c.key === categoryHint);
+    if (cat) {
+      const { data: record } = await db
+        .from(cat.table)
+        .select("*, company:Company(name, id)")
+        .eq("id", id)
+        .maybeSingle();
+      return record ? { record: record as ContentRecord, category: cat.key, categoryLabel: cat.label } : null;
+    }
+  }
   const results = await Promise.all(
     CATEGORIES.map(async (cat) => {
       const { data: record } = await db

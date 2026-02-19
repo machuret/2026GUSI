@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = reviewSchema.parse(body);
 
-    const found = await findContentById(data.contentId);
+    const found = await findContentById(data.contentId, data.category);
     if (!found) {
       return NextResponse.json({ error: "Content not found" }, { status: 404 });
     }

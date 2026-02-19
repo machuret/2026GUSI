@@ -13,16 +13,16 @@ const categoryKeys = CATEGORIES.map((c) => c.key) as [string, ...string[]];
 
 const abSchema = z.object({
   companyId: z.string().min(1),
-  prompt: z.string().min(1),
+  prompt: z.string().min(1).max(2000, "Prompt must be under 2000 characters"),
   category: z.enum(categoryKeys),
   brief: z.object({
-    audience: z.string().optional(),
-    goal: z.string().optional(),
-    cta: z.string().optional(),
-    keywords: z.string().optional(),
+    audience: z.string().max(500).optional(),
+    goal: z.string().max(500).optional(),
+    cta: z.string().max(300).optional(),
+    keywords: z.string().max(500).optional(),
     tone: z.number().min(0).max(4).optional(),
     length: z.number().min(0).max(4).optional(),
-    platform: z.string().optional(),
+    platform: z.string().max(100).optional(),
   }).optional(),
 });
 

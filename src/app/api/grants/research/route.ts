@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { callOpenAI } from "@/lib/openai";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
+import { handleOptions } from "@/lib/cors";
 
 const bodySchema = z.object({
   name: z.string().optional(),
@@ -10,6 +11,8 @@ const bodySchema = z.object({
   founder: z.string().optional(),
   existingData: z.record(z.any()).optional(),
 }).refine((d) => d.name || d.url, { message: "name or url required" });
+
+export async function OPTIONS() { return handleOptions(); }
 
 export async function POST(req: NextRequest) {
   try {

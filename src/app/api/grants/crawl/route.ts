@@ -4,12 +4,15 @@ import { z } from "zod";
 import { callOpenAI } from "@/lib/openai";
 import { KNOWN_GRANT_SITES } from "@/lib/grantSites";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
+import { handleOptions } from "@/lib/cors";
 
 const bodySchema = z.object({
   url: z.string().url("A valid URL is required"),
   siteName: z.string().optional(),
   extractionHint: z.string().optional(),
 });
+
+export async function OPTIONS() { return handleOptions(); }
 
 export async function POST(req: NextRequest) {
   try {

@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 
 // PATCH /api/prompts/[id]
 export async function PATCH(
@@ -9,9 +9,8 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerSupabase();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { response: authError } = await requireAuth();
+    if (authError) return authError;
 
     const body = await req.json();
     const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
@@ -25,17 +24,17 @@ export async function PATCH(
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
 
-    const { data: updated } = await db
+    const { data: updated, error: updateError } = await db
       .from("PromptTemplate")
       .update(patch)
       .eq("id", params.id)
       .select()
       .single();
 
+    if (updateError) throw updateError;
     return NextResponse.json({ success: true, prompt: updated });
   } catch (error) {
-    console.error("Prompt PATCH error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return handleApiError(error, "Prompt PATCH");
   }
 }
 
@@ -45,14 +44,13 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerSupabase();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { response: authError } = await requireAuth();
+    if (authError) return authError;
 
-    await db.from("PromptTemplate").delete().eq("id", params.id);
+    const { error: deleteError } = await db.from("PromptTemplate").delete().eq("id", params.id);
+    if (deleteError) throw deleteError;
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Prompt DELETE error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return handleApiError(error, "Prompt DELETE");
   }
 }

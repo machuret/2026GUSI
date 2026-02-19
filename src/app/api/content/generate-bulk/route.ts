@@ -14,15 +14,15 @@ const categoryKeys = CATEGORIES.map((c) => c.key) as [string, ...string[]];
 const bulkSchema = z.object({
   companyId: z.string().min(1),
   category: z.enum(categoryKeys),
-  topics: z.array(z.string().min(1)).min(1).max(20),
+  topics: z.array(z.string().min(1).max(500, "Topic must be under 500 characters")).min(1).max(20),
   brief: z.object({
-    audience: z.string().optional(),
-    goal: z.string().optional(),
-    cta: z.string().optional(),
-    keywords: z.string().optional(),
+    audience: z.string().max(500).optional(),
+    goal: z.string().max(500).optional(),
+    cta: z.string().max(300).optional(),
+    keywords: z.string().max(500).optional(),
     tone: z.number().min(0).max(4).optional(),
     length: z.number().min(0).max(4).optional(),
-    platform: z.string().optional(),
+    platform: z.string().max(100).optional(),
   }).optional(),
 });
 

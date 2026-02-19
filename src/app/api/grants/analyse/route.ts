@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { callOpenAI } from "@/lib/openai";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
+import { corsHeaders, handleOptions } from "@/lib/cors";
 
 
 const bodySchema = z.object({
@@ -39,6 +40,8 @@ async function persistScore(grantId: string, score: number, verdict: string) {
     // non-fatal — analysis still returns even if persist fails
   }
 }
+
+export async function OPTIONS() { return handleOptions(); }
 
 export async function POST(req: NextRequest) {
   try {

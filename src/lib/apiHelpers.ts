@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { logger } from "@/lib/logger";
 
 /**
  * Verify the request has a valid Supabase session.
@@ -25,7 +26,7 @@ export function handleApiError(error: unknown, context = "API") {
       { status: 400 }
     );
   }
-  console.error(`${context} error:`, error);
+  logger.error(context, error instanceof Error ? error.message : "Unknown error", error);
   const message = error instanceof Error ? error.message : "Internal server error";
   return NextResponse.json({ error: message }, { status: 500 });
 }

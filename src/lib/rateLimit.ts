@@ -1,25 +1,37 @@
 /**
- * Simple in-memory rate limiter for API routes.
- * Uses a sliding window per identifier (userId or IP).
- * Resets automatically — no external dependency required.
+ * In-memory rate limiter with lazy TTL cleanup.
  *
- * Limits:
- *  - generate / generate-ab: 20 requests per 60 seconds per user
- *  - generate-bulk: 5 requests per 60 seconds per user
+ * ⚠️  SERVERLESS NOTE: This store lives in module memory. On platforms like
+ * Vercel each serverless instance has its own store — limits are per-instance,
+ * not global. For true global rate limiting, replace with Upstash Redis:
+ * https://github.com/upstash/ratelimit
+ *
+ * For the current single-tenant beta this is acceptable.
  */
 
-interface Window {
+interface RateWindow {
   count: number;
   resetAt: number;
 }
 
-const store = new Map<string, Window>();
+const store = new Map<string, RateWindow>();
+
+/** Lazily evict expired entries — called on every check, O(1) amortised. */
+function evictExpired(now: number) {
+  // Only scan if store is large to avoid O(n) on every request
+  if (store.size < 500) return;
+  Array.from(store.entries()).forEach(([key, win]) => {
+    if (now > win.resetAt) store.delete(key);
+  });
+}
 
 export function checkRateLimit(
   key: string,
   { limit, windowMs }: { limit: number; windowMs: number }
 ): { allowed: boolean; remaining: number; resetAt: number } {
   const now = Date.now();
+  evictExpired(now);
+
   const existing = store.get(key);
 
   if (!existing || now > existing.resetAt) {
@@ -35,15 +47,15 @@ export function checkRateLimit(
   return { allowed: true, remaining: limit - existing.count, resetAt: existing.resetAt };
 }
 
-// Periodically clean up expired entries to prevent memory leak.
-// Only runs in Node.js runtime — not in edge runtime where setInterval may not persist.
-if (typeof globalThis.setInterval !== "undefined" && typeof process !== "undefined" && process.versions?.node) {
-  setInterval(() => {
-    const now = Date.now();
-    Array.from(store.entries()).forEach(([key, win]) => {
-      if (now > win.resetAt) store.delete(key);
-    });
-  }, 60_000).unref?.();
+/**
+ * Returns standard rate-limit response headers.
+ */
+export function rateLimitHeaders(result: { remaining: number; resetAt: number }, limit: number) {
+  return {
+    "X-RateLimit-Limit": String(limit),
+    "X-RateLimit-Remaining": String(result.remaining),
+    "X-RateLimit-Reset": String(Math.ceil(result.resetAt / 1000)),
+  };
 }
 
 export const RATE_LIMITS = {
