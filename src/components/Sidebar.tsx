@@ -62,6 +62,7 @@ export function Sidebar() {
   const supabase = createClient();
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [roleLoaded, setRoleLoaded] = useState(false);
 
   useEffect(() => {
     fetch("/api/users/me")
@@ -69,11 +70,13 @@ export function Sidebar() {
       .then((d) => {
         if (d.user?.role)  setUserRole(d.user.role);
         if (d.user?.email) setUserEmail(d.user.email);
+        setRoleLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => { setRoleLoaded(true); });
   }, []);
 
-  const canAccessSettings = userRole ? hasRole(userRole, "ADMIN") : false;
+  // Show settings while loading (optimistic) — hide only once loaded and confirmed non-admin
+  const canAccessSettings = !roleLoaded || (userRole ? hasRole(userRole, "ADMIN") : false);
   const canAccessAdmin    = userRole ? hasRole(userRole, "SUPER_ADMIN") : false;
 
   const handleLogout = async () => {
