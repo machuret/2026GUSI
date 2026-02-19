@@ -16,9 +16,17 @@ export async function getAppUser(authId: string, email: string) {
   if (existing) return existing;
 
   const now = new Date().toISOString();
+  // Auto-promote to SUPER_ADMIN if no admin exists yet (first-time bootstrap)
+  const { count } = await db
+    .from("User")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "SUPER_ADMIN");
+
+  const role = (count ?? 0) === 0 ? "SUPER_ADMIN" : "EDITOR";
+
   const { data: created, error } = await db
     .from("User")
-    .insert({ authId, email, name: email.split("@")[0], role: "EDITOR", updatedAt: now })
+    .insert({ authId, email, name: email.split("@")[0], role, updatedAt: now })
     .select()
     .single();
 

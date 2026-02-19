@@ -12,14 +12,28 @@ const createUserSchema = z.object({
   role: z.enum(["SUPER_ADMIN", "EDITOR"]),
 });
 
-// GET /api/users — list all users (super admin only)
+// GET /api/users — list all users (super admin only, with bootstrap self-promotion)
 export async function GET() {
   try {
     const supabase = createServerSupabase();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    await requireRole(user.id, "SUPER_ADMIN");
+    // Bootstrap: if no SUPER_ADMIN exists yet, promote the calling user
+    const { count: adminCount } = await db
+      .from("User")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "SUPER_ADMIN");
+
+    if ((adminCount ?? 0) === 0) {
+      const now = new Date().toISOString();
+      await db
+        .from("User")
+        .update({ role: "SUPER_ADMIN", updatedAt: now })
+        .eq("authId", user.id);
+    } else {
+      await requireRole(user.id, "SUPER_ADMIN");
+    }
 
     const { data: users } = await db
       .from("User")
@@ -29,7 +43,7 @@ export async function GET() {
     return NextResponse.json({ users: users ?? [] });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Internal server error";
-    const status = msg.toLowerCase().includes("forbidden") || msg.toLowerCase().includes("unauthorized") ? 403 : 500;
+    const status = msg.toLowerCase().includes("insufficient") || msg.toLowerCase().includes("unauthorized") ? 403 : 500;
     return NextResponse.json({ error: msg }, { status });
   }
 }

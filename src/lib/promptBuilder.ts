@@ -50,6 +50,11 @@ export interface ContentBriefOptions {
   platform?: string;
 }
 
+interface VaultDoc {
+  filename: string;
+  content: string;
+}
+
 interface BuildPromptOptions {
   companyName: string;
   companyIndustry?: string;
@@ -59,6 +64,7 @@ interface BuildPromptOptions {
   companyInfo: CompanyInfo | null;
   promptTemplate: PromptTemplate | null;
   lessons: Lesson[];
+  vaultDocs?: VaultDoc[];
   brief?: ContentBriefOptions;
 }
 
@@ -106,6 +112,7 @@ export function buildSystemPrompt({
   companyInfo,
   promptTemplate,
   lessons,
+  vaultDocs,
   brief,
 }: BuildPromptOptions): string {
   const toneIndex = brief?.tone ?? 2;
@@ -190,7 +197,15 @@ ${styleProfile.summary ? `- Summary: ${styleProfile.summary}` : ""}`
         .join("\n")
     : "";
 
-  // 9. Brief context block
+  // 9. Vault knowledge
+  const vaultBlock = vaultDocs && vaultDocs.length > 0
+    ? `\n\nKNOWLEDGE VAULT (research and reference material — use this to inform your content):\n` +
+      vaultDocs
+        .map((d) => `--- ${d.filename} ---\n${d.content.slice(0, 2000)}`)
+        .join("\n\n")
+    : "";
+
+  // 10. Brief context block
   const briefParts: string[] = [];
   if (brief?.audience) briefParts.push(`- Target audience: ${brief.audience}`);
   if (brief?.goal) briefParts.push(`- Goal: ${brief.goal}`);
@@ -203,7 +218,7 @@ ${styleProfile.summary ? `- Summary: ${styleProfile.summary}` : ""}`
   const industry = companyIndustry ? ` (${companyIndustry})` : "";
 
   return `You are the content writer for ${companyName}${industry}. You are writing a ${categoryLabel}.
-${dnaBlock}${identityBlock}${styleBlock}${examplesBlock}${rulesBlock}${platformBlock}${customBlock}${lessonsBlock}${briefBlock}
+${dnaBlock}${identityBlock}${styleBlock}${examplesBlock}${rulesBlock}${platformBlock}${customBlock}${vaultBlock}${lessonsBlock}${briefBlock}
 
 OUTPUT RULES:
 1. Follow the Writing DNA above as your primary instruction — it defines the voice, tone, structure, and vocabulary you must use.

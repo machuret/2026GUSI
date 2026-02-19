@@ -12,12 +12,13 @@ export async function loadGenerationContext(
   companyId: string,
   category: string
 ) {
-  const [styleRes, postsRes, infoRes, promptRes, lessonsRes] = await Promise.all([
+  const [styleRes, postsRes, infoRes, promptRes, lessonsRes, vaultRes] = await Promise.all([
     db.from("StyleProfile").select("*").eq("companyId", companyId).maybeSingle(),
     db.from("ContentPost").select("*").eq("companyId", companyId).order("createdAt", { ascending: false }).limit(5),
     db.from("CompanyInfo").select("*").eq("companyId", companyId).maybeSingle(),
     db.from("PromptTemplate").select("*").eq("companyId", companyId).eq("contentType", category).eq("active", true).limit(1),
     db.from("Lesson").select("*").eq("companyId", companyId).eq("active", true).or(`contentType.eq.${category},contentType.is.null`).order("createdAt", { ascending: false }).limit(30),
+    db.from("Document").select("filename, content").eq("companyId", companyId).order("createdAt", { ascending: false }).limit(10),
   ]);
 
   return {
@@ -26,6 +27,7 @@ export async function loadGenerationContext(
     companyInfo: infoRes.data ?? null,
     promptTemplate: promptRes.data?.[0] ?? null,
     lessons: lessonsRes.data ?? [],
+    vaultDocs: vaultRes.data ?? [],
   };
 }
 
@@ -51,6 +53,7 @@ export async function buildGenerationPrompt(
     companyInfo: ctx.companyInfo,
     promptTemplate: ctx.promptTemplate,
     lessons: ctx.lessons,
+    vaultDocs: ctx.vaultDocs,
     brief,
   });
 }

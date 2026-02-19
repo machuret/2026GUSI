@@ -18,6 +18,8 @@ import {
   Trophy,
   Users,
   Rss,
+  Vault,
+  LayoutTemplate,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -41,6 +43,8 @@ const grantsNav = [
 
 const settingsNav = [
   { href: "/company", label: "Company Info", icon: Building2 },
+  { href: "/vault", label: "Content Vault", icon: Vault },
+  { href: "/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/prompts", label: "Prompt Management", icon: FileText },
   { href: "/lessons", label: "Lessons", icon: BookOpen },
   { href: "/activity", label: "Activity Log", icon: Activity },
