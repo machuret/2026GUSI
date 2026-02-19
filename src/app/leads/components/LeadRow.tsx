@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   ChevronDown, ChevronUp, Linkedin, Globe, Save, Trash2, Loader2,
-  Mail, Phone, Building2, MapPin, Tag, Code2,
+  Mail, Phone, Building2, MapPin, Tag, Code2, User, ExternalLink,
 } from "lucide-react";
 import { type Lead, LEAD_STATUSES, STATUS_STYLES, SOURCE_STYLES } from "@/hooks/useLeads";
 
@@ -95,6 +95,8 @@ export function LeadRow({ lead, onUpdate, onDelete }: Props) {
                   { k: "fullName", label: "Full Name" }, { k: "email", label: "Email" },
                   { k: "phone", label: "Phone" }, { k: "jobTitle", label: "Job Title" },
                   { k: "company", label: "Company" }, { k: "location", label: "Location" },
+                  { k: "city", label: "City" }, { k: "state", label: "State" },
+                  { k: "country", label: "Country" }, { k: "website", label: "Website" },
                   { k: "linkedinUrl", label: "LinkedIn URL" }, { k: "profileUrl", label: "Profile URL" },
                 ] as { k: keyof Lead; label: string }[]).map(({ k, label }) => (
                   <div key={k}>
@@ -114,13 +116,61 @@ export function LeadRow({ lead, onUpdate, onDelete }: Props) {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 text-sm">
-                {lead.email && <div className="flex items-center gap-2 text-gray-700"><Mail className="h-4 w-4 text-gray-400 shrink-0" /><a href={`mailto:${lead.email}`} className="text-brand-600 hover:underline truncate">{lead.email}</a></div>}
-                {lead.phone && <div className="flex items-center gap-2 text-gray-700"><Phone className="h-4 w-4 text-gray-400 shrink-0" />{lead.phone}</div>}
-                {lead.company && <div className="flex items-center gap-2 text-gray-700"><Building2 className="h-4 w-4 text-gray-400 shrink-0" />{lead.company}</div>}
-                {lead.location && <div className="flex items-center gap-2 text-gray-700"><MapPin className="h-4 w-4 text-gray-400 shrink-0" />{lead.location}</div>}
-                {lead.specialties?.length ? <div className="flex items-start gap-2 text-gray-700 sm:col-span-2"><Tag className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" /><span>{lead.specialties.join(", ")}</span></div> : null}
-                {lead.notes && <div className="sm:col-span-3 text-gray-600 text-xs whitespace-pre-wrap bg-white rounded-lg border border-gray-100 px-3 py-2">{lead.notes}</div>}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
+                {lead.email && (
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Mail className="h-4 w-4 text-gray-400 shrink-0" />
+                    <a href={`mailto:${lead.email}`} className="text-brand-600 hover:underline truncate">{lead.email}</a>
+                  </div>
+                )}
+                {lead.phone && (
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Phone className="h-4 w-4 text-gray-400 shrink-0" />{lead.phone}
+                  </div>
+                )}
+                {lead.gender && (
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <User className="h-4 w-4 text-gray-400 shrink-0" />{lead.gender}
+                  </div>
+                )}
+                {lead.company && (
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Building2 className="h-4 w-4 text-gray-400 shrink-0" />{lead.company}
+                  </div>
+                )}
+                {(lead.location || lead.city || lead.state) && (
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <MapPin className="h-4 w-4 text-gray-400 shrink-0" />
+                    {lead.location || [lead.city, lead.state, lead.country].filter(Boolean).join(", ")}
+                  </div>
+                )}
+                {lead.website && (
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Globe className="h-4 w-4 text-gray-400 shrink-0" />
+                    <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline truncate">{lead.website}</a>
+                  </div>
+                )}
+                {lead.profileUrl && (
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <ExternalLink className="h-4 w-4 text-gray-400 shrink-0" />
+                    <a href={lead.profileUrl} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline truncate">View Profile</a>
+                  </div>
+                )}
+                {lead.linkedinUrl && (
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Linkedin className="h-4 w-4 text-blue-400 shrink-0" />
+                    <a href={lead.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline truncate">LinkedIn</a>
+                  </div>
+                )}
+                {lead.specialties?.length ? (
+                  <div className="flex items-start gap-2 text-gray-700 sm:col-span-2">
+                    <Tag className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" />
+                    <span>{lead.specialties.join(", ")}</span>
+                  </div>
+                ) : null}
+                {lead.notes && (
+                  <div className="sm:col-span-3 text-gray-600 text-xs whitespace-pre-wrap bg-white rounded-lg border border-gray-100 px-3 py-2">{lead.notes}</div>
+                )}
                 <div className="sm:col-span-3 flex items-center gap-4">
                   <button onClick={() => setEditing(true)} className="text-xs text-brand-600 hover:underline">Edit all fields →</button>
                   {lead.rawData && (

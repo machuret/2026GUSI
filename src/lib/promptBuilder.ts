@@ -16,6 +16,12 @@ interface CompanyInfo {
   founders?: string;
   history?: string;
   achievements?: string;
+  website?: string;
+  linkedinUrl?: string;
+  youtubeUrl?: string;
+  facebookUrl?: string;
+  hashtags?: string;
+  products?: string;
 }
 
 interface ContentPost {
@@ -130,11 +136,19 @@ export function buildSystemPrompt({
 
   // 2. Company identity
   const identityParts: string[] = [];
+  if (companyInfo?.website) identityParts.push(`Website: ${companyInfo.website}`);
   if (companyInfo?.values) identityParts.push(`Values: ${companyInfo.values}`);
   if (companyInfo?.corePhilosophy) identityParts.push(`Philosophy: ${companyInfo.corePhilosophy}`);
   if (companyInfo?.founders) identityParts.push(`Founders/Team: ${companyInfo.founders}`);
   if (companyInfo?.history) identityParts.push(`History: ${companyInfo.history}`);
   if (companyInfo?.achievements) identityParts.push(`Achievements: ${companyInfo.achievements}`);
+  if (companyInfo?.products) identityParts.push(`Products/Services: ${companyInfo.products}`);
+  const socialParts: string[] = [];
+  if (companyInfo?.linkedinUrl) socialParts.push(`LinkedIn: ${companyInfo.linkedinUrl}`);
+  if (companyInfo?.youtubeUrl) socialParts.push(`YouTube: ${companyInfo.youtubeUrl}`);
+  if (companyInfo?.facebookUrl) socialParts.push(`Facebook: ${companyInfo.facebookUrl}`);
+  if (companyInfo?.hashtags) socialParts.push(`Brand hashtags: ${companyInfo.hashtags}`);
+  if (socialParts.length) identityParts.push(`Social presence: ${socialParts.join(" | ")}`);
   const identityBlock = identityParts.length > 0
     ? `\n\nCOMPANY IDENTITY:\n${identityParts.join("\n")}`
     : "";
