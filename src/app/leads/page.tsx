@@ -5,8 +5,9 @@ import {
   Users, Search, Plus, Trash2, ExternalLink, Loader2, X,
   ChevronDown, ChevronUp, Linkedin, Globe, Zap, Save,
   Mail, Phone, Building2, MapPin, Star, Tag, RefreshCw,
-  AlertCircle, Code2, CheckCircle2,
+  AlertCircle, Code2, CheckCircle2, Download,
 } from "lucide-react";
+import { exportToCsv } from "@/lib/exportCsv";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import {
   useLeads, type Lead, LEAD_STATUSES, STATUS_STYLES, SOURCE_STYLES,
@@ -483,6 +484,31 @@ export default function LeadsPage() {
         <div className="flex items-center gap-2">
           <button onClick={fetchLeads} title="Refresh" className="rounded-lg border border-gray-200 p-2.5 hover:bg-gray-50">
             <RefreshCw className="h-4 w-4 text-gray-500" />
+          </button>
+          <button
+            onClick={() => {
+              const rows = leads.map((l) => ({
+                "Full Name": l.fullName ?? "",
+                "Job Title": l.jobTitle ?? "",
+                Company: l.company ?? "",
+                Email: l.email ?? "",
+                Phone: l.phone ?? "",
+                Location: l.location ?? "",
+                Source: l.source ?? "",
+                Status: l.status ?? "",
+                LinkedIn: l.linkedinUrl ?? "",
+                "Profile URL": l.profileUrl ?? "",
+                Specialties: Array.isArray(l.specialties) ? l.specialties.join("; ") : "",
+                Notes: l.notes ?? "",
+                Added: l.createdAt ? new Date(l.createdAt).toLocaleDateString("en-AU") : "",
+              }));
+              exportToCsv(`leads-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+            }}
+            disabled={leads.length === 0}
+            title="Export visible leads to CSV"
+            className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+          >
+            <Download className="h-4 w-4" /> Export CSV
           </button>
           <button onClick={() => setShowScraper(true)} className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700">
             <Zap className="h-4 w-4" /> Scrape Leads

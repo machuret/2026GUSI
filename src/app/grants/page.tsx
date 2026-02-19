@@ -5,10 +5,12 @@ import {
   Plus, ExternalLink, Trash2, ChevronDown, ChevronUp,
   Search, FileText, Loader2, X, Save, Sparkles, FlaskConical,
   CheckCircle2, AlertCircle, TrendingUp, Globe, BadgeCheck, ShieldAlert,
+  Download,
 } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { useGrants, type Grant } from "@/hooks/useGrants";
 import { authFetch } from "@/lib/authFetch";
+import { exportToCsv } from "@/lib/exportCsv";
 
 // ─── Dropdown options ─────────────────────────────────────────────────────────
 const GEO_SCOPES = [
@@ -852,6 +854,32 @@ export default function GrantsPage() {
           <p className="mt-1 text-gray-500">Track, research, and prioritise grant opportunities</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const rows = filtered.map((g) => ({
+                Name: g.name,
+                Founder: g.founder ?? "",
+                URL: g.url ?? "",
+                Deadline: g.deadlineDate ? new Date(g.deadlineDate).toLocaleDateString("en-AU") : "",
+                Amount: g.amount ?? "",
+                "Geographic Scope": g.geographicScope ?? "",
+                "Project Duration": g.projectDuration ?? "",
+                Eligibility: g.eligibility ?? "",
+                "How to Apply": g.howToApply ?? "",
+                "Fit Score": g.fitScore ?? "",
+                "Submission Effort": g.submissionEffort ?? "",
+                Decision: g.decision ?? "",
+                Notes: g.notes ?? "",
+                Added: new Date(g.createdAt).toLocaleDateString("en-AU"),
+              }));
+              exportToCsv(`grants-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+            }}
+            disabled={filtered.length === 0}
+            title="Export visible grants to CSV"
+            className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+          >
+            <Download className="h-4 w-4" /> Export CSV
+          </button>
           <button onClick={() => setShowSearch(true)} className="flex items-center gap-2 rounded-lg border border-brand-300 bg-brand-50 px-4 py-2.5 text-sm font-medium text-brand-700 hover:bg-brand-100">
             <Search className="h-4 w-4" /> Search Grants
           </button>
