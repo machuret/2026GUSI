@@ -9,6 +9,7 @@ import {
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { useGrants } from "@/hooks/useGrants";
 import { KNOWN_GRANT_SITES, type GrantSite } from "@/lib/grantSites";
+import { authFetch } from "@/lib/authFetch";
 
 interface CrawledGrant {
   name: string;
@@ -66,7 +67,7 @@ export default function GrantCrawlerPage() {
     setIsPartial(false);
     setAdded({});
     try {
-      const res = await fetch("/api/grants/crawl", {
+      const res = await authFetch("/api/grants/crawl", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url, siteName, extractionHint: extractionHint || undefined }),

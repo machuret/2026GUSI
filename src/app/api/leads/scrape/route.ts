@@ -3,13 +3,20 @@ export const maxDuration = 30; // Only needs to start the run now — no polling
 import { NextRequest, NextResponse } from "next/server";
 import { SCRAPE_SOURCES } from "@/lib/leadSources";
 import { normalise } from "@/lib/leadNormalisers";
+import { requireAuth } from "@/lib/apiHelpers";
+import { getEnv } from "@/lib/env";
 
-const APIFY_TOKEN = process.env.APIFY_API_TOKEN!;
 const APIFY_BASE = "https://api.apify.com/v2";
 
 // ─── POST — start Apify run, return runId immediately ─────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    const { response: authError } = await requireAuth();
+    if (authError) return authError;
+
+    const { APIFY_API_TOKEN } = getEnv();
+    if (!APIFY_API_TOKEN) return NextResponse.json({ error: "Apify token not configured" }, { status: 500 });
+
     const { sourceId, inputFields } = await req.json();
 
     const source = SCRAPE_SOURCES.find((s) => s.id === sourceId);
@@ -20,7 +27,7 @@ export async function POST(req: NextRequest) {
     const actorInput = source.buildInput(inputFields ?? {});
 
     const runRes = await fetch(
-      `${APIFY_BASE}/acts/${encodeURIComponent(source.actorId)}/runs?token=${APIFY_TOKEN}`,
+      `${APIFY_BASE}/acts/${encodeURIComponent(source.actorId)}/runs?token=${APIFY_API_TOKEN}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -53,6 +60,9 @@ export async function POST(req: NextRequest) {
 
 // ─── GET — poll run status OR return source list ──────────────────────────────
 export async function GET(req: NextRequest) {
+  const { response: authError } = await requireAuth();
+  if (authError) return authError;
+
   const runId = req.nextUrl.searchParams.get("runId");
   const datasetId = req.nextUrl.searchParams.get("datasetId");
   const sourceId = req.nextUrl.searchParams.get("sourceId");
@@ -63,8 +73,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const { APIFY_API_TOKEN } = getEnv();
+    if (!APIFY_API_TOKEN) return NextResponse.json({ error: "Apify token not configured" }, { status: 500 });
+
     // Check run status
-    const statusRes = await fetch(`${APIFY_BASE}/actor-runs/${runId}?token=${APIFY_TOKEN}`);
+    const statusRes = await fetch(`${APIFY_BASE}/actor-runs/${runId}?token=${APIFY_API_TOKEN}`);
     if (!statusRes.ok) {
       return NextResponse.json({ error: "Failed to check run status" }, { status: 500 });
     }
@@ -83,7 +96,7 @@ export async function GET(req: NextRequest) {
 
     // Fetch results from dataset
     const dataRes = await fetch(
-      `${APIFY_BASE}/datasets/${resolvedDatasetId}/items?token=${APIFY_TOKEN}&clean=true&format=json`
+      `${APIFY_BASE}/datasets/${resolvedDatasetId}/items?token=${APIFY_API_TOKEN}&clean=true&format=json`
     );
     if (!dataRes.ok) {
       return NextResponse.json({ error: "Failed to fetch dataset results" }, { status: 500 });

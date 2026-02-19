@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { useGrants, type Grant } from "@/hooks/useGrants";
+import { authFetch } from "@/lib/authFetch";
 
 // ─── Dropdown options ─────────────────────────────────────────────────────────
 const GEO_SCOPES = [
@@ -260,7 +261,7 @@ function GrantSearchModal({
     }
     setSearching(true); setError(null); setResults([]);
     try {
-      const res = await fetch("/api/grants/search", {
+      const res = await authFetch("/api/grants/search", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: query || undefined,
@@ -508,7 +509,7 @@ function AddGrantModal({ onClose, onSaved }: { onClose: () => void; onSaved: (g:
     if (!form.name?.trim() && !form.url?.trim()) { setError("Enter a grant name or URL first"); return; }
     setResearching(true); setResearchMsg(null); setError(null);
     try {
-      const res = await fetch("/api/grants/research", {
+      const res = await authFetch("/api/grants/research", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: form.name, url: form.url, founder: form.founder, existingData: form }),
       });
@@ -654,7 +655,7 @@ function GrantRow({ grant, onUpdate, onDelete, companyDNA }: {
     if (!companyDNA) { setAiError("No company DNA found. Add company info first."); setExpanded(true); return; }
     setAnalysing(true); setAiError(null); setAnalysis(null); setExpanded(true);
     try {
-      const res = await fetch("/api/grants/analyse", {
+      const res = await authFetch("/api/grants/analyse", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ grant, companyDNA }),
       });
@@ -668,7 +669,7 @@ function GrantRow({ grant, onUpdate, onDelete, companyDNA }: {
   const handleResearch = async () => {
     setResearching(true); setAiError(null); setResearchMsg(null); setExpanded(true);
     try {
-      const res = await fetch("/api/grants/research", {
+      const res = await authFetch("/api/grants/research", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: grant.name, url: grant.url, founder: grant.founder, existingData: grant }),
       });

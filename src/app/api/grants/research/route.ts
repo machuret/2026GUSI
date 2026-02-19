@@ -2,6 +2,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { callOpenAI } from "@/lib/openai";
+import { requireEdgeAuth } from "@/lib/edgeAuth";
 
 const bodySchema = z.object({
   name: z.string().optional(),
@@ -12,6 +13,9 @@ const bodySchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    const { error: authError } = await requireEdgeAuth(req);
+    if (authError) return authError;
+
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });

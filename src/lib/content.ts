@@ -72,34 +72,54 @@ export interface HistoryOptions {
 
 /**
  * Fetch history from ALL 9 tables for a company, merged & sorted by createdAt desc.
- * Supports pagination via page (1-indexed) and limit.
+ * Uses DB-level LIMIT per table to avoid loading all rows into memory.
+ * Each table fetches (page * limit) rows so we have enough to sort and slice correctly.
  */
 export async function getAllHistory(
   companyId: string,
   { page = 1, limit = 50 }: HistoryOptions = {}
 ): Promise<{ items: ContentWithMeta[]; total: number }> {
-  const results = await Promise.all(
-    CATEGORIES.map(async (cat) => {
-      const { data: items } = await db
-        .from(cat.table)
-        .select("*, user:User(name, email)")
-        .eq("companyId", companyId)
-        .order("createdAt", { ascending: false });
+  // Fetch enough rows from each table to cover the requested page.
+  // We over-fetch slightly (page * limit per table) to allow cross-table sorting.
+  const fetchLimit = page * limit + limit;
 
-      return (items ?? []).map((item) => ({
-        ...(item as ContentRecord),
-        category: cat.key,
-        categoryLabel: cat.label,
-      }));
-    })
-  );
+  const [results, countResults] = await Promise.all([
+    Promise.all(
+      CATEGORIES.map(async (cat) => {
+        const { data: items } = await db
+          .from(cat.table)
+          .select("*, user:User(name, email)")
+          .eq("companyId", companyId)
+          .order("createdAt", { ascending: false })
+          .limit(fetchLimit);
+
+        return (items ?? []).map((item) => ({
+          ...(item as ContentRecord),
+          category: cat.key,
+          categoryLabel: cat.label,
+        }));
+      })
+    ),
+    // Count total across all tables in parallel
+    Promise.all(
+      CATEGORIES.map(async (cat) => {
+        const { count } = await db
+          .from(cat.table)
+          .select("id", { count: "exact", head: true })
+          .eq("companyId", companyId);
+        return count ?? 0;
+      })
+    ),
+  ]);
+
+  const total = countResults.reduce((sum, c) => sum + c, 0);
 
   const all = results.flat().sort((a, b) =>
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 
   const start = (page - 1) * limit;
-  return { items: all.slice(start, start + limit), total: all.length };
+  return { items: all.slice(start, start + limit), total };
 }
 
 /**

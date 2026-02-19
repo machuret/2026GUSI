@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity";
 import { createContent, CATEGORIES } from "@/lib/content";
 import { buildGenerationPrompt } from "@/lib/contentContext";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 import { z } from "zod";
 
 const categoryKeys = CATEGORIES.map((c) => c.key) as [string, ...string[]];
@@ -30,6 +31,14 @@ export async function POST(req: NextRequest) {
   try {
     const { user: authUser, response: authError } = await requireAuth();
     if (authError) return authError;
+
+    const rl = checkRateLimit(`generate:${authUser.id}`, RATE_LIMITS.generate);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Rate limit exceeded. Try again in ${Math.ceil((rl.resetAt - Date.now()) / 1000)}s.` },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } }
+      );
+    }
 
     const body = await req.json();
     const data = generateSchema.parse(body);
