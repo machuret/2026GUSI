@@ -59,7 +59,7 @@ export const SCRAPE_SOURCES: ScrapeSrc[] = [
       const specialty = (fields.specialty as string) || "medecin-generaliste";
       const city = ((fields.city as string) || "paris").toLowerCase().replace(/\s+/g, "-");
       const url = `https://www.doctolib.fr/${specialty}/${city}`;
-      return { startUrls: [{ url }], maxItems: fields.maxItems ?? 20 };
+      return { startUrls: [{ url }], maxItems: fields.maxItems ?? 20, nation: "fr" };
     },
   },
   {
@@ -84,11 +84,16 @@ export const SCRAPE_SOURCES: ScrapeSrc[] = [
       { key: "maxItems", label: "Max results", type: "number", default: 30, min: 1, max: 200 },
     ],
     buildInput: (fields) => {
-      const q = encodeURIComponent((fields.specialty as string) || "doctor");
-      const city = encodeURIComponent((fields.city as string) || "");
-      const state = encodeURIComponent((fields.state as string) || "");
-      const url = `https://doctor.webmd.com/results?q=${q}&city=${city}&state=${state}`;
-      return { searchUrls: [url], maxItems: fields.maxItems ?? 30 };
+      const specialty = (fields.specialty as string) || "doctor";
+      const city = (fields.city as string) || "";
+      const state = (fields.state as string) || "";
+      // easyapi/webmd-doctor-scraper accepts keyword + location fields
+      return {
+        keyword: specialty,
+        location: [city, state].filter(Boolean).join(", "),
+        maxItems: fields.maxItems ?? 30,
+        proxyConfiguration: { useApifyProxy: true },
+      };
     },
   },
 ];

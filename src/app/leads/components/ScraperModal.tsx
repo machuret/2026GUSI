@@ -29,10 +29,14 @@ export function ScraperModal({ onClose, onImported }: Props) {
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [runPhase, setRunPhase] = useState<"idle" | "starting" | "running" | "fetching" | "done">("idle");
+  const [partialCount, setPartialCount] = useState(0);
   const [results, setResults] = useState<Partial<Lead>[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [imported, setImported] = useState(false);
+  const [backgroundRunId, setBackgroundRunId] = useState<string | null>(null);
+  const [backgroundDatasetId, setBackgroundDatasetId] = useState<string | null>(null);
+  const [backgroundSourceId, setBackgroundSourceId] = useState<string | null>(null);
 
   const setField = (key: string, value: unknown) => setFields((p) => ({ ...p, [key]: value }));
 
@@ -51,9 +55,33 @@ export function ScraperModal({ onClose, onImported }: Props) {
     return null;
   }, [selectedSource.id, fields]);
 
+  const pollUntilDone = async (runId: string, datasetId: string, sourceId: string) => {
+    let attempts = 0;
+    while (attempts < 120) {
+      await new Promise((r) => setTimeout(r, 3000));
+      attempts++;
+      try {
+        const pollRes = await fetch(
+          `/api/leads/scrape?runId=${runId}&datasetId=${datasetId}&sourceId=${encodeURIComponent(sourceId)}`
+        );
+        const pollData = await pollRes.json();
+        if (pollData.error) { setError(`Scraper failed: ${pollData.error}`); return; }
+        if (pollData.partialCount) setPartialCount(pollData.partialCount);
+        if (pollData.running) continue;
+        setRunPhase("fetching");
+        setResults(pollData.leads ?? []);
+        setPartialCount(pollData.leads?.length ?? 0);
+        setRunPhase("done");
+        setBackgroundRunId(null);
+        return;
+      } catch { /* network blip — keep polling */ }
+    }
+    setError("Timed out after 6 minutes — check your Apify console for results.");
+  };
+
   const handleRun = async () => {
     setRunning(true); setError(null); setResults([]); setImported(false);
-    setRunPhase("starting"); setElapsed(0);
+    setRunPhase("starting"); setElapsed(0); setPartialCount(0);
     const timer = setInterval(() => setElapsed((e) => e + 1), 1000);
     try {
       const startRes = await fetch("/api/leads/scrape", {
@@ -66,25 +94,24 @@ export function ScraperModal({ onClose, onImported }: Props) {
 
       const { runId, datasetId, sourceId } = startData;
       setRunPhase("running");
-
-      let attempts = 0;
-      while (attempts < 80) {
-        await new Promise((r) => setTimeout(r, 3000));
-        attempts++;
-        const pollRes = await fetch(
-          `/api/leads/scrape?runId=${runId}&datasetId=${datasetId}&sourceId=${encodeURIComponent(sourceId)}`
-        );
-        const pollData = await pollRes.json();
-        if (pollData.error) { setError(`Scraper failed: ${pollData.error}`); return; }
-        if (pollData.running) continue;
-        setRunPhase("fetching");
-        setResults(pollData.leads ?? []);
-        setRunPhase("done");
-        return;
-      }
-      setError("Timed out after 4 minutes — the actor may still be running in Apify. Check your Apify console.");
+      setBackgroundRunId(runId);
+      setBackgroundDatasetId(datasetId);
+      setBackgroundSourceId(sourceId);
+      await pollUntilDone(runId, datasetId, sourceId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error — could not reach server");
+    } finally {
+      clearInterval(timer);
+      setRunning(false);
+    }
+  };
+
+  const handleResumeBackground = async () => {
+    if (!backgroundRunId || !backgroundDatasetId || !backgroundSourceId) return;
+    setRunning(true); setRunPhase("running"); setError(null);
+    const timer = setInterval(() => setElapsed((e) => e + 1), 1000);
+    try {
+      await pollUntilDone(backgroundRunId, backgroundDatasetId, backgroundSourceId);
     } finally {
       clearInterval(timer);
       setRunning(false);
@@ -188,7 +215,34 @@ export function ScraperModal({ onClose, onImported }: Props) {
                 <div className="h-full rounded-full bg-brand-500 transition-all duration-1000"
                   style={{ width: runPhase === "starting" ? "10%" : runPhase === "running" ? `${Math.min(85, 10 + elapsed * 0.8)}%` : runPhase === "fetching" ? "95%" : "100%" }} />
               </div>
-              <p className="text-xs text-brand-600">Apify actors typically take 30–120 seconds. Do not close this window.</p>
+              <div className="flex items-center justify-between">
+                {partialCount > 0
+                  ? <p className="text-xs text-brand-700 font-medium">✓ {partialCount} contacts scraped so far…</p>
+                  : <p className="text-xs text-brand-600">Waiting for first results…</p>
+                }
+                <button
+                  onClick={onClose}
+                  className="text-xs text-brand-500 hover:text-brand-700 underline"
+                >
+                  Run in background
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Resume banner when returning to modal with a background run */}
+          {!running && backgroundRunId && runPhase !== "done" && (
+            <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm text-amber-800">
+                <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
+                <span>Scraper is still running in background</span>
+              </div>
+              <button
+                onClick={handleResumeBackground}
+                className="text-xs font-medium text-amber-700 hover:underline"
+              >
+                Check results
+              </button>
             </div>
           )}
 

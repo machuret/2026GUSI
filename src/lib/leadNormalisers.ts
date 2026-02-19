@@ -41,27 +41,60 @@ function normaliseDoctolib(item: Record<string, unknown>): NormalisedLead {
 }
 
 function normaliseWebMD(item: Record<string, unknown>): NormalisedLead {
+  // easyapi/webmd-doctor-scraper can return nested or flat structures
   const nameObj = item.name as Record<string, string> | undefined;
   const locationObj = item.location as Record<string, string> | undefined;
+  const addressObj = item.address as Record<string, string> | undefined;
   const urlsObj = item.urls as Record<string, string> | undefined;
-  const rawLocation = locationObj
-    ? `${locationObj.address ?? ""}, ${locationObj.city ?? ""}, ${locationObj.state ?? ""}`.replace(/^[,\s]+|[,\s]+$/g, "")
-    : "";
+  const practiceObj = item.practice as Record<string, string> | undefined;
+
+  // Name — try nested object first, then flat fields
+  const fullName = nameObj?.full
+    ?? (item.fullName as string)
+    ?? (item.name as string)
+    ?? [item.firstName, item.lastName].filter(Boolean).join(" ")
+    ?? "";
+  const firstName = nameObj?.first ?? (item.firstName as string) ?? "";
+  const lastName  = nameObj?.last  ?? (item.lastName  as string) ?? "";
+
+  // Specialties
+  const specialties: string[] = Array.isArray(item.specialties)
+    ? item.specialties as string[]
+    : typeof item.specialty === "string" ? [item.specialty] : [];
+
+  // Company / practice name
+  const company = practiceObj?.name
+    ?? locationObj?.name
+    ?? (item.practiceName as string)
+    ?? (item.hospital as string)
+    ?? (item.company as string)
+    ?? "";
+
+  // Location
+  const city  = locationObj?.city  ?? addressObj?.city  ?? (item.city  as string) ?? "";
+  const state = locationObj?.state ?? addressObj?.state ?? (item.state as string) ?? "";
+  const addr  = locationObj?.address ?? addressObj?.street ?? (item.address as string) ?? "";
+  const rawLocation = [addr, city, state].filter(Boolean).join(", ");
+
+  // Email — some actors return it, most don't
+  const email = (item.email as string) ?? (item.emailAddress as string) ?? "";
+
   return {
     source: "webmd",
-    fullName: nameObj?.full ?? "",
-    firstName: nameObj?.first ?? "",
-    lastName: nameObj?.last ?? "",
+    fullName,
+    firstName,
+    lastName,
+    email,
     gender: (item.gender ?? "") as string,
-    jobTitle: Array.isArray(item.specialties) ? (item.specialties as string[])[0] ?? "" : "",
-    specialties: Array.isArray(item.specialties) ? item.specialties as string[] : [],
-    company: locationObj?.name ?? "",
+    jobTitle: specialties[0] ?? (item.jobTitle as string) ?? "",
+    specialties,
+    company,
     location: rawLocation,
-    city: locationObj?.city ?? "",
-    state: locationObj?.state ?? "",
+    city,
+    state,
     country: "United States",
-    profileUrl: urlsObj?.profile ?? "",
-    website: urlsObj?.website ?? "",
+    profileUrl: urlsObj?.profile ?? (item.profileUrl as string) ?? (item.url as string) ?? "",
+    website: urlsObj?.website ?? (item.website as string) ?? "",
     rawData: item,
   };
 }

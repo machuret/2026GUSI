@@ -85,9 +85,28 @@ export async function GET(req: NextRequest) {
     const status: string = statusData.data?.status ?? "UNKNOWN";
     const resolvedDatasetId: string = datasetId ?? statusData.data?.defaultDatasetId ?? "";
 
-    // Still running — client should poll again
+    // Still running — fetch partial count from dataset so UI can show progress
     if (status === "RUNNING" || status === "READY" || status === "CREATED") {
-      return NextResponse.json({ status, running: true, runId });
+      let partialCount = 0;
+      try {
+        const countRes = await fetch(
+          `${APIFY_BASE}/datasets/${resolvedDatasetId}/items?token=${APIFY_API_TOKEN}&clean=true&format=json&limit=0`,
+          { method: "HEAD" }
+        );
+        const countHeader = countRes.headers.get("x-apify-pagination-total");
+        if (countHeader) partialCount = parseInt(countHeader, 10) || 0;
+        // Fallback: fetch minimal fields to count
+        if (!partialCount) {
+          const sampleRes = await fetch(
+            `${APIFY_BASE}/datasets/${resolvedDatasetId}/items?token=${APIFY_API_TOKEN}&clean=true&format=json&fields=id&limit=1000`
+          );
+          if (sampleRes.ok) {
+            const sample = await sampleRes.json();
+            partialCount = Array.isArray(sample) ? sample.length : 0;
+          }
+        }
+      } catch { /* non-fatal */ }
+      return NextResponse.json({ status, running: true, runId, partialCount });
     }
 
     if (status !== "SUCCEEDED") {
