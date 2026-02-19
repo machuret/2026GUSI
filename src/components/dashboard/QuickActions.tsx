@@ -54,8 +54,8 @@ export function QuickActions({ stats }: Props) {
             href={action.href}
             className={`group flex items-center justify-between rounded-xl border p-5 transition-all hover:shadow-md ${
               action.primary
-                ? "border-brand-200 bg-brand-50 hover:bg-brand-100"
-                : "border-gray-200 bg-white hover:bg-gray-50"
+                ? "border-brand-300 bg-brand-50 hover:bg-brand-100 shadow-sm"
+                : "border-gray-300 bg-white hover:bg-gray-50 shadow-sm"
             }`}
           >
             <div className="flex items-center gap-4">
@@ -66,10 +66,10 @@ export function QuickActions({ stats }: Props) {
                 <p className={`font-semibold ${action.primary ? "text-brand-800" : "text-gray-800"}`}>
                   {action.title}
                 </p>
-                <p className="text-sm text-gray-500">{action.desc}</p>
+                <p className="text-sm text-gray-600">{action.desc}</p>
               </div>
             </div>
-            <ArrowRight className="h-4 w-4 text-gray-400 transition-transform group-hover:translate-x-1" />
+            <ArrowRight className="h-4 w-4 text-gray-500 transition-transform group-hover:translate-x-1" />
           </Link>
         ))}
       </div>

@@ -70,8 +70,8 @@ export function Sidebar() {
         href={item.href}
         className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
           isActive
-            ? "bg-brand-50 text-brand-700"
-            : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            ? "bg-brand-600 text-white shadow-sm"
+            : "text-gray-300 hover:bg-gray-800 hover:text-white"
         }`}
       >
         <item.icon className="h-5 w-5" />
@@ -81,29 +81,29 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="flex w-64 flex-col border-r border-gray-200 bg-white px-4 py-6">
+    <aside className="flex w-64 flex-col border-r border-gray-300 bg-gray-900 px-4 py-6">
       <div className="mb-8 px-2">
-        <h1 className="text-2xl font-bold text-brand-700">GUSI</h1>
-        <p className="text-xs text-gray-500">AI Content Generator</p>
+        <h1 className="text-2xl font-bold text-white">GUSI</h1>
+        <p className="text-xs text-gray-400">AI Content Generator</p>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto">
         {mainNav.map(navLink)}
 
-        <div className="my-3 border-t border-gray-100" />
-        <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+        <div className="my-3 border-t border-gray-700" />
+        <p className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
           Content
         </p>
         {contentNav.map(navLink)}
 
-        <div className="my-3 border-t border-gray-100" />
-        <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+        <div className="my-3 border-t border-gray-700" />
+        <p className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
           Growth
         </p>
         {grantsNav.map(navLink)}
 
-        <div className="my-3 border-t border-gray-100" />
-        <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+        <div className="my-3 border-t border-gray-700" />
+        <p className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
           Settings
         </p>
         {settingsNav.map(navLink)}
@@ -111,7 +111,7 @@ export function Sidebar() {
 
       <button
         onClick={handleLogout}
-        className="mt-4 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600"
+        className="mt-4 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-400 transition-colors hover:bg-red-900/40 hover:text-red-400"
       >
         <LogOut className="h-5 w-5" />
         Sign Out

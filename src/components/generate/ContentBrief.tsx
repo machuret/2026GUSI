@@ -54,7 +54,7 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
   const isValid = brief.topic.trim().length > 0;
 
   const inputCls =
-    "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
+    "w-full rounded-lg border border-gray-400 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200";
 
   return (
     <div className="mt-5 space-y-4">
@@ -67,7 +67,7 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
       {/* Platform picker for social */}
       {isSocial && (
         <div>
-          <p className="mb-2 text-xs font-medium text-gray-500">Platform</p>
+          <p className="mb-2 text-xs font-medium text-gray-700">Platform</p>
           <div className="flex flex-wrap gap-2">
             {SOCIAL_PLATFORMS.map((p) => (
               <button
@@ -77,7 +77,7 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
                 className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                   brief.platform === p.id
                     ? "border-brand-500 bg-brand-600 text-white"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-brand-300 hover:text-brand-700"
+                    : "border-gray-300 bg-white text-gray-700 hover:border-brand-400 hover:text-brand-700"
                 }`}
               >
                 <span>{p.emoji}</span> {p.label}
@@ -89,8 +89,8 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
 
       {/* Topic — required */}
       <div>
-        <label className="mb-1 block text-xs font-medium text-gray-600">
-          Topic <span className="text-red-400">*</span>
+        <label className="mb-1 block text-xs font-medium text-gray-700">
+          Topic <span className="text-red-500">*</span>
         </label>
         <textarea
           value={brief.topic}
@@ -107,7 +107,7 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
                 key={p}
                 type="button"
                 onClick={() => set("topic", p)}
-                className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs text-gray-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                className="rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-xs text-gray-700 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 transition-colors"
               >
                 {p}
               </button>
@@ -119,7 +119,7 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
       {/* Audience + Goal */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">Target Audience</label>
+          <label className="mb-1 block text-xs font-medium text-gray-700">Target Audience</label>
           <input
             value={brief.audience}
             onChange={(e) => set("audience", e.target.value)}
@@ -128,7 +128,7 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">Goal</label>
+          <label className="mb-1 block text-xs font-medium text-gray-700">Goal</label>
           <input
             value={brief.goal}
             onChange={(e) => set("goal", e.target.value)}
@@ -142,7 +142,7 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <div className="mb-1 flex items-center justify-between">
-            <label className="text-xs font-medium text-gray-600">Tone</label>
+            <label className="text-xs font-medium text-gray-700">Tone</label>
             <span className="text-xs text-brand-600 font-medium">{TONE_LABELS[brief.tone]}</span>
           </div>
           <input
@@ -153,13 +153,13 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
             onChange={(e) => set("tone", Number(e.target.value))}
             className="w-full accent-brand-600"
           />
-          <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+          <div className="flex justify-between text-xs text-gray-500 mt-0.5">
             <span>Formal</span><span>Casual</span>
           </div>
         </div>
         <div>
           <div className="mb-1 flex items-center justify-between">
-            <label className="text-xs font-medium text-gray-600">Length</label>
+            <label className="text-xs font-medium text-gray-700">Length</label>
             <span className="text-xs text-brand-600 font-medium">{LENGTH_LABELS[brief.length]}</span>
           </div>
           <input
@@ -170,7 +170,7 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
             onChange={(e) => set("length", Number(e.target.value))}
             className="w-full accent-brand-600"
           />
-          <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+          <div className="flex justify-between text-xs text-gray-500 mt-0.5">
             <span>Short</span><span>Long</span>
           </div>
         </div>
@@ -180,7 +180,7 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
       <button
         type="button"
         onClick={() => setShowAdvanced((v) => !v)}
-        className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"
+        className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-800"
       >
         {showAdvanced ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
         {showAdvanced ? "Hide" : "Show"} advanced fields (CTA, keywords)
@@ -189,7 +189,7 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
       {showAdvanced && (
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Call to Action</label>
+            <label className="mb-1 block text-xs font-medium text-gray-700">Call to Action</label>
             <input
               value={brief.cta}
               onChange={(e) => set("cta", e.target.value)}
@@ -198,7 +198,7 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Keywords / Hashtags</label>
+            <label className="mb-1 block text-xs font-medium text-gray-700">Keywords / Hashtags</label>
             <input
               value={brief.keywords}
               onChange={(e) => set("keywords", e.target.value)}

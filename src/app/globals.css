@@ -4,6 +4,41 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    @apply bg-gray-100 text-gray-900 antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    @apply text-gray-900;
+  }
+
+  input, textarea, select {
+    @apply text-gray-900 placeholder-gray-400;
+  }
+
+  label {
+    @apply text-gray-700;
+  }
+}
+
+@layer components {
+  /* Stronger card style */
+  .card {
+    @apply rounded-xl border border-gray-300 bg-white shadow-sm;
+  }
+
+  /* Consistent input style */
+  .input {
+    @apply w-full rounded-lg border border-gray-400 px-3 py-2 text-sm text-gray-900 placeholder-gray-400
+           focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200;
+  }
+
+  /* Muted helper text — still readable */
+  .text-muted {
+    @apply text-gray-500;
+  }
+
+  /* Section label */
+  .section-label {
+    @apply text-xs font-semibold uppercase tracking-wider text-gray-500;
   }
 }

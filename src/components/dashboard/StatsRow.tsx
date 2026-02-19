@@ -25,16 +25,16 @@ export function StatsRow({ stats, loading }: Props) {
         const isUrgent = s.urgentKey && (stats?.[s.urgentKey] ?? 0) > 0;
 
         const card = (
-          <div className={`rounded-xl border p-4 ${isUrgent ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-white"}`}>
+          <div className={`rounded-xl border p-4 shadow-sm ${isUrgent ? "border-amber-300 bg-amber-50" : "border-gray-300 bg-white"}`}>
             <div className={`mb-2 inline-flex rounded-lg p-2 ${s.bg}`}>
               <s.icon className={`h-4 w-4 ${s.color}`} />
             </div>
-            <p className="text-xs text-gray-500">{s.label}</p>
+            <p className="text-xs font-medium text-gray-600">{s.label}</p>
             <p className={`mt-0.5 text-2xl font-bold ${isUrgent ? "text-amber-600" : "text-gray-900"}`}>
               {loading || value === null ? "—" : value}
             </p>
             {isUrgent && (
-              <p className="mt-1 text-xs font-medium text-amber-600">Needs attention →</p>
+              <p className="mt-1 text-xs font-semibold text-amber-600">Needs attention →</p>
             )}
           </div>
         );

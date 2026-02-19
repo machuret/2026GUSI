@@ -35,8 +35,8 @@ export function CategoryPicker({ selected, onChange }: Props) {
             onClick={() => onChange(cat.key)}
             className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
               selected === cat.key
-                ? "border-brand-500 bg-brand-50 text-brand-700 ring-1 ring-brand-500"
-                : "border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                ? "border-brand-600 bg-brand-600 text-white ring-2 ring-brand-300 shadow-sm"
+                : "border-gray-300 bg-white text-gray-800 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700"
             }`}
           >
             <span className="text-lg">{cat.icon}</span>
@@ -45,7 +45,7 @@ export function CategoryPicker({ selected, onChange }: Props) {
         ))}
       </div>
       {selectedCat && (
-        <p className="mt-2 text-xs text-gray-400">{selectedCat.desc}</p>
+        <p className="mt-2 text-xs font-medium text-gray-600">{selectedCat.desc}</p>
       )}
     </div>
   );

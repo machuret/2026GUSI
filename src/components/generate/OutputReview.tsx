@@ -108,13 +108,13 @@ export function OutputReview({
   const hasRegenFeedback = regenTags.length > 0 || regenText.trim().length > 0;
 
   return (
-    <div className="mt-6 rounded-xl border border-gray-200 bg-white p-6">
+    <div className="mt-6 rounded-xl border border-gray-300 bg-white p-6 shadow-sm">
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">3</span>
           <h3 className="text-sm font-semibold text-gray-700">Review &amp; approve</h3>
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{wordCount} words</span>
+          <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">{wordCount} words</span>
           {reviewStatus === "approved" && (
             <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">✓ Approved</span>
           )}
@@ -133,7 +133,7 @@ export function OutputReview({
       </div>
 
       {/* Output */}
-      <div className="whitespace-pre-wrap rounded-lg bg-gray-50 p-4 text-sm leading-relaxed text-gray-800">
+      <div className="whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed text-gray-800">
         {result.output}
       </div>
 
@@ -161,7 +161,7 @@ export function OutputReview({
                 className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                   regenTags.includes(issue.id)
                     ? "border-brand-500 bg-brand-600 text-white"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-brand-300 hover:text-brand-700"
+                    : "border-gray-300 bg-white text-gray-700 hover:border-brand-400 hover:text-brand-700"
                 }`}
               >
                 {issue.label}
@@ -187,7 +187,7 @@ export function OutputReview({
               <RefreshCw className={`h-4 w-4 ${regenerating ? "animate-spin" : ""}`} />
               {regenerating ? "Regenerating…" : "Save Lesson + Regenerate"}
             </button>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs font-medium text-gray-600">
               {regenTags.length > 0 && `${regenTags.length} issue${regenTags.length > 1 ? "s" : ""} selected`}
             </p>
           </div>
@@ -215,7 +215,7 @@ export function OutputReview({
                 className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                   rejectTags.includes(issue.id)
                     ? "border-amber-500 bg-amber-500 text-white"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-amber-300 hover:text-amber-700"
+                    : "border-gray-300 bg-white text-gray-700 hover:border-amber-400 hover:text-amber-700"
                 }`}
               >
                 {issue.label}
