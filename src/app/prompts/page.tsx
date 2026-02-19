@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Plus, Trash2, Save, FileText, ChevronDown, ChevronUp, Eye, EyeOff, Pencil, X, Check } from "lucide-react";
 import { CATEGORIES as BASE_CATEGORIES } from "@/lib/content";
+import { fetchJSON } from "@/lib/fetchJSON";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 interface Prompt {
   id: string;
@@ -92,9 +94,7 @@ export default function PromptsPage() {
 
   const fetchPrompts = useCallback(async () => {
     try {
-      const res = await fetch("/api/prompts");
-      if (!res.ok) throw new Error(`Failed to load prompts (${res.status})`);
-      const data = await res.json();
+      const data = await fetchJSON<{ prompts: Prompt[] }>("/api/prompts");
       setPrompts(data.prompts || []);
       setError(null);
     } catch (err) {
@@ -108,35 +108,40 @@ export default function PromptsPage() {
     setSaving(true);
     setActionError(null);
     try {
-      const res = await fetch("/api/prompts", {
+      await fetchJSON("/api/prompts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      if (res.ok) {
-        setShowForm(false);
-        setForm({ name: "", description: "", systemPrompt: "", contentType: "general" });
-        fetchPrompts();
-      } else {
-        const d = await res.json().catch(() => ({}));
-        setActionError(d.error || "Failed to save prompt");
-      }
+      setShowForm(false);
+      setForm({ name: "", description: "", systemPrompt: "", contentType: "general" });
+      fetchPrompts();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to save prompt");
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this prompt template?")) return;
-    await fetch(`/api/prompts/${id}`, { method: "DELETE" });
-    fetchPrompts();
+    try {
+      await fetchJSON(`/api/prompts/${id}`, { method: "DELETE" });
+      fetchPrompts();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to delete prompt");
+    }
   };
 
   const toggleActive = async (p: Prompt) => {
-    await fetch(`/api/prompts/${p.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ active: !p.active }),
-    });
-    fetchPrompts();
+    try {
+      await fetchJSON(`/api/prompts/${p.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: !p.active }),
+      });
+      fetchPrompts();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update prompt");
+    }
   };
 
   const startEdit = (p: Prompt) => {
@@ -148,29 +153,22 @@ export default function PromptsPage() {
     setEditSaving(true);
     setActionError(null);
     try {
-      const res = await fetch(`/api/prompts/${id}`, {
+      await fetchJSON(`/api/prompts/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editForm),
       });
-      if (res.ok) {
-        setEditingId(null);
-        fetchPrompts();
-      } else {
-        const d = await res.json().catch(() => ({}));
-        setActionError(d.error || "Failed to update prompt");
-      }
+      setEditingId(null);
+      fetchPrompts();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update prompt");
     } finally { setEditSaving(false); }
   };
 
   return (
     <div className="mx-auto max-w-4xl">
-      {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-      )}
-      {actionError && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>
-      )}
+      {error && <ErrorBanner message={error} onRetry={fetchPrompts} onDismiss={() => setError(null)} className="mb-4" />}
+      {actionError && <ErrorBanner message={actionError} onDismiss={() => setActionError(null)} className="mb-4" />}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Prompt Management</h1>

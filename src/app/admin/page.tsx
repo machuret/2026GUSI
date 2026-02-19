@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Shield, ToggleLeft, ToggleRight, ExternalLink } from "lucide-react";
+import { fetchJSON } from "@/lib/fetchJSON";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 interface AppUser {
   id: string;
@@ -21,9 +23,7 @@ export default function AdminPage() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await fetch("/api/users");
-      if (!res.ok) throw new Error(`Failed to load users (${res.status})`);
-      const data = await res.json();
+      const data = await fetchJSON<{ users: AppUser[] }>("/api/users");
       setUsers(data.users || []);
       setError(null);
     } catch (err) {
@@ -40,11 +40,12 @@ export default function AdminPage() {
     setUsers((prev) =>
       prev.map((u) => u.id === user.id ? { ...u, active: !u.active } : u)
     );
-    fetch(`/api/users/${user.id}`, {
+    fetchJSON(`/api/users/${user.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ active: !user.active }),
-    }).catch(() => {
+    }).catch((err: unknown) => {
+      setActionError(err instanceof Error ? err.message : "Failed to update user");
       setUsers((prev) =>
         prev.map((u) => u.id === user.id ? { ...u, active: user.active } : u)
       );
@@ -56,11 +57,12 @@ export default function AdminPage() {
     setUsers((prev) =>
       prev.map((u) => u.id === user.id ? { ...u, role: newRole } : u)
     );
-    fetch(`/api/users/${user.id}`, {
+    fetchJSON(`/api/users/${user.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: newRole }),
-    }).catch(() => {
+    }).catch((err: unknown) => {
+      setActionError(err instanceof Error ? err.message : "Failed to update role");
       setUsers((prev) =>
         prev.map((u) => u.id === user.id ? { ...u, role: user.role } : u)
       );
@@ -69,12 +71,8 @@ export default function AdminPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-      )}
-      {actionError && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>
-      )}
+      {error && <ErrorBanner message={error} onRetry={fetchUsers} onDismiss={() => setError(null)} className="mb-4" />}
+      {actionError && <ErrorBanner message={actionError} onDismiss={() => setActionError(null)} className="mb-4" />}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">User Management</h1>

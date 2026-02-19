@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Save, Star } from "lucide-react";
+import { fetchJSON } from "@/lib/fetchJSON";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 interface CompanyInfoData {
   values: string;
@@ -63,9 +65,7 @@ export default function CompanyPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/company");
-        if (!res.ok) throw new Error(`Failed to load company info (${res.status})`);
-        const data = await res.json();
+        const data = await fetchJSON<{ info: CompanyInfoData | null }>("/api/company");
         if (data.info) {
           setForm({
             values: data.info.values || "",
@@ -88,26 +88,21 @@ export default function CompanyPage() {
     setSaved(false);
     setSaveError(null);
     try {
-      const res = await fetch("/api/company", {
+      await fetchJSON("/api/company", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      if (res.ok) {
-        setSaved(true);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setSaveError(data.error || `Save failed (${res.status})`);
-      }
-    } catch {
-      setSaveError("Network error — could not reach server");
+      setSaved(true);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save company info");
     } finally { setSaving(false); }
   };
 
   const set = (key: keyof CompanyInfoData) => (v: string) => setForm({ ...form, [key]: v });
 
   if (loading) return <div className="py-12 text-center text-gray-400">Loading...</div>;
-  if (loadError) return <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{loadError}</div>;
+  if (loadError) return <ErrorBanner message={loadError} className="m-6" />;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -187,11 +182,7 @@ export default function CompanyPage() {
             </button>
             {saved && <span className="text-sm font-medium text-green-600">✓ Saved</span>}
           </div>
-          {saveError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-              {saveError}
-            </div>
-          )}
+          {saveError && <ErrorBanner message={saveError} onDismiss={() => setSaveError(null)} />}
         </div>
       </div>
     </div>

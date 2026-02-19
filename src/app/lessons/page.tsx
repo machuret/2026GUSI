@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, BookOpen, ToggleLeft, ToggleRight } from "lucide-react";
 import { CATEGORIES } from "@/lib/content";
+import { fetchJSON } from "@/lib/fetchJSON";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 interface LessonItem {
   id: string;
@@ -36,9 +38,7 @@ export default function LessonsPage() {
 
   const fetchLessons = useCallback(async () => {
     try {
-      const res = await fetch("/api/lessons");
-      if (!res.ok) throw new Error(`Failed to load lessons (${res.status})`);
-      const data = await res.json();
+      const data = await fetchJSON<{ lessons: LessonItem[] }>("/api/lessons");
       setLessons(data.lessons || []);
       setError(null);
     } catch (err) {
@@ -54,45 +54,38 @@ export default function LessonsPage() {
     setSaving(true);
     setActionError(null);
     try {
-      const res = await fetch("/api/lessons", {
+      await fetchJSON("/api/lessons", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          feedback: form.feedback,
-          contentType: form.contentType || null,
-          severity: form.severity,
-        }),
+        body: JSON.stringify({ feedback: form.feedback, contentType: form.contentType || null, severity: form.severity }),
       });
-      if (res.ok) {
-        setShowForm(false);
-        setForm({ feedback: "", contentType: "", severity: "medium" });
-        fetchLessons();
-      } else {
-        const d = await res.json().catch(() => ({}));
-        setActionError(d.error || "Failed to save lesson");
-      }
+      setShowForm(false);
+      setForm({ feedback: "", contentType: "", severity: "medium" });
+      fetchLessons();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to save lesson");
     } finally { setSaving(false); }
   }, [form, fetchLessons]);
 
   const toggleActive = useCallback((lesson: LessonItem) => {
-    setLessons((prev) =>
-      prev.map((l) => l.id === lesson.id ? { ...l, active: !l.active } : l)
-    );
-    fetch(`/api/lessons/${lesson.id}`, {
+    setLessons((prev) => prev.map((l) => l.id === lesson.id ? { ...l, active: !l.active } : l));
+    fetchJSON(`/api/lessons/${lesson.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ active: !lesson.active }),
     }).catch(() => {
-      setLessons((prev) =>
-        prev.map((l) => l.id === lesson.id ? { ...l, active: lesson.active } : l)
-      );
+      setLessons((prev) => prev.map((l) => l.id === lesson.id ? { ...l, active: lesson.active } : l));
+      setActionError("Failed to update lesson — please try again");
     });
   }, []);
 
   const handleDelete = useCallback(async (id: string) => {
     if (!confirm("Delete this lesson?")) return;
     setLessons((prev) => prev.filter((l) => l.id !== id));
-    await fetch(`/api/lessons/${id}`, { method: "DELETE" }).catch(() => fetchLessons());
+    fetchJSON(`/api/lessons/${id}`, { method: "DELETE" }).catch(() => {
+      fetchLessons();
+      setActionError("Failed to delete lesson — please try again");
+    });
   }, [fetchLessons]);
 
   const activeCount = useMemo(
@@ -126,12 +119,8 @@ export default function LessonsPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-      )}
-      {actionError && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>
-      )}
+      {error && <ErrorBanner message={error} onRetry={fetchLessons} onDismiss={() => setError(null)} className="mb-4" />}
+      {actionError && <ErrorBanner message={actionError} onDismiss={() => setActionError(null)} className="mb-4" />}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Lessons</h1>
