@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { postJSON } from "@/lib/api";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import type { GeneratedResult, ReviewStatus } from "@/components/generate/OutputReview";
+import type { BriefFields } from "@/components/generate/ContentBrief";
 
 interface GenerateResponse {
   success: boolean;
@@ -23,7 +24,7 @@ export function useContentGeneration() {
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const generate = useCallback(async (cat: string, prompt: string, platform?: string) => {
+  const generate = useCallback(async (cat: string, prompt: string, brief?: BriefFields) => {
     setLoading(true);
     setError(null);
     try {
@@ -31,7 +32,15 @@ export function useContentGeneration() {
         companyId: DEMO_COMPANY_ID,
         prompt,
         category: cat,
-        ...(platform && platform !== "all" ? { extraFields: { platform } } : {}),
+        brief: brief ? {
+          audience: brief.audience || undefined,
+          goal: brief.goal || undefined,
+          cta: brief.cta || undefined,
+          keywords: brief.keywords || undefined,
+          tone: brief.tone,
+          length: brief.length,
+          platform: brief.platform || undefined,
+        } : undefined,
       });
       if (data.success) {
         setResult({ id: data.generated.id, output: data.generated.output, category: cat });

@@ -2,25 +2,30 @@
 
 import { useState } from "react";
 import { CategoryPicker } from "@/components/generate/CategoryPicker";
-import { PromptInput } from "@/components/generate/PromptInput";
+import { ContentBrief, type BriefFields } from "@/components/generate/ContentBrief";
 import { OutputReview } from "@/components/generate/OutputReview";
 import { useContentGeneration } from "@/hooks/useContentGeneration";
 
 export default function GeneratePage() {
   const [category, setCategory] = useState("newsletter");
-  const [prompt, setPrompt] = useState("");
+  const [lastBrief, setLastBrief] = useState<BriefFields | null>(null);
 
   const {
     loading, regenerating, result, reviewStatus, error,
     generate, handleApprove, handleReject, handleRevise, handleRegenerate, reset,
   } = useContentGeneration();
 
+  const handleGenerate = (brief: BriefFields) => {
+    setLastBrief(brief);
+    generate(category, brief.topic, brief);
+  };
+
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Create Content</h1>
         <p className="mt-1 text-gray-500">
-          Pick a category, describe what you need, review and approve — all in one place
+          Fill in the brief, review and approve — all in one place
         </p>
       </div>
 
@@ -29,12 +34,10 @@ export default function GeneratePage() {
           selected={category}
           onChange={(key) => { setCategory(key); reset(); }}
         />
-        <PromptInput
+        <ContentBrief
           category={category}
-          prompt={prompt}
           loading={loading}
-          onChange={setPrompt}
-          onGenerate={(platform) => generate(category, prompt, platform)}
+          onGenerate={handleGenerate}
         />
       </div>
 
@@ -50,8 +53,8 @@ export default function GeneratePage() {
           onApprove={handleApprove}
           onReject={handleReject}
           onRevise={handleRevise}
-          onRegenerate={(feedback, tags) => handleRegenerate(prompt, feedback, tags)}
-          onCreateAnother={() => { reset(); setPrompt(""); }}
+          onRegenerate={(feedback, tags) => handleRegenerate(lastBrief?.topic ?? "", feedback, tags)}
+          onCreateAnother={() => { reset(); }}
         />
       )}
     </div>

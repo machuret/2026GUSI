@@ -15,6 +15,15 @@ const generateSchema = z.object({
   prompt: z.string().min(1),
   category: z.enum(categoryKeys),
   extraFields: z.record(z.any()).optional(),
+  brief: z.object({
+    audience: z.string().optional(),
+    goal: z.string().optional(),
+    cta: z.string().optional(),
+    keywords: z.string().optional(),
+    tone: z.number().min(0).max(4).optional(),
+    length: z.number().min(0).max(4).optional(),
+    platform: z.string().optional(),
+  }).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -55,6 +64,7 @@ export async function POST(req: NextRequest) {
       companyInfo: infoRes.data,
       promptTemplate: promptRes.data?.[0] ?? null,
       lessons: lessonsRes.data ?? [],
+      brief: data.brief,
     });
 
     const response = await openai.chat.completions.create({
