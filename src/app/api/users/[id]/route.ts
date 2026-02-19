@@ -17,7 +17,7 @@ export async function PATCH(
     await requireRole(user.id, "SUPER_ADMIN");
 
     const body = await req.json();
-    const VALID_ROLES = ["SUPER_ADMIN", "EDITOR"];
+    const VALID_ROLES = ["SUPER_ADMIN", "ADMIN", "USER", "EDITOR"];
     const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
     if (body.role !== undefined) {
       if (!VALID_ROLES.includes(body.role)) {

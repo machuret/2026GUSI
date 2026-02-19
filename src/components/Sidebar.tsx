@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Brain,
@@ -24,6 +25,7 @@ import {
   Mic2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { hasRole } from "@/lib/auth";
 
 const mainNav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -58,6 +60,17 @@ const settingsNav = [
 export function Sidebar() {
   const pathname = usePathname();
   const supabase = createClient();
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/users/me")
+      .then((r) => r.json())
+      .then((d) => { if (d.user?.role) setUserRole(d.user.role); })
+      .catch(() => {});
+  }, []);
+
+  const canAccessSettings = userRole ? hasRole(userRole, "ADMIN") : false;
+  const canAccessAdmin    = userRole ? hasRole(userRole, "SUPER_ADMIN") : false;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -104,11 +117,17 @@ export function Sidebar() {
         </p>
         {grantsNav.map(navLink)}
 
-        <div className="my-3 border-t border-gray-700" />
-        <p className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Settings
-        </p>
-        {settingsNav.map(navLink)}
+        {(canAccessSettings || userRole === null) && (
+          <>
+            <div className="my-3 border-t border-gray-700" />
+            <p className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Settings
+            </p>
+            {settingsNav.filter((item) =>
+              item.href === "/admin" ? canAccessAdmin : true
+            ).map(navLink)}
+          </>
+        )}
       </nav>
 
       <button

@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Shield, ToggleLeft, ToggleRight, ExternalLink } from "lucide-react";
+import { Shield, ToggleLeft, ToggleRight, ExternalLink, ChevronDown } from "lucide-react";
 import { fetchJSON } from "@/lib/fetchJSON";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { ROLES } from "@/lib/auth";
 
 interface AppUser {
   id: string;
@@ -13,6 +14,20 @@ interface AppUser {
   active: boolean;
   createdAt: string;
 }
+
+const ROLE_STYLES: Record<string, string> = {
+  USER:        "bg-blue-100 text-blue-700 border-blue-200",
+  EDITOR:      "bg-blue-100 text-blue-700 border-blue-200",
+  ADMIN:       "bg-purple-100 text-purple-700 border-purple-200",
+  SUPER_ADMIN: "bg-red-100 text-red-700 border-red-200",
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  USER:        "User",
+  EDITOR:      "User",
+  ADMIN:       "Admin",
+  SUPER_ADMIN: "Super Admin",
+};
 
 export default function AdminPage() {
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -52,8 +67,7 @@ export default function AdminPage() {
     });
   }, []);
 
-  const toggleRole = useCallback((user: AppUser) => {
-    const newRole = user.role === "SUPER_ADMIN" ? "EDITOR" : "SUPER_ADMIN";
+  const changeRole = useCallback((user: AppUser, newRole: string) => {
     setUsers((prev) =>
       prev.map((u) => u.id === user.id ? { ...u, role: newRole } : u)
     );
@@ -100,42 +114,82 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* Role legend */}
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {ROLES.map((r) => (
+          <div key={r.value} className={`rounded-xl border p-4 ${r.color.replace("text-", "border-").replace("bg-", "border-").split(" ")[0]} bg-white`}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${ROLE_STYLES[r.value]}`}>{r.label}</span>
+            </div>
+            <p className="text-xs text-gray-500 leading-relaxed">{r.description}</p>
+          </div>
+        ))}
+      </div>
+
       {loading ? (
         <div className="py-12 text-center text-gray-400">Loading...</div>
       ) : (
-        <div className="space-y-3">
-          {users.map((u) => (
-            <div key={u.id} className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-6 py-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="font-medium text-gray-900">{u.name}</p>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${u.role === "SUPER_ADMIN" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
-                    {u.role === "SUPER_ADMIN" ? "Super Admin" : "Editor"}
-                  </span>
-                  {!u.active && (
-                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Disabled</span>
-                  )}
-                </div>
-                <p className="text-sm text-gray-500">{u.email}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => toggleRole(u)}
-                  className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                  title="Toggle role"
-                >
-                  <Shield className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => toggleActive(u)}
-                  className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                  title="Toggle active"
-                >
-                  {u.active ? <ToggleRight className="h-3.5 w-3.5 text-green-600" /> : <ToggleLeft className="h-3.5 w-3.5 text-red-400" />}
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50">
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">User</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Role</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Joined</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {users.map((u) => (
+                <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-5 py-4">
+                    <p className="font-medium text-gray-900">{u.name}</p>
+                    <p className="text-xs text-gray-400">{u.email}</p>
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="relative inline-block">
+                      <select
+                        value={u.role === "EDITOR" ? "USER" : u.role}
+                        onChange={(e) => changeRole(u, e.target.value)}
+                        className={`appearance-none rounded-full border pl-3 pr-7 py-1 text-xs font-semibold cursor-pointer focus:outline-none ${ROLE_STYLES[u.role] ?? ROLE_STYLES.USER}`}
+                      >
+                        {ROLES.map((r) => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 opacity-60" />
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    <button
+                      onClick={() => toggleActive(u)}
+                      className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                        u.active
+                          ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+                          : "border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                      }`}
+                    >
+                      {u.active
+                        ? <><ToggleRight className="h-3.5 w-3.5" /> Active</>
+                        : <><ToggleLeft className="h-3.5 w-3.5" /> Disabled</>}
+                    </button>
+                  </td>
+                  <td className="px-4 py-4 text-xs text-gray-400">
+                    {new Date(u.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${ROLE_STYLES[u.role] ?? ROLE_STYLES.USER}`}>
+                      <Shield className="h-3 w-3" />{ROLE_LABELS[u.role] ?? u.role}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {users.length === 0 && (
+            <div className="py-12 text-center text-sm text-gray-400">No users found</div>
+          )}
         </div>
       )}
     </div>

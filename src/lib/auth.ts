@@ -1,6 +1,39 @@
 import { db } from "./db";
 
-export type AppRole = "SUPER_ADMIN" | "EDITOR";
+export type AppRole = "SUPER_ADMIN" | "ADMIN" | "USER" | "EDITOR";
+
+// Role hierarchy: higher index = more permissions
+const ROLE_LEVEL: Record<string, number> = {
+  USER:        1,
+  EDITOR:      1, // legacy — treated same as USER
+  ADMIN:       2,
+  SUPER_ADMIN: 3,
+};
+
+export function hasRole(userRole: string, requiredRole: AppRole): boolean {
+  return (ROLE_LEVEL[userRole] ?? 0) >= (ROLE_LEVEL[requiredRole] ?? 99);
+}
+
+export const ROLES: { value: AppRole; label: string; description: string; color: string }[] = [
+  {
+    value: "USER",
+    label: "User",
+    description: "Access to all content tools: Generate, Bulk, Voices, Translations, History, Calendar, Grants, Leads, Train AI",
+    color: "bg-blue-100 text-blue-700",
+  },
+  {
+    value: "ADMIN",
+    label: "Admin",
+    description: "Everything Users can do, plus Settings: Company Info, Vault, Templates, Prompts, Lessons, Activity Log",
+    color: "bg-purple-100 text-purple-700",
+  },
+  {
+    value: "SUPER_ADMIN",
+    label: "Super Admin",
+    description: "Full access including User Management. Can assign roles and enable/disable accounts.",
+    color: "bg-red-100 text-red-700",
+  },
+];
 
 /**
  * Get app user profile (role, name) for a Supabase auth user.
@@ -22,7 +55,7 @@ export async function getAppUser(authId: string, email: string) {
     .select("id", { count: "exact", head: true })
     .eq("role", "SUPER_ADMIN");
 
-  const role = (count ?? 0) === 0 ? "SUPER_ADMIN" : "EDITOR";
+  const role = (count ?? 0) === 0 ? "SUPER_ADMIN" : "USER";
 
   const { data: created, error } = await db
     .from("User")
@@ -42,7 +75,7 @@ export async function requireRole(authId: string, role: AppRole) {
     .maybeSingle();
 
   if (!user || !user.active) throw new Error("User not found or inactive");
-  if (user.role !== role && user.role !== "SUPER_ADMIN") {
+  if (!hasRole(user.role, role)) {
     throw new Error("Insufficient permissions");
   }
   return user;
