@@ -1,0 +1,431 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Auth ────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  EDITOR
+}
+
+model User {
+  id        String   @id @default(cuid())
+  authId    String   @unique // Supabase auth.users.id
+  email     String   @unique
+  name      String
+  role      Role     @default(EDITOR)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  newsletters    Newsletter[]
+  offers         Offer[]
+  webinars       Webinar[]
+  socialMedia    SocialMedia[]
+  announcements  Announcement[]
+  blogPosts      BlogPost[]
+  courseContents CourseContent[]
+  salesPages     SalesPage[]
+  coldEmails     ColdEmail[]
+  activityLogs   ActivityLog[]
+}
+
+// ─── Company ─────────────────────────────────────────
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  industry  String?
+  website   String?
+  createdAt DateTime @default(now())
+
+  posts          ContentPost[]
+  documents      Document[]
+  styleProfile   StyleProfile?
+  companyInfo    CompanyInfo?
+  promptTemplates PromptTemplate[]
+  lessons        Lesson[]
+  newsletters    Newsletter[]
+  offers         Offer[]
+  webinars       Webinar[]
+  socialMedia    SocialMedia[]
+  announcements  Announcement[]
+  blogPosts      BlogPost[]
+  courseContents CourseContent[]
+  salesPages     SalesPage[]
+  coldEmails     ColdEmail[]
+}
+
+model CompanyInfo {
+  id             String   @id @default(cuid())
+  companyId      String   @unique
+  values         String?  // core values
+  corePhilosophy String?
+  founders       String?
+  history        String?
+  achievements   String?
+  bulkContent    String?  // any extra context about the company
+  updatedAt      DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// ─── Ingested Content (reference/training) ──────────
+
+model ContentPost {
+  id          String   @id @default(cuid())
+  companyId   String
+  title       String?
+  body        String
+  contentType String
+  platform    String
+  tags        String[] @default([])
+  style       String?
+  mustDo      String?
+  mustNot     String?
+  wordCount   Int?
+  brandRules  String?
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([contentType])
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  companyId String
+  filename  String
+  content   String
+  fileType  String
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+// ─── Style & Prompts ─────────────────────────────────
+
+model StyleProfile {
+  id               String   @id @default(cuid())
+  companyId        String   @unique
+  tone             String
+  vocabulary       String[] @default([])
+  avgWordCount     Int      @default(0)
+  commonPhrases    String[] @default([])
+  preferredFormats String[] @default([])
+  summary          String?
+  updatedAt        DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model PromptTemplate {
+  id           String   @id @default(cuid())
+  companyId    String
+  name         String
+  description  String?
+  systemPrompt String
+  contentType  String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([contentType])
+}
+
+// ─── Content Status (shared across all 9 tables) ────
+
+enum ContentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVISED
+}
+
+// ─── 1. Newsletters ─────────────────────────────────
+
+model Newsletter {
+  id             String        @id @default(cuid())
+  companyId      String
+  userId         String?
+  prompt         String
+  output         String
+  status         ContentStatus @default(PENDING)
+  feedback       String?
+  revisionOf     String?
+  revisionNumber Int           @default(0)
+  // Newsletter-specific
+  subject        String?
+  preheader      String?
+  audienceSegment String?
+  createdAt      DateTime      @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ─── 2. Offers ──────────────────────────────────────
+
+model Offer {
+  id             String        @id @default(cuid())
+  companyId      String
+  userId         String?
+  prompt         String
+  output         String
+  status         ContentStatus @default(PENDING)
+  feedback       String?
+  revisionOf     String?
+  revisionNumber Int           @default(0)
+  // Offer-specific
+  offerType      String?       // discount, bundle, free-trial, etc.
+  discount       String?
+  validUntil     DateTime?
+  targetAudience String?
+  createdAt      DateTime      @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ─── 3. Webinars ────────────────────────────────────
+
+model Webinar {
+  id             String        @id @default(cuid())
+  companyId      String
+  userId         String?
+  prompt         String
+  output         String
+  status         ContentStatus @default(PENDING)
+  feedback       String?
+  revisionOf     String?
+  revisionNumber Int           @default(0)
+  // Webinar-specific
+  title          String?
+  description    String?
+  duration       String?
+  speakers       String?
+  scheduledAt    DateTime?
+  createdAt      DateTime      @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ─── 4. Social Media ────────────────────────────────
+
+model SocialMedia {
+  id             String        @id @default(cuid())
+  companyId      String
+  userId         String?
+  prompt         String
+  output         String
+  status         ContentStatus @default(PENDING)
+  feedback       String?
+  revisionOf     String?
+  revisionNumber Int           @default(0)
+  // Social-specific
+  platform       String?       // linkedin, facebook, instagram, twitter, tiktok
+  hashtags       String[]      @default([])
+  mediaType      String?       // image, video, carousel, text
+  createdAt      DateTime      @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ─── 5. Announcements ───────────────────────────────
+
+model Announcement {
+  id             String        @id @default(cuid())
+  companyId      String
+  userId         String?
+  prompt         String
+  output         String
+  status         ContentStatus @default(PENDING)
+  feedback       String?
+  revisionOf     String?
+  revisionNumber Int           @default(0)
+  // Announcement-specific
+  title          String?
+  urgency        String?       // low, medium, high, critical
+  channel        String?       // email, website, social, all
+  createdAt      DateTime      @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ─── 6. Blog Posts ──────────────────────────────────
+
+model BlogPost {
+  id               String        @id @default(cuid())
+  companyId        String
+  userId           String?
+  prompt           String
+  output           String
+  status           ContentStatus @default(PENDING)
+  feedback         String?
+  revisionOf       String?
+  revisionNumber   Int           @default(0)
+  // Blog-specific
+  title            String?
+  metaDescription  String?
+  keywords         String[]      @default([])
+  estimatedReadTime Int?
+  createdAt        DateTime      @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ─── 7. Course Content ──────────────────────────────
+
+model CourseContent {
+  id               String        @id @default(cuid())
+  companyId        String
+  userId           String?
+  prompt           String
+  output           String
+  status           ContentStatus @default(PENDING)
+  feedback         String?
+  revisionOf       String?
+  revisionNumber   Int           @default(0)
+  // Course-specific
+  moduleTitle      String?
+  lessonTitle      String?
+  learningObjectives String?
+  difficulty       String?       // beginner, intermediate, advanced
+  createdAt        DateTime      @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ─── 8. Sales Pages ─────────────────────────────────
+
+model SalesPage {
+  id             String        @id @default(cuid())
+  companyId      String
+  userId         String?
+  prompt         String
+  output         String
+  status         ContentStatus @default(PENDING)
+  feedback       String?
+  revisionOf     String?
+  revisionNumber Int           @default(0)
+  // Sales-specific
+  headline       String?
+  subheadline    String?
+  targetAudience String?
+  productName    String?
+  createdAt      DateTime      @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ─── 9. Cold Emails ─────────────────────────────────
+
+model ColdEmail {
+  id             String        @id @default(cuid())
+  companyId      String
+  userId         String?
+  prompt         String
+  output         String
+  status         ContentStatus @default(PENDING)
+  feedback       String?
+  revisionOf     String?
+  revisionNumber Int           @default(0)
+  // Cold email-specific
+  subject        String?
+  recipientType  String?       // ceo, marketing, hr, general
+  followUpNumber Int?          @default(0)
+  callToAction   String?
+  createdAt      DateTime      @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ─── Lessons (accumulated feedback) ─────────────────
+
+model Lesson {
+  id          String   @id @default(cuid())
+  companyId   String
+  contentType String?  // which category this lesson applies to (null = global)
+  feedback    String   // the actual lesson / feedback text
+  source      String?  // e.g. "rejection", "manual", "style-correction"
+  severity    String   @default("medium") // low, medium, high
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([contentType])
+}
+
+// ─── Activity Log ────────────────────────────────────
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+}
