@@ -12,11 +12,21 @@ export async function GET() {
 
     const { data, error } = await db
       .from("Translation")
-      .select("*")
+      .select("id, title, originalText, translatedText, language, category, publishedAt, createdAt, status, feedback")
       .eq("companyId", DEMO_COMPANY_ID)
       .order("createdAt", { ascending: false });
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      // Fallback: status/feedback columns may not exist yet — select without them
+      const { data: fallback, error: fallbackError } = await db
+        .from("Translation")
+        .select("id, title, originalText, translatedText, language, category, publishedAt, createdAt")
+        .eq("companyId", DEMO_COMPANY_ID)
+        .order("createdAt", { ascending: false });
+      if (fallbackError) throw new Error(fallbackError.message);
+      const withDefaults = (fallback ?? []).map((t) => ({ ...t, status: "draft", feedback: null }));
+      return NextResponse.json({ translations: withDefaults });
+    }
     return NextResponse.json({ translations: data ?? [] });
   } catch (err) {
     return handleApiError(err, "Translations GET");
