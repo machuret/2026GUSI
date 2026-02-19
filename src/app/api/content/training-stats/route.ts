@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
       styleProfile,
       recommendations,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Internal server error" }, { status: 500 });
   }
 }

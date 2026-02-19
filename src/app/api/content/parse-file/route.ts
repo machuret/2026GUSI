@@ -42,8 +42,8 @@ export async function POST(req: NextRequest) {
       filename: file.name,
       wordCount: text.split(/\s+/).filter(Boolean).length,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("parse-file error:", err);
-    return NextResponse.json({ error: err.message || "Failed to parse file" }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to parse file" }, { status: 500 });
   }
 }

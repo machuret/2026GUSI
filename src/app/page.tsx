@@ -31,7 +31,7 @@ export default function DashboardPage() {
           lessons: (lessonsData.lessons || []).length,
           ingestedPosts: 0,
           hasCompanyInfo: !!companyData.info,
-          hasStyleProfile: !!companyData.company,
+          hasStyleProfile: !!companyData.info?.bulkContent,
         });
       } catch (e) {
         console.error(e);

@@ -35,13 +35,16 @@ export function checkRateLimit(
   return { allowed: true, remaining: limit - existing.count, resetAt: existing.resetAt };
 }
 
-// Periodically clean up expired entries to prevent memory leak
-setInterval(() => {
-  const now = Date.now();
-  Array.from(store.entries()).forEach(([key, win]) => {
-    if (now > win.resetAt) store.delete(key);
-  });
-}, 60_000);
+// Periodically clean up expired entries to prevent memory leak.
+// Only runs in Node.js runtime — not in edge runtime where setInterval may not persist.
+if (typeof globalThis.setInterval !== "undefined" && typeof process !== "undefined" && process.versions?.node) {
+  setInterval(() => {
+    const now = Date.now();
+    Array.from(store.entries()).forEach(([key, win]) => {
+      if (now > win.resetAt) store.delete(key);
+    });
+  }, 60_000).unref?.();
+}
 
 export const RATE_LIMITS = {
   generate:      { limit: 20, windowMs: 60_000 },

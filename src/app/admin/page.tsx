@@ -15,6 +15,8 @@ interface AppUser {
 export default function AdminPage() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ email: "", name: "", role: "EDITOR", password: "" });
   const [saving, setSaving] = useState(false);
@@ -22,10 +24,12 @@ export default function AdminPage() {
   const fetchUsers = useCallback(async () => {
     try {
       const res = await fetch("/api/users");
+      if (!res.ok) throw new Error(`Failed to load users (${res.status})`);
       const data = await res.json();
       setUsers(data.users || []);
-    } catch {
-      console.error("Failed to fetch users");
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load users");
     } finally {
       setLoading(false);
     }
@@ -35,17 +39,23 @@ export default function AdminPage() {
 
   const handleCreate = useCallback(async () => {
     setSaving(true);
+    setActionError(null);
     try {
       const res = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setShowForm(false);
         setForm({ email: "", name: "", role: "EDITOR", password: "" });
         fetchUsers();
+      } else {
+        setActionError(data.error || `Failed to create user (${res.status})`);
       }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to create user");
     } finally {
       setSaving(false);
     }
@@ -84,6 +94,12 @@ export default function AdminPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+      {actionError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>
+      )}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">User Management</h1>

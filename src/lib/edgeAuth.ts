@@ -17,8 +17,12 @@ export async function requireEdgeAuth(req: NextRequest): Promise<{ error: NextRe
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return { error: NextResponse.json({ error: "Server misconfigured" }, { status: 500 }) };
+  }
 
   try {
     const res = await fetch(`${supabaseUrl}/auth/v1/user`, {

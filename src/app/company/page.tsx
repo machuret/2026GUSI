@@ -55,6 +55,7 @@ function Field({
 export default function CompanyPage() {
   const [form, setForm] = useState<CompanyInfoData>(empty);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -63,6 +64,7 @@ export default function CompanyPage() {
     async function load() {
       try {
         const res = await fetch("/api/company");
+        if (!res.ok) throw new Error(`Failed to load company info (${res.status})`);
         const data = await res.json();
         if (data.info) {
           setForm({
@@ -74,8 +76,9 @@ export default function CompanyPage() {
             bulkContent: data.info.bulkContent || "",
           });
         }
-      } catch { console.error("Failed to load company info"); }
-      finally { setLoading(false); }
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : "Failed to load company info");
+      } finally { setLoading(false); }
     }
     load();
   }, []);
@@ -104,6 +107,7 @@ export default function CompanyPage() {
   const set = (key: keyof CompanyInfoData) => (v: string) => setForm({ ...form, [key]: v });
 
   if (loading) return <div className="py-12 text-center text-gray-400">Loading...</div>;
+  if (loadError) return <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{loadError}</div>;
 
   return (
     <div className="mx-auto max-w-4xl">

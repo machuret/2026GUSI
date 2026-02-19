@@ -286,7 +286,7 @@ function GrantSearchModal({
   const handleAdd = async (result: SearchResult, idx: number) => {
     setAdding((p) => ({ ...p, [idx]: true }));
     try {
-      const res = await fetch("/api/grants", {
+      const res = await authFetch("/api/grants", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           companyId: DEMO_COMPANY_ID,

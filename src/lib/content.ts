@@ -80,8 +80,8 @@ export async function getAllHistory(
   { page = 1, limit = 50 }: HistoryOptions = {}
 ): Promise<{ items: ContentWithMeta[]; total: number }> {
   // Fetch enough rows from each table to cover the requested page.
-  // We over-fetch slightly (page * limit per table) to allow cross-table sorting.
-  const fetchLimit = page * limit + limit;
+  // We need page * limit rows per table to allow cross-table sorting and slicing.
+  const fetchLimit = page * limit;
 
   const [results, countResults] = await Promise.all([
     Promise.all(

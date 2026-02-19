@@ -63,8 +63,11 @@ export default function IngestPage() {
     setStatsLoading(true);
     try {
       const r = await fetch(`/api/content/training-stats?companyId=${CID}`);
+      if (!r.ok) throw new Error(`Failed to load stats (${r.status})`);
       const d = await r.json();
       if (d.success) setStats(d);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load training stats");
     } finally { setStatsLoading(false); }
   }, []);
   useEffect(() => { fetchStats(); }, [fetchStats]);
@@ -139,9 +142,16 @@ export default function IngestPage() {
 
   const handleAnalyse = async () => {
     setAnalysing(true);
+    setError(null);
     try {
-      await fetch("/api/style/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ companyId: CID }) });
+      const r = await fetch("/api/style/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ companyId: CID }) });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.error || `Style analysis failed (${r.status})`);
+      }
       fetchStats();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Style analysis failed");
     } finally { setAnalysing(false); }
   };
 

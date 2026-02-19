@@ -86,6 +86,10 @@ IMPORTANT:
 
     const output = response.choices[0]?.message?.content?.trim() ?? "";
 
+    if (!output) {
+      return NextResponse.json({ error: "AI returned empty content — please try again" }, { status: 500 });
+    }
+
     // Mark original as REVISED
     await updateContent(category, data.contentId, { status: "REVISED" });
 

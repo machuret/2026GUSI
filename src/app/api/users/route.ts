@@ -29,7 +29,8 @@ export async function GET() {
     return NextResponse.json({ users: users ?? [] });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: msg }, { status: 403 });
+    const status = msg.toLowerCase().includes("forbidden") || msg.toLowerCase().includes("unauthorized") ? 403 : 500;
+    return NextResponse.json({ error: msg }, { status });
   }
 }
 
