@@ -33,15 +33,17 @@ const actionColors: Record<string, string> = {
 export default function ActivityPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
         const res = await fetch("/api/activity");
+        if (!res.ok) throw new Error(`Failed to load activity (${res.status})`);
         const data = await res.json();
         setLogs(data.logs || []);
-      } catch {
-        console.error("Failed to load activity");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load activity");
       } finally {
         setLoading(false);
       }
@@ -57,6 +59,10 @@ export default function ActivityPage() {
           Track who used the system and what they did
         </p>
       </div>
+
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
 
       {loading ? (
         <div className="py-12 text-center text-gray-400">Loading...</div>

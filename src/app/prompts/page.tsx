@@ -80,6 +80,8 @@ const PROMPT_SECTIONS = [
 export default function PromptsPage() {
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showLivePrompt, setShowLivePrompt] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", systemPrompt: "", contentType: "general" });
@@ -91,16 +93,20 @@ export default function PromptsPage() {
   const fetchPrompts = async () => {
     try {
       const res = await fetch("/api/prompts");
+      if (!res.ok) throw new Error(`Failed to load prompts (${res.status})`);
       const data = await res.json();
       setPrompts(data.prompts || []);
-    } catch { console.error("Failed to fetch prompts"); }
-    finally { setLoading(false); }
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load prompts");
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { fetchPrompts(); }, []);
 
   const handleCreate = async () => {
     setSaving(true);
+    setActionError(null);
     try {
       const res = await fetch("/api/prompts", {
         method: "POST",
@@ -111,6 +117,9 @@ export default function PromptsPage() {
         setShowForm(false);
         setForm({ name: "", description: "", systemPrompt: "", contentType: "general" });
         fetchPrompts();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setActionError(d.error || "Failed to save prompt");
       }
     } finally { setSaving(false); }
   };
@@ -137,19 +146,31 @@ export default function PromptsPage() {
 
   const handleSaveEdit = async (id: string) => {
     setEditSaving(true);
+    setActionError(null);
     try {
-      await fetch(`/api/prompts/${id}`, {
+      const res = await fetch(`/api/prompts/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editForm),
       });
-      setEditingId(null);
-      fetchPrompts();
+      if (res.ok) {
+        setEditingId(null);
+        fetchPrompts();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setActionError(d.error || "Failed to update prompt");
+      }
     } finally { setEditSaving(false); }
   };
 
   return (
     <div className="mx-auto max-w-4xl">
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+      {actionError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>
+      )}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Prompt Management</h1>

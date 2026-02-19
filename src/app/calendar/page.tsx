@@ -127,14 +127,19 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(today.getMonth());
   const [items, setItems] = useState<CalendarItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"month" | "week">("month");
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/content/calendar?companyId=${DEMO_COMPANY_ID}`);
+      if (!res.ok) throw new Error(`Failed to load calendar (${res.status})`);
       const data = await res.json();
       setItems(data.items ?? []);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load calendar");
     } finally {
       setLoading(false);
     }
@@ -236,6 +241,10 @@ export default function CalendarPage() {
           </a>
         </div>
       </div>
+
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
 
       {loading ? (
         <div className="py-20 text-center text-gray-400">Loading calendar…</div>

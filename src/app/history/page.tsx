@@ -11,16 +11,20 @@ const STATUS_FILTERS = ["All", "PENDING", "APPROVED", "PUBLISHED", "REJECTED", "
 export default function HistoryPage() {
   const [items, setItems] = useState<GeneratedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("All");
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
 
   const fetchHistory = useCallback(async () => {
     try {
       const res = await fetch(`/api/content/history?companyId=${DEMO_COMPANY_ID}&limit=100`);
+      if (!res.ok) throw new Error(`Failed to load history (${res.status})`);
       const data = await res.json();
       setItems(data.history || []);
+      setError(null);
     } catch (err) {
-      console.error("Failed to fetch history:", err);
+      setError(err instanceof Error ? err.message : "Failed to load history");
     } finally {
       setLoading(false);
     }
@@ -29,11 +33,13 @@ export default function HistoryPage() {
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
   const handleApprove = useCallback(async (id: string, category: string) => {
-    await fetch("/api/content/review", {
+    setActionError(null);
+    const res = await fetch("/api/content/review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contentId: id, category, action: "approve" }),
     });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setActionError(d.error || "Approve failed"); return; }
     fetchHistory();
   }, [fetchHistory]);
 
@@ -63,11 +69,13 @@ export default function HistoryPage() {
   }, [fetchHistory]);
 
   const handleRevise = useCallback(async (id: string) => {
-    await fetch("/api/content/revise", {
+    setActionError(null);
+    const res = await fetch("/api/content/revise", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contentId: id }),
     });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setActionError(d.error || "Revise failed"); return; }
     fetchHistory();
   }, [fetchHistory]);
 
@@ -114,6 +122,13 @@ export default function HistoryPage() {
           Review, approve, or reject generated content — rejections become lessons
         </p>
       </div>
+
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+      {actionError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>
+      )}
 
       {/* Filters */}
       {items.length > 0 && (

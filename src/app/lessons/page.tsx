@@ -27,6 +27,8 @@ const SEVERITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 export default function LessonsPage() {
   const [lessons, setLessons] = useState<LessonItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ feedback: "", contentType: "", severity: "medium" });
   const [saving, setSaving] = useState(false);
@@ -35,10 +37,12 @@ export default function LessonsPage() {
   const fetchLessons = useCallback(async () => {
     try {
       const res = await fetch("/api/lessons");
+      if (!res.ok) throw new Error(`Failed to load lessons (${res.status})`);
       const data = await res.json();
       setLessons(data.lessons || []);
-    } catch {
-      console.error("Failed to fetch lessons");
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load lessons");
     } finally {
       setLoading(false);
     }
@@ -48,6 +52,7 @@ export default function LessonsPage() {
 
   const handleCreate = useCallback(async () => {
     setSaving(true);
+    setActionError(null);
     try {
       const res = await fetch("/api/lessons", {
         method: "POST",
@@ -62,6 +67,9 @@ export default function LessonsPage() {
         setShowForm(false);
         setForm({ feedback: "", contentType: "", severity: "medium" });
         fetchLessons();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setActionError(d.error || "Failed to save lesson");
       }
     } finally { setSaving(false); }
   }, [form, fetchLessons]);
@@ -118,6 +126,12 @@ export default function LessonsPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+      {actionError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>
+      )}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Lessons</h1>
