@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { callOpenAI } from "@/lib/openai";
+import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logActivity } from "@/lib/activity";
 import { logAiUsage } from "@/lib/aiUsage";
 import { createContent, CATEGORIES } from "@/lib/content";
@@ -73,15 +73,17 @@ export async function POST(req: NextRequest) {
           setTimeout(() => reject(new Error("Topic timed out after 30s")), TOPIC_TIMEOUT_MS)
         );
 
-        const generatePromise = callOpenAI({
+        const generatePromise = callOpenAIWithUsage({
           systemPrompt,
           userPrompt: topic,
+          model: MODEL_CONFIG.generateBulk,
           maxTokens: 2500,
           temperature: 0.65,
           jsonMode: false,
         });
 
-        const output = (await Promise.race([generatePromise, timeoutPromise])).trim();
+        const aiResult = await Promise.race([generatePromise, timeoutPromise]);
+        const output = aiResult.content.trim();
 
         const saved = await createContent(data.category, {
           companyId: data.companyId,
@@ -90,7 +92,7 @@ export async function POST(req: NextRequest) {
           output,
         });
 
-        logAiUsage({ model: "gpt-4o", feature: "generate_bulk", promptTokens: 0, completionTokens: output.split(/\s+/).length, userId: authUser.id });
+        logAiUsage({ model: MODEL_CONFIG.generateBulk, feature: "generate_bulk", promptTokens: aiResult.promptTokens, completionTokens: aiResult.completionTokens, userId: authUser.id });
         results.push({ topic, id: saved.id, output });
       } catch (err) {
         results.push({ topic, id: "", output: "", error: err instanceof Error ? err.message : "Failed" });

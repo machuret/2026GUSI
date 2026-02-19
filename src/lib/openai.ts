@@ -1,8 +1,30 @@
 import OpenAI from "openai";
 
+// ─── Central model config — change here, applies everywhere ───────────────────
+export const MODEL_CONFIG = {
+  generate:        "gpt-4o",
+  generateBulk:    "gpt-4o",
+  generateAB:      "gpt-4o",
+  revise:          "gpt-4o",
+  voiceAnalyse:    "gpt-4o",
+  voiceGenerate:   "gpt-4o",
+  styleAnalyse:    "gpt-4o-mini",
+  vaultCrawl:      "gpt-4o-mini",
+  grantsAnalyse:   "gpt-4o",
+  companyResearch: "gpt-4o-mini",
+} as const;
+
+export type UsageResult = {
+  content: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+};
+
 type CallOptions = {
   systemPrompt: string;
   userPrompt: string;
+  model?: string;
   maxTokens?: number;
   temperature?: number;
   jsonMode?: boolean;
@@ -23,10 +45,26 @@ async function sleep(ms: number) {
 export async function callOpenAI({
   systemPrompt,
   userPrompt,
+  model = MODEL_CONFIG.generate,
   maxTokens = 1000,
   temperature = 0.3,
   jsonMode = true,
 }: CallOptions): Promise<string> {
+  const result = await callOpenAIWithUsage({ systemPrompt, userPrompt, model, maxTokens, temperature, jsonMode });
+  return result.content;
+}
+
+/**
+ * Like callOpenAI but also returns token usage for accurate cost tracking.
+ */
+export async function callOpenAIWithUsage({
+  systemPrompt,
+  userPrompt,
+  model = MODEL_CONFIG.generate,
+  maxTokens = 1000,
+  temperature = 0.3,
+  jsonMode = true,
+}: CallOptions): Promise<UsageResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
 
@@ -42,7 +80,7 @@ export async function callOpenAI({
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -55,13 +93,18 @@ export async function callOpenAI({
 
     if (res.ok) {
       const data = await res.json();
-      return data.choices?.[0]?.message?.content ?? "{}";
+      return {
+        content: data.choices?.[0]?.message?.content ?? "{}",
+        promptTokens:     data.usage?.prompt_tokens     ?? 0,
+        completionTokens: data.usage?.completion_tokens ?? 0,
+        totalTokens:      data.usage?.total_tokens      ?? 0,
+      };
     }
 
     const errText = await res.text();
     lastError = new Error(`OpenAI error (${res.status}): ${errText.slice(0, 300)}`);
 
-    if (!RETRYABLE_STATUSES.has(res.status)) break; // don't retry 400/401/403
+    if (!RETRYABLE_STATUSES.has(res.status)) break;
   }
 
   throw lastError ?? new Error("OpenAI request failed");

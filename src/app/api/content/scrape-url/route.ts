@@ -2,6 +2,16 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/apiHelpers";
 
+const BLOCKED_HOSTS = /^(localhost|127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|0\.0\.0\.0|::1|169\.254\.)/i;
+
+function isSafeUrl(url: URL): boolean {
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  const host = url.hostname.toLowerCase();
+  if (BLOCKED_HOSTS.test(host)) return false;
+  if (host === "metadata.google.internal") return false;
+  return true;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { response: authError } = await requireAuth();
@@ -13,6 +23,10 @@ export async function POST(req: NextRequest) {
     let parsedUrl: URL;
     try { parsedUrl = new URL(url); } catch {
       return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
+    }
+
+    if (!isSafeUrl(parsedUrl)) {
+      return NextResponse.json({ error: "URL not allowed" }, { status: 400 });
     }
 
     const res = await fetch(parsedUrl.toString(), {

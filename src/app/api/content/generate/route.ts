@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { callOpenAI } from "@/lib/openai";
+import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logActivity } from "@/lib/activity";
 import { logAiUsage } from "@/lib/aiUsage";
 import { createContent, CATEGORIES } from "@/lib/content";
@@ -57,13 +57,15 @@ export async function POST(req: NextRequest) {
     const catLabel = CATEGORIES.find((c) => c.key === data.category)?.label ?? data.category;
     const systemPrompt = await buildGenerationPrompt(company, data.companyId, data.category, data.brief);
 
-    const output = await callOpenAI({
+    const aiResult = await callOpenAIWithUsage({
       systemPrompt,
       userPrompt: data.prompt,
+      model: MODEL_CONFIG.generate,
       maxTokens: 2500,
       temperature: 0.65,
       jsonMode: false,
     });
+    const output = aiResult.content.trim();
 
     // Get or create app user for tracking
     const appUser = await logActivity(
@@ -82,7 +84,7 @@ export async function POST(req: NextRequest) {
       ...(data.extraFields || {}),
     });
 
-    logAiUsage({ model: "gpt-4o", feature: "generate", promptTokens: 0, completionTokens: output.split(/\s+/).length, userId: authUser.id });
+    logAiUsage({ model: MODEL_CONFIG.generate, feature: "generate", promptTokens: aiResult.promptTokens, completionTokens: aiResult.completionTokens, userId: authUser.id });
 
     return NextResponse.json({ success: true, generated, category: data.category });
   } catch (error) {

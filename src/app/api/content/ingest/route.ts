@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { logActivity } from "@/lib/activity";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
 
 const postSchema = z.object({
@@ -26,7 +27,7 @@ const documentSchema = z.object({
 });
 
 const ingestSchema = z.object({
-  companyId: z.string().min(1),
+  companyId: z.string().optional(), // ignored server-side — always uses DEMO_COMPANY_ID
   posts: z.array(postSchema).default([]),
   documents: z.array(documentSchema).default([]),
 });
@@ -39,15 +40,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = ingestSchema.parse(body);
 
-    // Auto-create company if it doesn't exist — ignoreDuplicates preserves existing name/industry
-    await db.from("Company").upsert({ id: data.companyId, name: "My Company" }, { onConflict: "id", ignoreDuplicates: true });
+    // Always use the single company ID — ignore any client-supplied value
+    const companyId = DEMO_COMPANY_ID;
+    await db.from("Company").upsert({ id: companyId, name: "My Company" }, { onConflict: "id", ignoreDuplicates: true });
 
     const results = { postsCreated: 0, documentsCreated: 0 };
 
     if (data.posts.length > 0) {
       const { data: created } = await db.from("ContentPost").insert(
         data.posts.map((p) => ({
-          companyId: data.companyId,
+          companyId,
           title: p.title || null,
           body: p.body,
           contentType: p.contentType,
@@ -67,7 +69,7 @@ export async function POST(req: NextRequest) {
     if (data.documents.length > 0) {
       const { data: created } = await db.from("Document").insert(
         data.documents.map((d) => ({
-          companyId: data.companyId,
+          companyId,
           filename: d.filename,
           content: d.content,
           fileType: d.fileType,

@@ -3,6 +3,8 @@ export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { logAiUsage } from "@/lib/aiUsage";
+import { MODEL_CONFIG } from "@/lib/openai";
 import { z } from "zod";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
@@ -72,7 +74,7 @@ GENERATION RULES:
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: MODEL_CONFIG.voiceGenerate,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: data.prompt },
@@ -89,8 +91,12 @@ GENERATION RULES:
 
     const aiData = await res.json();
     const output = (aiData.choices?.[0]?.message?.content ?? "").trim();
-    const tokensUsed = aiData.usage?.total_tokens ?? 0;
+    const promptTokens     = aiData.usage?.prompt_tokens     ?? 0;
+    const completionTokens = aiData.usage?.completion_tokens ?? 0;
+    const tokensUsed       = aiData.usage?.total_tokens      ?? 0;
     const wordCount = output.split(/\s+/).filter(Boolean).length;
+
+    logAiUsage({ model: MODEL_CONFIG.voiceGenerate, feature: "voice_generate", promptTokens, completionTokens });
 
     return NextResponse.json({
       success: true,
@@ -98,7 +104,7 @@ GENERATION RULES:
       wordCount,
       tokensUsed,
       author: author.name,
-      model: "gpt-4o",
+      model: MODEL_CONFIG.voiceGenerate,
     });
   } catch (err) {
     return handleApiError(err, "Voice generate");

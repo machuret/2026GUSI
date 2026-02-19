@@ -61,5 +61,6 @@ export function rateLimitHeaders(result: { remaining: number; resetAt: number },
 export const RATE_LIMITS = {
   generate:      { limit: 20, windowMs: 60_000 },
   generateBulk:  { limit: 5,  windowMs: 60_000 },
+  generateAB:    { limit: 10, windowMs: 60_000 },
   grantsAI:      { limit: 30, windowMs: 60_000 },
 } as const;

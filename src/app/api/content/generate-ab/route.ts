@@ -1,8 +1,9 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { openai } from "@/lib/openai";
+import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logActivity } from "@/lib/activity";
+import { logAiUsage } from "@/lib/aiUsage";
 import { createContent, CATEGORIES } from "@/lib/content";
 import { buildGenerationPrompt } from "@/lib/contentContext";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     const { user: authUser, response: authError } = await requireAuth();
     if (authError) return authError;
 
-    const rl = checkRateLimit(`generate:${authUser.id}`, RATE_LIMITS.generate);
+    const rl = checkRateLimit(`generate-ab:${authUser.id}`, RATE_LIMITS.generateAB);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: `Rate limit exceeded. Try again in ${Math.ceil((rl.resetAt - Date.now()) / 1000)}s.` },
@@ -57,23 +58,21 @@ export async function POST(req: NextRequest) {
 
     // Generate 2 variants in parallel — use allSettled so one failure doesn't kill both
     const [resA, resB] = await Promise.allSettled([
-      openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: data.prompt },
-        ],
+      callOpenAIWithUsage({
+        systemPrompt,
+        userPrompt: data.prompt,
+        model: MODEL_CONFIG.generateAB,
+        maxTokens: 2500,
         temperature: 0.55,
-        max_tokens: 2500,
+        jsonMode: false,
       }),
-      openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: systemPrompt + "\n\nIMPORTANT: Write a distinctly different version — different opening, different structure, different angle. Same brief, fresh approach." },
-          { role: "user", content: data.prompt },
-        ],
+      callOpenAIWithUsage({
+        systemPrompt: systemPrompt + "\n\nIMPORTANT: Write a distinctly different version — different opening, different structure, different angle. Same brief, fresh approach.",
+        userPrompt: data.prompt,
+        model: MODEL_CONFIG.generateAB,
+        maxTokens: 2500,
         temperature: 0.85,
-        max_tokens: 2500,
+        jsonMode: false,
       }),
     ]);
 
@@ -81,8 +80,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Both AI variants failed to generate" }, { status: 500 });
     }
 
-    const outputA = resA.status === "fulfilled" ? (resA.value.choices[0]?.message?.content?.trim() ?? "") : "";
-    const outputB = resB.status === "fulfilled" ? (resB.value.choices[0]?.message?.content?.trim() ?? "") : "";
+    const outputA = resA.status === "fulfilled" ? resA.value.content.trim() : "";
+    const outputB = resB.status === "fulfilled" ? resB.value.content.trim() : "";
 
     const appUser = await logActivity(
       authUser.id,
@@ -99,6 +98,10 @@ export async function POST(req: NextRequest) {
 
     const variantA = saveResults[0].status === "fulfilled" ? { id: saveResults[0].value.id, output: outputA } : null;
     const variantB = saveResults[1].status === "fulfilled" ? { id: saveResults[1].value.id, output: outputB } : null;
+
+    const totalPrompt     = (resA.status === "fulfilled" ? resA.value.promptTokens     : 0) + (resB.status === "fulfilled" ? resB.value.promptTokens     : 0);
+    const totalCompletion = (resA.status === "fulfilled" ? resA.value.completionTokens : 0) + (resB.status === "fulfilled" ? resB.value.completionTokens : 0);
+    logAiUsage({ model: MODEL_CONFIG.generateAB, feature: "generate_ab", promptTokens: totalPrompt, completionTokens: totalCompletion, userId: authUser.id });
 
     return NextResponse.json({
       success: true,

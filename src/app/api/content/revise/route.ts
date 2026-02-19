@@ -1,8 +1,9 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { openai } from "@/lib/openai";
+import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logActivity } from "@/lib/activity";
+import { logAiUsage } from "@/lib/aiUsage";
 import { findContentById, updateContent, createContent } from "@/lib/content";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { z } from "zod";
@@ -74,17 +75,15 @@ IMPORTANT:
 3. Keep the same general topic and intent as the original prompt
 4. Output ONLY the revised content — no commentary`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `Original request: ${original.prompt}` },
-      ],
+    const aiResult = await callOpenAIWithUsage({
+      systemPrompt,
+      userPrompt: `Original request: ${original.prompt}`,
+      model: MODEL_CONFIG.revise,
+      maxTokens: 2000,
       temperature: 0.6,
-      max_tokens: 2000,
+      jsonMode: false,
     });
-
-    const output = response.choices[0]?.message?.content?.trim() ?? "";
+    const output = aiResult.content.trim();
 
     if (!output) {
       return NextResponse.json({ error: "AI returned empty content — please try again" }, { status: 500 });
@@ -110,6 +109,8 @@ IMPORTANT:
       revisionOf: original.id,
       revisionNumber: (typeof original.revisionNumber === "number" ? original.revisionNumber : 0) + 1,
     });
+
+    logAiUsage({ model: MODEL_CONFIG.revise, feature: "revise", promptTokens: aiResult.promptTokens, completionTokens: aiResult.completionTokens, userId: authUser.id });
 
     return NextResponse.json({
       success: true,

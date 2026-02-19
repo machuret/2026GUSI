@@ -5,9 +5,11 @@ import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
 
+const MAX_BODY_CHARS = 500_000; // ~500KB per post sample
+
 const postSchema = z.object({
-  title: z.string().optional(),
-  body: z.string().min(1),
+  title: z.string().max(500).optional(),
+  body: z.string().min(1).max(MAX_BODY_CHARS, `Post body must be under ${MAX_BODY_CHARS / 1000}KB`),
   contentType: z.string().default("blog"),
   platform: z.string().default("website"),
 });
