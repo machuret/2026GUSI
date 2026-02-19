@@ -61,7 +61,7 @@ interface VaultDoc {
   content: string;
 }
 
-interface BuildPromptOptions {
+export interface BuildPromptOptions {
   companyName: string;
   companyIndustry?: string;
   categoryLabel: string;
@@ -211,11 +211,19 @@ ${styleProfile.summary ? `- Summary: ${styleProfile.summary}` : ""}`
         .join("\n")
     : "";
 
-  // 9. Vault knowledge
+  // 9. Vault knowledge — budget-capped to avoid blowing context window
+  const VAULT_BUDGET_CHARS = 12_000; // ~3k tokens total for vault
+  let vaultBudget = VAULT_BUDGET_CHARS;
   const vaultBlock = vaultDocs && vaultDocs.length > 0
     ? `\n\nKNOWLEDGE VAULT (research and reference material — use this to inform your content):\n` +
       vaultDocs
-        .map((d) => `--- ${d.filename} ---\n${d.content.slice(0, 2000)}`)
+        .map((d) => {
+          if (vaultBudget <= 0) return null;
+          const chunk = d.content.slice(0, Math.min(2000, vaultBudget));
+          vaultBudget -= chunk.length;
+          return `--- ${d.filename} ---\n${chunk}`;
+        })
+        .filter(Boolean)
         .join("\n\n")
     : "";
 

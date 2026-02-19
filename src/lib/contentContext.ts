@@ -1,17 +1,24 @@
 import { db } from "./db";
 import { buildSystemPrompt } from "./promptBuilder";
-import type { ContentBriefOptions } from "./promptBuilder";
+import type { ContentBriefOptions, BuildPromptOptions } from "./promptBuilder";
 import { CATEGORIES } from "./content";
+import { generationContextCache } from "./cache";
 
 /**
  * Fetches all context needed to build a generation prompt for a given company + category.
  * Extracted to eliminate the identical 5-query block duplicated across generate, generate-ab,
  * and generate-bulk routes.
  */
+type GenerationContext = Pick<BuildPromptOptions, "styleProfile" | "recentPosts" | "companyInfo" | "promptTemplate" | "lessons" | "vaultDocs">;
+
 export async function loadGenerationContext(
   companyId: string,
   category: string
-) {
+): Promise<GenerationContext> {
+  const cacheKey = `gen-ctx:${companyId}:${category}`;
+  const cached = generationContextCache.get(cacheKey) as GenerationContext | undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (cached) return cached;
+
   const [styleRes, postsRes, infoRes, promptRes, lessonsRes, vaultRes] = await Promise.all([
     db.from("StyleProfile").select("*").eq("companyId", companyId).maybeSingle(),
     db.from("ContentPost").select("*").eq("companyId", companyId).order("createdAt", { ascending: false }).limit(5),
@@ -21,7 +28,7 @@ export async function loadGenerationContext(
     db.from("Document").select("filename, content").eq("companyId", companyId).order("createdAt", { ascending: false }).limit(10),
   ]);
 
-  return {
+  const ctx: GenerationContext = {
     styleProfile: styleRes.data ?? null,
     recentPosts: postsRes.data ?? [],
     companyInfo: infoRes.data ?? null,
@@ -29,6 +36,9 @@ export async function loadGenerationContext(
     lessons: lessonsRes.data ?? [],
     vaultDocs: vaultRes.data ?? [],
   };
+
+  generationContextCache.set(cacheKey, ctx);
+  return ctx;
 }
 
 /**

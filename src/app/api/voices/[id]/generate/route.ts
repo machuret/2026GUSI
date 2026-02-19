@@ -4,10 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { logAiUsage } from "@/lib/aiUsage";
-import { MODEL_CONFIG } from "@/lib/openai";
+import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { z } from "zod";
-
-const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 const generateSchema = z.object({
   prompt: z.string().min(1).max(2000),
@@ -22,9 +20,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   try {
     const { response: authError } = await requireAuth();
     if (authError) return authError;
-
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 500 });
 
     const [{ data: author }, { data: style }] = await Promise.all([
       db.from("Author").select("name, bio").eq("id", params.id).maybeSingle(),
@@ -70,39 +65,25 @@ GENERATION RULES:
 - Target length: ~${data.targetWords} words
 - Output ONLY the finished content — no meta-commentary, no "here is your content"`;
 
-    const res = await fetch(OPENAI_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: MODEL_CONFIG.voiceGenerate,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: data.prompt },
-        ],
-        temperature: data.temperature,
-        max_tokens: Math.min(4000, Math.ceil(data.targetWords * 1.5)),
-      }),
+    const aiResult = await callOpenAIWithUsage({
+      systemPrompt,
+      userPrompt: data.prompt,
+      model: MODEL_CONFIG.voiceGenerate,
+      maxTokens: Math.min(4000, Math.ceil(data.targetWords * 1.5)),
+      temperature: data.temperature,
+      jsonMode: false,
     });
 
-    if (!res.ok) {
-      const err = await res.text();
-      return NextResponse.json({ error: `OpenAI error: ${err.slice(0, 200)}` }, { status: 502 });
-    }
-
-    const aiData = await res.json();
-    const output = (aiData.choices?.[0]?.message?.content ?? "").trim();
-    const promptTokens     = aiData.usage?.prompt_tokens     ?? 0;
-    const completionTokens = aiData.usage?.completion_tokens ?? 0;
-    const tokensUsed       = aiData.usage?.total_tokens      ?? 0;
+    const output = aiResult.content.trim();
     const wordCount = output.split(/\s+/).filter(Boolean).length;
 
-    logAiUsage({ model: MODEL_CONFIG.voiceGenerate, feature: "voice_generate", promptTokens, completionTokens });
+    logAiUsage({ model: MODEL_CONFIG.voiceGenerate, feature: "voice_generate", promptTokens: aiResult.promptTokens, completionTokens: aiResult.completionTokens });
 
     return NextResponse.json({
       success: true,
       output,
       wordCount,
-      tokensUsed,
+      tokensUsed: aiResult.totalTokens,
       author: author.name,
       model: MODEL_CONFIG.voiceGenerate,
     });
