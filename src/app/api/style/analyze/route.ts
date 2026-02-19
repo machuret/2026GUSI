@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
         commonPhrases: analysis.commonPhrases,
         preferredFormats: analysis.preferredFormats,
         summary: analysis.summary,
+        updatedAt: new Date().toISOString(),
       }, { onConflict: "companyId" })
       .select()
       .single();

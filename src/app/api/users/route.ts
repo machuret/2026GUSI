@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
         email: data.email,
         name: data.name,
         role: data.role,
+        updatedAt: new Date().toISOString(),
       })
       .select("id, email, name, role, active, createdAt")
       .single();

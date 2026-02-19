@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
         description: data.description ?? null,
         systemPrompt: data.systemPrompt,
         contentType: data.contentType,
+        updatedAt: new Date().toISOString(),
       })
       .select()
       .single();

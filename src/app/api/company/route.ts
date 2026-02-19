@@ -41,14 +41,17 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const data = companyInfoSchema.parse(body);
 
-    // Ensure company exists
-    await db.from("Company").upsert({ id: DEMO_COMPANY_ID, name: "My Company" }, { onConflict: "id" });
+    // Ensure company exists (ignore if already there — don't overwrite name/industry)
+    await db.from("Company").upsert({ id: DEMO_COMPANY_ID, name: "My Company" }, { onConflict: "id", ignoreDuplicates: true });
 
-    const { data: info } = await db
+    const now = new Date().toISOString();
+    const { data: info, error: upsertError } = await db
       .from("CompanyInfo")
-      .upsert({ companyId: DEMO_COMPANY_ID, ...data }, { onConflict: "companyId" })
+      .upsert({ companyId: DEMO_COMPANY_ID, ...data, updatedAt: now }, { onConflict: "companyId" })
       .select()
       .single();
+
+    if (upsertError) throw upsertError;
 
     await logActivity(user.id, user.email || "", "company.update", "Updated company info");
 

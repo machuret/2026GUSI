@@ -14,7 +14,7 @@ export async function PATCH(
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const patch: Record<string, any> = {};
+    const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
     if (body.name) patch.name = body.name;
     if (body.description !== undefined) patch.description = body.description;
     if (body.systemPrompt) patch.systemPrompt = body.systemPrompt;

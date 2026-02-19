@@ -18,7 +18,7 @@ export async function getAppUser(authId: string, email: string) {
   const now = new Date().toISOString();
   const { data: created, error } = await db
     .from("User")
-    .insert({ authId, email, name: email.split("@")[0], role: "EDITOR", createdAt: now, updatedAt: now })
+    .insert({ authId, email, name: email.split("@")[0], role: "EDITOR", updatedAt: now })
     .select()
     .single();
 

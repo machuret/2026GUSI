@@ -17,7 +17,7 @@ export async function PATCH(
     await requireRole(user.id, "SUPER_ADMIN");
 
     const body = await req.json();
-    const patch: Record<string, any> = {};
+    const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
     if (body.role) patch.role = body.role;
     if (typeof body.active === "boolean") patch.active = body.active;
     if (body.name) patch.name = body.name;
