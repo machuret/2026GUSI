@@ -15,16 +15,26 @@ import {
   BookOpen,
   Layers,
   CalendarDays,
+  Trophy,
+  Users,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 const mainNav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/ingest", label: "Train AI", icon: Brain },
+];
+
+const contentNav = [
   { href: "/generate", label: "Generate", icon: Sparkles },
   { href: "/bulk", label: "Bulk Generate", icon: Layers },
   { href: "/history", label: "History", icon: History },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
+];
+
+const grantsNav = [
+  { href: "/grants", label: "Grants", icon: Trophy },
+  { href: "/leads", label: "Leads", icon: Users },
 ];
 
 const settingsNav = [
@@ -69,10 +79,22 @@ export function Sidebar() {
         <p className="text-xs text-gray-500">AI Content Generator</p>
       </div>
 
-      <nav className="flex-1 space-y-1">
+      <nav className="flex-1 space-y-1 overflow-y-auto">
         {mainNav.map(navLink)}
 
-        <div className="my-4 border-t border-gray-100" />
+        <div className="my-3 border-t border-gray-100" />
+        <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+          Content
+        </p>
+        {contentNav.map(navLink)}
+
+        <div className="my-3 border-t border-gray-100" />
+        <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+          Growth
+        </p>
+        {grantsNav.map(navLink)}
+
+        <div className="my-3 border-t border-gray-100" />
         <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
           Settings
         </p>
