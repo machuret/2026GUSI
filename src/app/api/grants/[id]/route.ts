@@ -29,6 +29,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const body = await req.json();
     const data = updateSchema.parse(body);
 
+    const { data: existing, error: fetchError } = await db
+      .from("Grant")
+      .select("companyId")
+      .eq("id", params.id)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!existing) return NextResponse.json({ error: "Grant not found" }, { status: 404 });
+
     const { data: grant, error } = await db
       .from("Grant")
       .update({ ...data, updatedAt: new Date().toISOString() })
@@ -48,6 +57,15 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   try {
     const { response: authError } = await requireAuth();
     if (authError) return authError;
+
+    const { data: existing, error: fetchError } = await db
+      .from("Grant")
+      .select("companyId")
+      .eq("id", params.id)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!existing) return NextResponse.json({ error: "Grant not found" }, { status: 404 });
 
     const { error } = await db.from("Grant").delete().eq("id", params.id);
     if (error) throw error;

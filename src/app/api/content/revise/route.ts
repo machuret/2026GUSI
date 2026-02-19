@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
 
     const company = original.company as { name: string } | null;
     const systemPrompt = `You are revising ${categoryLabel} content for ${company?.name ?? "this company"}. The previous version was REJECTED with specific feedback. You must fix ALL issues mentioned in the feedback while maintaining the company's voice.
-${styleProfile ? `\nStyle: ${styleProfile.tone}. Vocabulary: ${styleProfile.vocabulary.join(", ")}` : ""}
+${styleProfile ? `\nStyle: ${styleProfile.tone}. Vocabulary: ${Array.isArray(styleProfile.vocabulary) ? styleProfile.vocabulary.join(", ") : ""}` : ""}
 ${lessonsContext}
 
 REJECTION FEEDBACK ON PREVIOUS VERSION:

@@ -67,33 +67,45 @@ export function useContentGeneration() {
 
   const handleApprove = useCallback(async () => {
     if (!result) return;
-    await postJSON("/api/content/review", {
-      contentId: result.id,
-      category: result.category,
-      action: "approve",
-    });
-    setReviewStatus("approved");
+    try {
+      await postJSON("/api/content/review", {
+        contentId: result.id,
+        category: result.category,
+        action: "approve",
+      });
+      setReviewStatus("approved");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Approve failed");
+    }
   }, [result]);
 
   const handleReject = useCallback(async (feedback: string) => {
     if (!result) return;
-    await postJSON("/api/content/review", {
-      contentId: result.id,
-      category: result.category,
-      action: "reject",
-      feedback,
-    });
-    setReviewStatus("rejected");
+    try {
+      await postJSON("/api/content/review", {
+        contentId: result.id,
+        category: result.category,
+        action: "reject",
+        feedback,
+      });
+      setReviewStatus("rejected");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Reject failed");
+    }
   }, [result]);
 
   const handleRevise = useCallback(async () => {
     if (!result) return;
-    const data = await postJSON<ReviseResponse>("/api/content/revise", {
-      contentId: result.id,
-    });
-    if (data.success) {
-      setResult({ id: data.revised.id, output: data.revised.output, category: result.category });
-      setReviewStatus("idle");
+    try {
+      const data = await postJSON<ReviseResponse>("/api/content/revise", {
+        contentId: result.id,
+      });
+      if (data.success) {
+        setResult({ id: data.revised.id, output: data.revised.output, category: result.category });
+        setReviewStatus("idle");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Revise failed");
     }
   }, [result]);
 
@@ -153,10 +165,14 @@ export function useContentGeneration() {
         },
       });
       if (data.success) {
-        setAbVariants({
-          a: { id: data.variantA.id, output: data.variantA.output, category: cat },
-          b: { id: data.variantB.id, output: data.variantB.output, category: cat },
-        });
+        if (!data.variantA || !data.variantB) {
+          setError("One A/B variant failed to generate — try again");
+        } else {
+          setAbVariants({
+            a: { id: data.variantA.id, output: data.variantA.output, category: cat },
+            b: { id: data.variantB.id, output: data.variantB.output, category: cat },
+          });
+        }
       } else {
         setError(data.error ?? "A/B generation failed");
       }

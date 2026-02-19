@@ -68,11 +68,23 @@ export async function POST(req: NextRequest) {
 // DELETE /api/content/comments?id=xxx
 export async function DELETE(req: NextRequest) {
   try {
-    const { response: authError } = await requireAuth();
+    const { user: authUser, response: authError } = await requireAuth();
     if (authError) return authError;
 
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+    const { data: comment, error: fetchError } = await db
+      .from("ContentComment")
+      .select("authorId")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!comment) return NextResponse.json({ error: "Comment not found" }, { status: 404 });
+    if (comment.authorId !== authUser.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const { error } = await db.from("ContentComment").delete().eq("id", id);
     if (error) throw error;

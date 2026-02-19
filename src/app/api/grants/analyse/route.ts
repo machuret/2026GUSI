@@ -4,8 +4,6 @@ import { z } from "zod";
 import { callOpenAI } from "@/lib/openai";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const bodySchema = z.object({
   companyDNA: z.string().min(20, "Company DNA is too short. Fill in your Company Info page first."),
@@ -23,13 +21,16 @@ const bodySchema = z.object({
 });
 
 async function persistScore(grantId: string, score: number, verdict: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return;
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/Grant?id=eq.${grantId}`, {
+    await fetch(`${supabaseUrl}/rest/v1/Grant?id=eq.${grantId}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
         Prefer: "return=minimal",
       },
       body: JSON.stringify({ aiScore: score, aiVerdict: verdict }),

@@ -41,8 +41,9 @@ export function useGrants() {
         fetch(`/api/company?companyId=${DEMO_COMPANY_ID}`),
       ]);
       if (!grantsRes.ok) throw new Error(`Failed to load grants (${grantsRes.status})`);
+      if (!companyRes.ok && companyRes.status !== 404) throw new Error(`Failed to load company (${companyRes.status})`);
       const grantsData = await grantsRes.json();
-      const companyData = await companyRes.json();
+      const companyData = companyRes.ok ? await companyRes.json() : {};
 
       setGrants(grantsData.grants ?? []);
 

@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Trash2, Save, FileText, ChevronDown, ChevronUp, Eye, EyeOff, Pencil, X, Check } from "lucide-react";
 import { CATEGORIES as BASE_CATEGORIES } from "@/lib/content";
 
@@ -90,7 +90,7 @@ export default function PromptsPage() {
   const [editForm, setEditForm] = useState({ name: "", description: "", systemPrompt: "" });
   const [editSaving, setEditSaving] = useState(false);
 
-  const fetchPrompts = async () => {
+  const fetchPrompts = useCallback(async () => {
     try {
       const res = await fetch("/api/prompts");
       if (!res.ok) throw new Error(`Failed to load prompts (${res.status})`);
@@ -100,9 +100,9 @@ export default function PromptsPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load prompts");
     } finally { setLoading(false); }
-  };
+  }, []);
 
-  useEffect(() => { fetchPrompts(); }, []);
+  useEffect(() => { fetchPrompts(); }, [fetchPrompts]);
 
   const handleCreate = async () => {
     setSaving(true);
