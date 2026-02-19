@@ -13,6 +13,7 @@ import {
   LogOut,
   Activity,
   BookOpen,
+  Layers,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -20,6 +21,7 @@ const mainNav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/ingest", label: "Train AI", icon: Brain },
   { href: "/generate", label: "Generate", icon: Sparkles },
+  { href: "/bulk", label: "Bulk Generate", icon: Layers },
   { href: "/history", label: "History", icon: History },
 ];
 
