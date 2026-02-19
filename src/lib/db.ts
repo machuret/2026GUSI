@@ -1,11 +1,21 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Server-side Supabase client using the service role key.
  * Bypasses RLS — only use in API routes, never in the browser.
+ * Lazy singleton — initialized on first use so build succeeds without env vars.
  */
-export const db = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } }
-);
+let _db: SupabaseClient | null = null;
+
+export const db = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    if (!_db) {
+      _db = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { persistSession: false } }
+      );
+    }
+    return (_db as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});
