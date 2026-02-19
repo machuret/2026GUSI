@@ -1,24 +1,31 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { callOpenAI } from "@/lib/openai";
+
+const bodySchema = z.object({
+  query: z.string().optional(),
+  sector: z.string().optional(),
+  geographicScope: z.string().optional(),
+  applicantCountry: z.string().optional(),
+  orgType: z.string().optional(),
+  fundingSize: z.string().optional(),
+  deadlineUrgency: z.string().optional(),
+  eligibilityType: z.string().optional(),
+  grantType: z.string().optional(),
+  companyDNA: z.string().optional(),
+}).refine(
+  (d) => d.query || d.sector || d.grantType || d.orgType,
+  { message: "At least one search filter is required" }
+);
 
 export async function POST(req: NextRequest) {
   try {
-    const {
-      query,
-      sector,
-      geographicScope,
-      applicantCountry,
-      orgType,
-      fundingSize,
-      deadlineUrgency,
-      eligibilityType,
-      grantType,
-      companyDNA,
-    } = await req.json();
-
-    if (!query && !sector && !grantType && !orgType) {
-      return NextResponse.json({ error: "At least one search filter is required" }, { status: 400 });
+    const parsed = bodySchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
     }
+    const { query, sector, geographicScope, applicantCountry, orgType, fundingSize, deadlineUrgency, eligibilityType, grantType, companyDNA } = parsed.data;
 
     const systemPrompt = `You are a grant discovery specialist with deep knowledge of global funding opportunities. Your job is to find real, currently active grant opportunities that precisely match the given filters and company profile.
 
@@ -72,33 +79,8 @@ ${filters.join("\n")}${dnaSection}
 
 Return up to 10 real, relevant grants that match ALL the filters above. Strictly filter by org type and eligibility if specified.`;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.15,
-        max_tokens: 3000,
-        response_format: { type: "json_object" },
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      return NextResponse.json({ error: `OpenAI error: ${err}` }, { status: 500 });
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content ?? "{}";
+    const content = await callOpenAI({ systemPrompt, userPrompt, maxTokens: 3000, temperature: 0.15 });
     const result = JSON.parse(content);
-
     return NextResponse.json({ success: true, results: result.results ?? [] });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });

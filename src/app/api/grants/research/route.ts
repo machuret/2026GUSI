@@ -1,13 +1,22 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { callOpenAI } from "@/lib/openai";
+
+const bodySchema = z.object({
+  name: z.string().optional(),
+  url: z.string().optional(),
+  founder: z.string().optional(),
+  existingData: z.record(z.any()).optional(),
+}).refine((d) => d.name || d.url, { message: "name or url required" });
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, url, founder, existingData } = await req.json();
-
-    if (!name && !url) {
-      return NextResponse.json({ error: "name or url required" }, { status: 400 });
+    const parsed = bodySchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
     }
+    const { name, url, founder, existingData } = parsed.data;
 
     const systemPrompt = `You are a grant research assistant. Given a grant name, organisation, and optional URL, research and fill in as many details as possible about this grant opportunity.
 
@@ -35,31 +44,7 @@ ${JSON.stringify(existingData ?? {}, null, 2)}
 
 Fill in as many fields as you can based on your knowledge of this grant or organisation.`;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.2,
-        max_tokens: 800,
-        response_format: { type: "json_object" },
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      return NextResponse.json({ error: `OpenAI error: ${err}` }, { status: 500 });
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content ?? "{}";
+    const content = await callOpenAI({ systemPrompt, userPrompt, maxTokens: 800, temperature: 0.2 });
     const result = JSON.parse(content);
 
     // Strip null values so we don't overwrite existing data with nulls

@@ -1,14 +1,22 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { callOpenAI } from "@/lib/openai";
 import { KNOWN_GRANT_SITES } from "@/lib/grantSites";
+
+const bodySchema = z.object({
+  url: z.string().url("A valid URL is required"),
+  siteName: z.string().optional(),
+  extractionHint: z.string().optional(),
+});
 
 export async function POST(req: NextRequest) {
   try {
-    const { url, siteName, extractionHint } = await req.json();
-
-    if (!url) {
-      return NextResponse.json({ error: "url required" }, { status: 400 });
+    const parsed = bodySchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
     }
+    const { url, siteName, extractionHint } = parsed.data;
 
     // Fetch the page HTML
     let html = "";
@@ -95,31 +103,7 @@ ${extractionHint ? `Hint: ${extractionHint}` : ""}
 PAGE CONTENT:
 ${html}`;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.1,
-        max_tokens: 4000,
-        response_format: { type: "json_object" },
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      return NextResponse.json({ error: `OpenAI error: ${err}` }, { status: 500 });
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content ?? "{}";
+    const content = await callOpenAI({ systemPrompt, userPrompt, maxTokens: 4000, temperature: 0.1 });
     const result = JSON.parse(content);
 
     return NextResponse.json({

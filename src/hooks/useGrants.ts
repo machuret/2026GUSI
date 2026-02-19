@@ -28,15 +28,18 @@ export interface Grant {
 export function useGrants() {
   const [grants, setGrants] = useState<Grant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [companyDNA, setCompanyDNA] = useState("");
 
   const fetchGrants = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [grantsRes, companyRes] = await Promise.all([
         fetch(`/api/grants?companyId=${DEMO_COMPANY_ID}`),
         fetch(`/api/company?companyId=${DEMO_COMPANY_ID}`),
       ]);
+      if (!grantsRes.ok) throw new Error(`Failed to load grants (${grantsRes.status})`);
       const grantsData = await grantsRes.json();
       const companyData = await companyRes.json();
 
@@ -53,6 +56,8 @@ export function useGrants() {
         ].filter(Boolean);
         setCompanyDNA(parts.join("\n"));
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load grants");
     } finally {
       setLoading(false);
     }
@@ -86,5 +91,5 @@ export function useGrants() {
     setGrants((prev) => [grant, ...prev]);
   }, []);
 
-  return { grants, loading, companyDNA, fetchGrants, updateGrant, deleteGrant, addGrant };
+  return { grants, loading, error, companyDNA, fetchGrants, updateGrant, deleteGrant, addGrant };
 }

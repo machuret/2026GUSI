@@ -57,28 +57,43 @@ export const SOURCE_STYLES: Record<string, string> = {
 export function useLeads(initialFilters?: { status?: string; source?: string }) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(initialFilters?.status ?? "");
   const [sourceFilter, setSourceFilter] = useState(initialFilters?.source ?? "");
 
+  // Debounce search — wait 350ms after last keystroke before querying DB
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, sourceFilter]);
+
   const fetchLeads = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams({ companyId: DEMO_COMPANY_ID, page: String(page), limit: "50" });
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter) params.set("status", statusFilter);
       if (sourceFilter) params.set("source", sourceFilter);
 
       const res = await fetch(`/api/leads?${params}`);
+      if (!res.ok) throw new Error(`Failed to load leads (${res.status})`);
       const data = await res.json();
       setLeads(data.leads ?? []);
       setTotal(data.total ?? 0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load leads");
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, sourceFilter]);
+  }, [page, debouncedSearch, statusFilter, sourceFilter]);
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
@@ -108,7 +123,7 @@ export function useLeads(initialFilters?: { status?: string; source?: string }) 
   }, []);
 
   return {
-    leads, loading, total, page, setPage,
+    leads, loading, error, total, page, setPage,
     search, setSearch,
     statusFilter, setStatusFilter,
     sourceFilter, setSourceFilter,

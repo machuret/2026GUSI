@@ -1,8 +1,25 @@
 export const runtime = 'edge';
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { callOpenAI } from "@/lib/openai";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+const bodySchema = z.object({
+  companyDNA: z.string().min(20, "Company DNA is too short. Fill in your Company Info page first."),
+  grant: z.object({
+    id: z.string().optional(),
+    name: z.string(),
+    founder: z.string().optional().nullable(),
+    geographicScope: z.string().optional().nullable(),
+    eligibility: z.string().optional().nullable(),
+    amount: z.string().optional().nullable(),
+    projectDuration: z.string().optional().nullable(),
+    howToApply: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  }),
+});
 
 async function persistScore(grantId: string, score: number, verdict: string) {
   try {
@@ -23,17 +40,11 @@ async function persistScore(grantId: string, score: number, verdict: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { grant, companyDNA } = await req.json();
-
-    if (!grant) {
-      return NextResponse.json({ error: "grant required" }, { status: 400 });
+    const parsed = bodySchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
     }
-
-    if (!companyDNA || companyDNA.trim().length < 20) {
-      return NextResponse.json({
-        error: "Company DNA is too short. Please fill in your Company Info page (values, philosophy, founders, achievements) before running the fit calculator.",
-      }, { status: 400 });
-    }
+    const { grant, companyDNA } = parsed.data;
 
     const systemPrompt = `You are a grant eligibility analyst. You will be given a company's profile (DNA) and a grant opportunity. Your job is to assess how likely this company is to successfully win this grant.
 
@@ -55,49 +66,11 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation:
   "recommendation": "<one concrete action to improve the application>"
 }`;
 
-    const userPrompt = `COMPANY DNA:
-${companyDNA}
+    const userPrompt = `COMPANY DNA:\n${companyDNA}\n\nGRANT DETAILS:\nName: ${grant.name}\nFounder/Organisation: ${grant.founder ?? "Unknown"}\nGeographic Scope: ${grant.geographicScope ?? "Not specified"}\nEligibility: ${grant.eligibility ?? "Not specified"}\nAmount: ${grant.amount ?? "Not specified"}\nProject Duration: ${grant.projectDuration ?? "Not specified"}\nHow to Apply: ${grant.howToApply ?? "Not specified"}\nNotes: ${grant.notes ?? "None"}\n\nAssess the likelihood of this company winning this grant.`;
 
-GRANT DETAILS:
-Name: ${grant.name}
-Founder/Organisation: ${grant.founder ?? "Unknown"}
-Geographic Scope: ${grant.geographicScope ?? "Not specified"}
-Eligibility: ${grant.eligibility ?? "Not specified"}
-Amount: ${grant.amount ?? "Not specified"}
-Project Duration: ${grant.projectDuration ?? "Not specified"}
-How to Apply: ${grant.howToApply ?? "Not specified"}
-Notes: ${grant.notes ?? "None"}
-
-Assess the likelihood of this company winning this grant.`;
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.3,
-        max_tokens: 600,
-        response_format: { type: "json_object" },
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      return NextResponse.json({ error: `OpenAI error: ${err}` }, { status: 500 });
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content ?? "{}";
+    const content = await callOpenAI({ systemPrompt, userPrompt, maxTokens: 600, temperature: 0.3 });
     const result = JSON.parse(content);
 
-    // Persist score to DB (non-blocking)
     if (grant.id && result.score !== undefined) {
       await persistScore(grant.id, result.score, result.verdict ?? "");
     }

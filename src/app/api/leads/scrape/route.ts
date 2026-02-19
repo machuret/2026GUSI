@@ -1,76 +1,11 @@
-export const runtime = 'edge';
+export const runtime = 'nodejs';
+export const maxDuration = 120; // 2 min — Apify actors can be slow
 import { NextRequest, NextResponse } from "next/server";
 import { SCRAPE_SOURCES } from "@/lib/leadSources";
+import { normalise } from "@/lib/leadNormalisers";
 
 const APIFY_TOKEN = process.env.APIFY_API_TOKEN!;
 const APIFY_BASE = "https://api.apify.com/v2";
-
-// ─── Normalise raw Apify results into Lead shape ───────────────────────────────
-function normaliseLinkedIn(item: Record<string, unknown>) {
-  return {
-    source: "linkedin",
-    fullName: (item.fullName ?? item.name ?? "") as string,
-    firstName: (item.firstName ?? "") as string,
-    lastName: (item.lastName ?? "") as string,
-    jobTitle: (item.headline ?? item.jobTitle ?? "") as string,
-    company: (item.currentCompany ?? item.company ?? "") as string,
-    location: (item.location ?? "") as string,
-    linkedinUrl: (item.profileUrl ?? item.url ?? "") as string,
-    profileUrl: (item.profileUrl ?? item.url ?? "") as string,
-    rawData: item,
-  };
-}
-
-function normaliseDoctolib(item: Record<string, unknown>) {
-  const name = (item.name ?? item.fullName ?? "") as string;
-  const parts = name.split(" ");
-  return {
-    source: "doctolib",
-    fullName: name,
-    firstName: parts[0] ?? "",
-    lastName: parts.slice(1).join(" "),
-    jobTitle: (item.specialty ?? item.speciality ?? "") as string,
-    company: (item.practiceName ?? item.clinic ?? "") as string,
-    location: (item.address ?? item.location ?? "") as string,
-    city: (item.city ?? "") as string,
-    country: "France",
-    profileUrl: (item.url ?? item.profileUrl ?? "") as string,
-    specialties: Array.isArray(item.specialties) ? item.specialties as string[] : [],
-    rawData: item,
-  };
-}
-
-function normaliseWebMD(item: Record<string, unknown>) {
-  const nameObj = item.name as Record<string, string> | undefined;
-  const locationObj = item.location as Record<string, string> | undefined;
-  const urlsObj = item.urls as Record<string, string> | undefined;
-  return {
-    source: "webmd",
-    fullName: nameObj?.full ?? "",
-    firstName: nameObj?.first ?? "",
-    lastName: nameObj?.last ?? "",
-    gender: (item.gender ?? "") as string,
-    jobTitle: Array.isArray(item.specialties) ? (item.specialties as string[])[0] ?? "" : "",
-    specialties: Array.isArray(item.specialties) ? item.specialties as string[] : [],
-    company: locationObj?.name ?? "",
-    location: locationObj ? `${locationObj.address ?? ""}, ${locationObj.city ?? ""}, ${locationObj.state ?? ""}`.trim().replace(/^,\s*/, "") : "",
-    city: locationObj?.city ?? "",
-    state: locationObj?.state ?? "",
-    country: "United States",
-    profileUrl: urlsObj?.profile ?? "",
-    website: urlsObj?.website ?? "",
-    rawData: item,
-  };
-}
-
-function normalise(sourceId: string, item: Record<string, unknown>) {
-  switch (sourceId) {
-    case "linkedin": return normaliseLinkedIn(item);
-    case "doctolib": return normaliseDoctolib(item);
-    case "webmd":    return normaliseWebMD(item);
-    default:         return { source: sourceId, fullName: "", rawData: item };
-  }
-}
 
 // ─── Route ────────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
