@@ -61,11 +61,15 @@ export function Sidebar() {
   const pathname = usePathname();
   const supabase = createClient();
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/users/me")
       .then((r) => r.json())
-      .then((d) => { if (d.user?.role) setUserRole(d.user.role); })
+      .then((d) => {
+        if (d.user?.role)  setUserRole(d.user.role);
+        if (d.user?.email) setUserEmail(d.user.email);
+      })
       .catch(() => {});
   }, []);
 
@@ -97,9 +101,24 @@ export function Sidebar() {
 
   return (
     <aside className="flex w-64 flex-col border-r border-gray-300 bg-gray-900 px-4 py-6">
-      <div className="mb-8 px-2">
+      <div className="mb-6 px-2">
         <h1 className="text-2xl font-bold text-white">GUSI</h1>
         <p className="text-xs text-gray-400">AI Content Generator</p>
+      </div>
+
+      {/* User badge + sign out */}
+      <div className="mb-4 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5">
+        <p className="truncate text-xs text-gray-300">{userEmail ?? "..."}</p>
+        <div className="mt-1 flex items-center justify-between">
+          <span className="text-xs font-semibold text-gray-500">{userRole ?? ""}</span>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-red-400 hover:bg-red-900/40 hover:text-red-300"
+          >
+            <LogOut className="h-3 w-3" />
+            Sign out
+          </button>
+        </div>
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto">
@@ -130,13 +149,6 @@ export function Sidebar() {
         )}
       </nav>
 
-      <button
-        onClick={handleLogout}
-        className="mt-4 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-400 transition-colors hover:bg-red-900/40 hover:text-red-400"
-      >
-        <LogOut className="h-5 w-5" />
-        Sign Out
-      </button>
     </aside>
   );
 }
