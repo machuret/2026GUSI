@@ -1,11 +1,12 @@
 export interface SourceField {
   key: string;
   label: string;
-  type: "text" | "number" | "tags";
+  type: "text" | "number" | "tags" | "select";
   placeholder?: string;
-  default?: number;
+  default?: number | string;
   min?: number;
   max?: number;
+  options?: string[];
 }
 
 export interface ScrapeSrc {
@@ -39,28 +40,55 @@ export const SCRAPE_SOURCES: ScrapeSrc[] = [
     id: "doctolib",
     label: "Doctolib Doctors",
     actorId: "giovannibiancia/doctolib-scraper",
-    description: "Scrape doctor profiles from Doctolib (France)",
+    description: "Scrape French doctor profiles from Doctolib by specialty and city",
     inputFields: [
-      { key: "searchUrl", label: "Doctolib search URL", type: "text", placeholder: "https://www.doctolib.fr/medecin-generaliste/paris" },
+      {
+        key: "specialty", label: "Specialty", type: "select",
+        options: [
+          "medecin-generaliste", "cardiologue", "dermatologue", "gynecologue",
+          "ophtalmologue", "pediatre", "psychiatre", "radiologue",
+          "rhumatologue", "chirurgien", "neurologue", "gastro-enterologue",
+          "endocrinologue", "pneumologue", "urologue", "orthopediste",
+        ],
+        placeholder: "Select specialty",
+      },
+      { key: "city", label: "City", type: "text", placeholder: "paris, lyon, marseille, bordeaux…" },
       { key: "maxItems", label: "Max results", type: "number", default: 20, min: 1, max: 200 },
     ],
-    buildInput: (fields) => ({
-      startUrls: [{ url: fields.searchUrl }],
-      maxItems: fields.maxItems ?? 20,
-    }),
+    buildInput: (fields) => {
+      const specialty = (fields.specialty as string) || "medecin-generaliste";
+      const city = ((fields.city as string) || "paris").toLowerCase().replace(/\s+/g, "-");
+      const url = `https://www.doctolib.fr/${specialty}/${city}`;
+      return { startUrls: [{ url }], maxItems: fields.maxItems ?? 20 };
+    },
   },
   {
     id: "webmd",
     label: "WebMD Doctors",
     actorId: "easyapi/webmd-doctor-scraper",
-    description: "Extract doctor profiles from WebMD search results",
+    description: "Scrape US doctor profiles from WebMD by specialty, city and state",
     inputFields: [
-      { key: "searchUrl", label: "WebMD search URL", type: "text", placeholder: "https://doctor.webmd.com/results?q=cardiologist&city=New+York&state=NY" },
+      { key: "specialty", label: "Specialty", type: "text", placeholder: "cardiologist, dermatologist, pediatrician…" },
+      { key: "city", label: "City", type: "text", placeholder: "New York, Los Angeles, Chicago…" },
+      {
+        key: "state", label: "State", type: "select",
+        options: [
+          "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+          "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+          "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+          "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+          "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
+        ],
+        placeholder: "Select state",
+      },
       { key: "maxItems", label: "Max results", type: "number", default: 30, min: 1, max: 200 },
     ],
-    buildInput: (fields) => ({
-      searchUrls: [fields.searchUrl],
-      maxItems: fields.maxItems ?? 30,
-    }),
+    buildInput: (fields) => {
+      const q = encodeURIComponent((fields.specialty as string) || "doctor");
+      const city = encodeURIComponent((fields.city as string) || "");
+      const state = encodeURIComponent((fields.state as string) || "");
+      const url = `https://doctor.webmd.com/results?q=${q}&city=${city}&state=${state}`;
+      return { searchUrls: [url], maxItems: fields.maxItems ?? 30 };
+    },
   },
 ];

@@ -237,7 +237,6 @@ function GrantSearchModal({
   existingNames: Set<string>;
 }) {
   const [query, setQuery] = useState("");
-  const [sector, setSector] = useState("");
   const [geographicScope, setGeographicScope] = useState("");
   const [applicantCountry, setApplicantCountry] = useState("");
   const [orgType, setOrgType] = useState("");
@@ -247,7 +246,9 @@ function GrantSearchModal({
   const [grantType, setGrantType] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [searchPhase, setSearchPhase] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [newCount, setNewCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState<Record<number, boolean>>({});
   const [added, setAdded] = useState<Record<number, boolean>>({});
@@ -255,17 +256,17 @@ function GrantSearchModal({
   const activeFilterCount = [geographicScope, applicantCountry, orgType, fundingSize, deadlineUrgency, eligibilityType, grantType].filter(Boolean).length;
 
   const handleSearch = async () => {
-    if (!query.trim() && !sector.trim() && !grantType && !orgType) {
-      setError("Enter a keyword, sector, grant type, or org type to search");
+    if (!query.trim() && !grantType && !orgType && !geographicScope) {
+      setError("Enter a keyword, grant type, org type, or region to search");
       return;
     }
-    setSearching(true); setError(null); setResults([]);
+    setSearching(true); setError(null); setResults([]); setNewCount(0);
+    setSearchPhase("Asking AI to find matching grants…");
     try {
       const res = await authFetch("/api/grants/search", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: query || undefined,
-          sector: sector || undefined,
           geographicScope: geographicScope || undefined,
           applicantCountry: applicantCountry || undefined,
           orgType: orgType || undefined,
@@ -274,13 +275,18 @@ function GrantSearchModal({
           eligibilityType: eligibilityType || undefined,
           grantType: grantType || undefined,
           companyDNA,
+          existingNames: Array.from(existingNames),
         }),
       });
+      setSearchPhase("Filtering results…");
       const data = await res.json();
-      if (data.success) setResults(data.results ?? []);
-      else setError(data.error || "Search failed");
-    } catch { setError("Network error"); }
-    finally { setSearching(false); }
+      if (data.success) {
+        const fresh = (data.results ?? []) as SearchResult[];
+        setResults(fresh);
+        setNewCount(fresh.filter((r) => !existingNames.has(r.name.toLowerCase())).length);
+      } else setError(data.error || "Search failed");
+    } catch (err) { setError(err instanceof Error ? err.message : "Network error"); }
+    finally { setSearching(false); setSearchPhase(""); }
   };
 
   const handleAdd = async (result: SearchResult, idx: number) => {
@@ -335,15 +341,9 @@ function GrantSearchModal({
         {/* Search inputs */}
         <div className="border-b border-gray-100 px-6 py-4 space-y-3 overflow-y-auto">
           {/* Row 1 — core search */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className={labelCls}>Keywords / Topic</label>
-              <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} className={inputCls} placeholder="e.g. women founders, climate tech…" />
-            </div>
-            <div>
-              <label className={labelCls}>Sector / Industry</label>
-              <input value={sector} onChange={(e) => setSector(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} className={inputCls} placeholder="e.g. healthcare, education, agri…" />
-            </div>
+          <div>
+            <label className={labelCls}>Keywords / Topic</label>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} className={inputCls} placeholder="e.g. women founders, climate tech, digital health…" />
           </div>
 
           {/* Row 2 — grant type + org type */}
@@ -401,7 +401,7 @@ function GrantSearchModal({
               className="flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
             >
               {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              {searching ? "Searching…" : "Search Grants"}
+              {searching ? (searchPhase || "Searching…") : "Search Grants"}
             </button>
             {!companyDNA && (
               <p className="text-xs text-amber-600 flex items-center gap-1">
@@ -414,7 +414,7 @@ function GrantSearchModal({
               </p>
             )}
           </div>
-          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          {error && <p className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</p>}
         </div>
 
         {/* Results */}
@@ -422,7 +422,8 @@ function GrantSearchModal({
           {searching && (
             <div className="flex flex-col items-center justify-center py-16 text-gray-400">
               <Loader2 className="h-8 w-8 animate-spin mb-3 text-brand-400" />
-              <p className="text-sm">AI is searching for matching grants…</p>
+              <p className="text-sm font-medium text-brand-600">{searchPhase || "Searching…"}</p>
+              <p className="text-xs text-gray-400 mt-1">This can take 10–20 seconds</p>
             </div>
           )}
 
@@ -435,7 +436,17 @@ function GrantSearchModal({
 
           {!searching && results.length > 0 && (
             <div className="space-y-3">
-              <p className="text-xs text-gray-400">{results.length} result{results.length !== 1 ? "s" : ""} found</p>
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-gray-500">
+                  <span className="font-semibold text-gray-800">{results.length}</span> grant{results.length !== 1 ? "s" : ""} found
+                  {newCount < results.length && (
+                    <span className="ml-1 text-amber-600">· {results.length - newCount} already in your list (shown greyed out)</span>
+                  )}
+                  {newCount > 0 && (
+                    <span className="ml-1 text-green-600">· <strong>{newCount} new</strong></span>
+                  )}
+                </p>
+              </div>
               {results.map((r, idx) => {
                 const alreadyInList = existingNames.has(r.name.toLowerCase());
                 const isAdded = added[idx] || alreadyInList;
