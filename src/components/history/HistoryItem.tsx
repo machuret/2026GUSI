@@ -3,6 +3,8 @@
 import { memo, useState } from "react";
 import { ThumbsUp, ThumbsDown, RefreshCw, Copy, Check, BookOpen, X, Pencil, Send } from "lucide-react";
 import { QUICK_ISSUES } from "@/components/generate/OutputReview";
+import { ContentComments } from "@/components/content/ContentComments";
+import { SchedulePicker } from "@/components/content/SchedulePicker";
 
 export interface GeneratedItem {
   id: string;
@@ -15,6 +17,8 @@ export interface GeneratedItem {
   revisionOf: string | null;
   revisionNumber: number;
   createdAt: string;
+  scheduledAt?: string | null;
+  contentTable?: string;
   user?: { name: string; email: string } | null;
 }
 
@@ -33,9 +37,11 @@ interface Props {
   onRevise: (id: string) => Promise<void>;
   onEdit: (id: string, category: string, output: string) => Promise<void>;
   onMarkPublish: (id: string, category: string) => Promise<void>;
+  onScheduled?: (id: string, date: string | null) => void;
 }
 
-function HistoryItemInner({ item, onApprove, onReject, onRevise, onEdit, onMarkPublish }: Props) {
+function HistoryItemInner({ item, onApprove, onReject, onRevise, onEdit, onMarkPublish, onScheduled }: Props) {
+  const [scheduledAt, setScheduledAt] = useState<string | null | undefined>(item.scheduledAt);
   const [copiedId, setCopiedId] = useState(false);
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
@@ -232,6 +238,16 @@ function HistoryItemInner({ item, onApprove, onReject, onRevise, onEdit, onMarkP
               <Send className="h-3.5 w-3.5" /> Mark to Publish
             </button>
           )}
+          {(item.status === "APPROVED" || item.status === "PUBLISHED") && (
+            <SchedulePicker
+              contentId={item.id}
+              scheduledAt={scheduledAt}
+              onScheduled={(date) => {
+                setScheduledAt(date);
+                onScheduled?.(item.id, date);
+              }}
+            />
+          )}
           <button onClick={() => { setEditMode(true); setEditText(item.output); }} className="flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
             <Pencil className="h-3.5 w-3.5" /> Edit
           </button>
@@ -240,6 +256,12 @@ function HistoryItemInner({ item, onApprove, onReject, onRevise, onEdit, onMarkP
           </button>
         </div>
       )}
+
+      {/* Comments */}
+      <ContentComments
+        contentId={item.id}
+        contentTable={item.contentTable ?? item.category}
+      />
     </div>
   );
 }

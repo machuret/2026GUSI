@@ -14,6 +14,7 @@ import {
   Activity,
   BookOpen,
   Layers,
+  CalendarDays,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -23,6 +24,7 @@ const mainNav = [
   { href: "/generate", label: "Generate", icon: Sparkles },
   { href: "/bulk", label: "Bulk Generate", icon: Layers },
   { href: "/history", label: "History", icon: History },
+  { href: "/calendar", label: "Calendar", icon: CalendarDays },
 ];
 
 const settingsNav = [
