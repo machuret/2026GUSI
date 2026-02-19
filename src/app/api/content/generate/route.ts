@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { openai } from "@/lib/openai";
 import { logActivity } from "@/lib/activity";
 import { createContent, CATEGORIES } from "@/lib/content";
-import { buildSystemPrompt } from "@/lib/promptBuilder";
+import { buildGenerationPrompt } from "@/lib/contentContext";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { z } from "zod";
 
@@ -34,8 +34,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = generateSchema.parse(body);
 
-    const catLabel = CATEGORIES.find((c) => c.key === data.category)?.label || data.category;
-
     const { data: company } = await db
       .from("Company")
       .select("*")
@@ -46,26 +44,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    // Fetch all context in parallel
-    const [styleRes, postsRes, infoRes, promptRes, lessonsRes] = await Promise.all([
-      db.from("StyleProfile").select("*").eq("companyId", data.companyId).maybeSingle(),
-      db.from("ContentPost").select("*").eq("companyId", data.companyId).order("createdAt", { ascending: false }).limit(5),
-      db.from("CompanyInfo").select("*").eq("companyId", data.companyId).maybeSingle(),
-      db.from("PromptTemplate").select("*").eq("companyId", data.companyId).eq("contentType", data.category).eq("active", true).limit(1),
-      db.from("Lesson").select("*").eq("companyId", data.companyId).eq("active", true).or(`contentType.eq.${data.category},contentType.is.null`).order("createdAt", { ascending: false }).limit(30),
-    ]);
-
-    const systemPrompt = buildSystemPrompt({
-      companyName: company.name,
-      companyIndustry: company.industry,
-      categoryLabel: catLabel,
-      styleProfile: styleRes.data,
-      recentPosts: postsRes.data ?? [],
-      companyInfo: infoRes.data,
-      promptTemplate: promptRes.data?.[0] ?? null,
-      lessons: lessonsRes.data ?? [],
-      brief: data.brief,
-    });
+    const catLabel = CATEGORIES.find((c) => c.key === data.category)?.label ?? data.category;
+    const systemPrompt = await buildGenerationPrompt(company, data.companyId, data.category, data.brief);
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",

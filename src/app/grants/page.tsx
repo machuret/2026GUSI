@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Plus, ExternalLink, Trash2, ChevronDown, ChevronUp,
   Search, FileText, Loader2, X, Save, Sparkles, FlaskConical,
   CheckCircle2, AlertCircle, TrendingUp, Globe, BadgeCheck, ShieldAlert,
 } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { useGrants, type Grant } from "@/hooks/useGrants";
 
 // ─── Dropdown options ─────────────────────────────────────────────────────────
 const GEO_SCOPES = [
@@ -29,28 +30,6 @@ interface GrantAnalysis {
   strengths: string[];
   gaps: string[];
   recommendation: string;
-}
-
-interface Grant {
-  id: string;
-  companyId: string;
-  name: string;
-  founder?: string | null;
-  url?: string | null;
-  deadlineDate?: string | null;
-  howToApply?: string | null;
-  geographicScope?: string | null;
-  eligibility?: string | null;
-  amount?: string | null;
-  projectDuration?: string | null;
-  fitScore?: number | null;
-  submissionEffort?: "Low" | "Medium" | "High" | null;
-  decision?: "Apply" | "Maybe" | "No" | null;
-  notes?: string | null;
-  aiScore?: number | null;
-  aiVerdict?: string | null;
-  createdAt: string;
-  updatedAt: string;
 }
 
 interface SearchResult {
@@ -723,54 +702,13 @@ function GrantRow({ grant, onUpdate, onDelete, companyDNA }: {
 }
 
 export default function GrantsPage() {
-  const [grants, setGrants] = useState<Grant[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { grants, loading, companyDNA, updateGrant, deleteGrant, addGrant } = useGrants();
   const [showAdd, setShowAdd] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [decisionFilter, setDecisionFilter] = useState("All");
   const [sortField, setSortField] = useState<"deadlineDate" | "fitScore" | "name">("deadlineDate");
   const [sortAsc, setSortAsc] = useState(true);
-  const [companyDNA, setCompanyDNA] = useState("");
-
-  const fetchGrants = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [grantsRes, companyRes] = await Promise.all([
-        fetch(`/api/grants?companyId=${DEMO_COMPANY_ID}`),
-        fetch(`/api/company?companyId=${DEMO_COMPANY_ID}`),
-      ]);
-      const grantsData = await grantsRes.json();
-      const companyData = await companyRes.json();
-      setGrants(grantsData.grants ?? []);
-      // Build DNA string from company info for AI analysis
-      const info = companyData.companyInfo;
-      if (info) {
-        const parts = [
-          info.bulkContent,
-          info.values ? `Values: ${info.values}` : null,
-          info.corePhilosophy ? `Philosophy: ${info.corePhilosophy}` : null,
-          info.founders ? `Founders: ${info.founders}` : null,
-          info.achievements ? `Achievements: ${info.achievements}` : null,
-        ].filter(Boolean);
-        setCompanyDNA(parts.join("\n"));
-      }
-    } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { fetchGrants(); }, [fetchGrants]);
-
-  const handleUpdate = useCallback(async (id: string, data: Partial<Grant>) => {
-    const res = await fetch(`/api/grants/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    const result = await res.json();
-    if (result.success) setGrants((prev) => prev.map((g) => g.id === id ? { ...g, ...result.grant } : g));
-  }, []);
-
-  const handleDelete = useCallback(async (id: string) => {
-    const res = await fetch(`/api/grants/${id}`, { method: "DELETE" });
-    const result = await res.json();
-    if (result.success) setGrants((prev) => prev.filter((g) => g.id !== id));
-  }, []);
 
   const toggleSort = (field: typeof sortField) => {
     if (sortField === field) setSortAsc(v => !v);
@@ -804,11 +742,11 @@ export default function GrantsPage() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      {showAdd && <AddGrantModal onClose={() => setShowAdd(false)} onSaved={(g) => setGrants(p => [g, ...p])} />}
+      {showAdd && <AddGrantModal onClose={() => setShowAdd(false)} onSaved={(g) => addGrant(g)} />}
       {showSearch && (
         <GrantSearchModal
           onClose={() => setShowSearch(false)}
-          onAdded={(g) => setGrants((p) => [g, ...p])}
+          onAdded={(g) => addGrant(g)}
           companyDNA={companyDNA}
           existingNames={existingNames}
         />
@@ -889,7 +827,7 @@ export default function GrantsPage() {
             </thead>
             <tbody>
               {filtered.map((grant) => (
-                <GrantRow key={grant.id} grant={grant} onUpdate={handleUpdate} onDelete={handleDelete} companyDNA={companyDNA} />
+                <GrantRow key={grant.id} grant={grant} onUpdate={updateGrant} onDelete={deleteGrant} companyDNA={companyDNA} />
               ))}
             </tbody>
           </table>

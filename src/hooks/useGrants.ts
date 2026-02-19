@@ -1,0 +1,90 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { DEMO_COMPANY_ID } from "@/lib/constants";
+
+export interface Grant {
+  id: string;
+  companyId: string;
+  name: string;
+  founder?: string | null;
+  url?: string | null;
+  deadlineDate?: string | null;
+  howToApply?: string | null;
+  geographicScope?: string | null;
+  eligibility?: string | null;
+  amount?: string | null;
+  projectDuration?: string | null;
+  fitScore?: number | null;
+  submissionEffort?: "Low" | "Medium" | "High" | null;
+  decision?: "Apply" | "Maybe" | "No" | null;
+  notes?: string | null;
+  aiScore?: number | null;
+  aiVerdict?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function useGrants() {
+  const [grants, setGrants] = useState<Grant[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [companyDNA, setCompanyDNA] = useState("");
+
+  const fetchGrants = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [grantsRes, companyRes] = await Promise.all([
+        fetch(`/api/grants?companyId=${DEMO_COMPANY_ID}`),
+        fetch(`/api/company?companyId=${DEMO_COMPANY_ID}`),
+      ]);
+      const grantsData = await grantsRes.json();
+      const companyData = await companyRes.json();
+
+      setGrants(grantsData.grants ?? []);
+
+      const info = companyData.companyInfo;
+      if (info) {
+        const parts = [
+          info.bulkContent,
+          info.values        ? `Values: ${info.values}`             : null,
+          info.corePhilosophy? `Philosophy: ${info.corePhilosophy}` : null,
+          info.founders      ? `Founders: ${info.founders}`         : null,
+          info.achievements  ? `Achievements: ${info.achievements}` : null,
+        ].filter(Boolean);
+        setCompanyDNA(parts.join("\n"));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchGrants(); }, [fetchGrants]);
+
+  const updateGrant = useCallback(async (id: string, data: Partial<Grant>) => {
+    const res = await fetch(`/api/grants/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    if (result.success) {
+      setGrants((prev) => prev.map((g) => g.id === id ? { ...g, ...result.grant } : g));
+    }
+    return result;
+  }, []);
+
+  const deleteGrant = useCallback(async (id: string) => {
+    const res = await fetch(`/api/grants/${id}`, { method: "DELETE" });
+    const result = await res.json();
+    if (result.success) {
+      setGrants((prev) => prev.filter((g) => g.id !== id));
+    }
+    return result;
+  }, []);
+
+  const addGrant = useCallback((grant: Grant) => {
+    setGrants((prev) => [grant, ...prev]);
+  }, []);
+
+  return { grants, loading, companyDNA, fetchGrants, updateGrant, deleteGrant, addGrant };
+}
