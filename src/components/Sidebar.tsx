@@ -17,6 +17,7 @@ import {
   CalendarDays,
   Trophy,
   Users,
+  Rss,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -34,6 +35,7 @@ const contentNav = [
 
 const grantsNav = [
   { href: "/grants", label: "Grants", icon: Trophy },
+  { href: "/grants/crawler", label: "Grant Crawler", icon: Rss },
   { href: "/leads", label: "Leads", icon: Users },
 ];
 

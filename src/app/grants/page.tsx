@@ -216,6 +216,14 @@ const CONFIDENCE_STYLES: Record<string, string> = {
   Low:    "bg-gray-100 text-gray-500 border-gray-300",
 };
 
+// ─── Search filter options ────────────────────────────────────────────────────
+const ORG_TYPES = ["Startup", "SME / Small Business", "Large Enterprise", "Non-Profit / NGO", "Social Enterprise", "University / Research Institution", "Individual / Sole Trader", "Government / Public Body", "Indigenous Organisation"];
+const FUNDING_SIZES = ["Under $10,000", "$10,000 – $50,000", "$50,000 – $100,000", "$100,000 – $250,000", "$250,000 – $1M", "Over $1M", "Any amount"];
+const DEADLINE_URGENCIES = ["Open now (any deadline)", "Closing within 30 days", "Closing within 90 days", "Ongoing / rolling", "Annual cycle"];
+const ELIGIBILITY_TYPES = ["For-profit only", "Non-profit only", "Both for-profit and non-profit", "Government entities", "Individuals"];
+const GRANT_TYPES = ["Innovation & R&D", "Social Impact", "Sustainability / Environment", "Health & Medical", "Education & Training", "Arts & Culture", "Women-led / Diversity", "Export & Trade", "Digital & Technology", "Agriculture & Food", "Infrastructure", "Community Development", "Indigenous / First Nations"];
+const APPLICANT_COUNTRIES = ["Australia", "United States", "United Kingdom", "Canada", "New Zealand", "Germany", "France", "Netherlands", "Singapore", "India", "South Africa", "Kenya", "Brazil", "Any country"];
+
 function GrantSearchModal({
   onClose,
   onAdded,
@@ -229,20 +237,43 @@ function GrantSearchModal({
 }) {
   const [query, setQuery] = useState("");
   const [sector, setSector] = useState("");
-  const [geoFilter, setGeoFilter] = useState("");
+  const [geographicScope, setGeographicScope] = useState("");
+  const [applicantCountry, setApplicantCountry] = useState("");
+  const [orgType, setOrgType] = useState("");
+  const [fundingSize, setFundingSize] = useState("");
+  const [deadlineUrgency, setDeadlineUrgency] = useState("");
+  const [eligibilityType, setEligibilityType] = useState("");
+  const [grantType, setGrantType] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState<Record<number, boolean>>({});
   const [added, setAdded] = useState<Record<number, boolean>>({});
 
+  const activeFilterCount = [geographicScope, applicantCountry, orgType, fundingSize, deadlineUrgency, eligibilityType, grantType].filter(Boolean).length;
+
   const handleSearch = async () => {
-    if (!query.trim() && !sector.trim()) { setError("Enter a search query or sector"); return; }
+    if (!query.trim() && !sector.trim() && !grantType && !orgType) {
+      setError("Enter a keyword, sector, grant type, or org type to search");
+      return;
+    }
     setSearching(true); setError(null); setResults([]);
     try {
       const res = await fetch("/api/grants/search", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, sector, geographicScope: geoFilter || undefined, companyDNA }),
+        body: JSON.stringify({
+          query: query || undefined,
+          sector: sector || undefined,
+          geographicScope: geographicScope || undefined,
+          applicantCountry: applicantCountry || undefined,
+          orgType: orgType || undefined,
+          fundingSize: fundingSize || undefined,
+          deadlineUrgency: deadlineUrgency || undefined,
+          eligibilityType: eligibilityType || undefined,
+          grantType: grantType || undefined,
+          companyDNA,
+        }),
       });
       const data = await res.json();
       if (data.success) setResults(data.results ?? []);
@@ -281,6 +312,13 @@ function GrantSearchModal({
     finally { setAdding((p) => ({ ...p, [idx]: false })); }
   };
 
+  const sel = (value: string, onChange: (v: string) => void, placeholder: string, options: string[]) => (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={inputCls}>
+      <option value="">{placeholder}</option>
+      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl bg-white shadow-2xl">
@@ -288,39 +326,75 @@ function GrantSearchModal({
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Grant Search</h2>
-            <p className="text-xs text-gray-400 mt-0.5">AI-powered discovery — find grants, add to your list, research deeper later</p>
+            <p className="text-xs text-gray-400 mt-0.5">AI-powered discovery — the more filters you set, the better the results</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-gray-100"><X className="h-5 w-5 text-gray-500" /></button>
         </div>
 
         {/* Search inputs */}
-        <div className="border-b border-gray-100 px-6 py-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="sm:col-span-1">
+        <div className="border-b border-gray-100 px-6 py-4 space-y-3 overflow-y-auto">
+          {/* Row 1 — core search */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
               <label className={labelCls}>Keywords / Topic</label>
-              <input
-                value={query} onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className={inputCls} placeholder="e.g. health innovation, women founders…"
-              />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} className={inputCls} placeholder="e.g. women founders, climate tech…" />
             </div>
             <div>
-              <label className={labelCls}>Sector / Focus</label>
-              <input
-                value={sector} onChange={(e) => setSector(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className={inputCls} placeholder="e.g. healthcare, education, tech…"
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Geographic Scope</label>
-              <select value={geoFilter} onChange={(e) => setGeoFilter(e.target.value)} className={inputCls}>
-                <option value="">Any location</option>
-                {GEO_SCOPES.map((s) => <option key={s}>{s}</option>)}
-              </select>
+              <label className={labelCls}>Sector / Industry</label>
+              <input value={sector} onChange={(e) => setSector(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} className={inputCls} placeholder="e.g. healthcare, education, agri…" />
             </div>
           </div>
-          <div className="mt-3 flex items-center gap-3">
+
+          {/* Row 2 — grant type + org type */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className={labelCls}>Grant Type</label>
+              {sel(grantType, setGrantType, "Any grant type", GRANT_TYPES)}
+            </div>
+            <div>
+              <label className={labelCls}>Our Organisation Type</label>
+              {sel(orgType, setOrgType, "Any org type", ORG_TYPES)}
+            </div>
+          </div>
+
+          {/* Advanced toggle */}
+          <button
+            onClick={() => setShowAdvanced(v => !v)}
+            className="flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-800"
+          >
+            {showAdvanced ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            Advanced filters
+            {activeFilterCount > 0 && (
+              <span className="ml-1 rounded-full bg-brand-100 px-1.5 py-0.5 text-xs font-semibold text-brand-700">{activeFilterCount}</span>
+            )}
+          </button>
+
+          {showAdvanced && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <div>
+                <label className={labelCls}>Where the grant funds (scope)</label>
+                {sel(geographicScope, setGeographicScope, "Any region", GEO_SCOPES)}
+              </div>
+              <div>
+                <label className={labelCls}>Our country (where we are based)</label>
+                {sel(applicantCountry, setApplicantCountry, "Any country", APPLICANT_COUNTRIES)}
+              </div>
+              <div>
+                <label className={labelCls}>Funding Size</label>
+                {sel(fundingSize, setFundingSize, "Any amount", FUNDING_SIZES)}
+              </div>
+              <div>
+                <label className={labelCls}>Deadline</label>
+                {sel(deadlineUrgency, setDeadlineUrgency, "Any deadline", DEADLINE_URGENCIES)}
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelCls}>Eligibility</label>
+                {sel(eligibilityType, setEligibilityType, "Any eligibility", ELIGIBILITY_TYPES)}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 pt-1">
             <button
               onClick={handleSearch} disabled={searching}
               className="flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
@@ -330,11 +404,16 @@ function GrantSearchModal({
             </button>
             {!companyDNA && (
               <p className="text-xs text-amber-600 flex items-center gap-1">
-                <ShieldAlert className="h-3.5 w-3.5" /> Add company info for personalised results
+                <ShieldAlert className="h-3.5 w-3.5" /> Fill in Company Info for personalised ranking
+              </p>
+            )}
+            {companyDNA && (
+              <p className="text-xs text-green-600 flex items-center gap-1">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Company DNA active — results ranked by fit
               </p>
             )}
           </div>
-          {error && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         </div>
 
         {/* Results */}
