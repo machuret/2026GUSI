@@ -38,7 +38,7 @@ interface Props {
 export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, onSaveRecheck, onDelete }: Props) {
   const [order, setOrder] = useState<string[]>([]); // local display order by id
   const dragId = useRef<string | null>(null);
-  const dragOverId = useRef<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -145,7 +145,7 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
     return [...ordered, ...rest];
   }, [filtered, order]);
 
-  const allFilteredIds = orderedFiltered.map((t) => t.id);
+  const allFilteredIds = useMemo(() => orderedFiltered.map((t) => t.id), [orderedFiltered]);
   const allSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selected.has(id));
   const someSelected = allFilteredIds.some((id) => selected.has(id));
 
@@ -202,11 +202,11 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
 
   // Drag-to-reorder handlers
   const onDragStart = (id: string) => { dragId.current = id; setDragActive(true); };
-  const onDragOver = (e: React.DragEvent, id: string) => { e.preventDefault(); dragOverId.current = id; };
+  const onDragOver = (e: React.DragEvent, id: string) => { e.preventDefault(); setDragOverId(id); };
   const onDrop = () => {
     const from = dragId.current;
-    const to = dragOverId.current;
-    if (!from || !to || from === to) { setDragActive(false); return; }
+    const to = dragOverId;
+    if (!from || !to || from === to) { setDragActive(false); setDragOverId(null); return; }
     setOrder((prev) => {
       const base = prev.length ? prev : filtered.map((t) => t.id);
       const arr = [...base];
@@ -218,10 +218,10 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
       return arr;
     });
     dragId.current = null;
-    dragOverId.current = null;
+    setDragOverId(null);
     setDragActive(false);
   };
-  const onDragEnd = () => { setDragActive(false); };
+  const onDragEnd = () => { setDragActive(false); setDragOverId(null); };
 
   return (
     <div>
@@ -340,7 +340,7 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
                 onDrop={onDrop}
                 onDragEnd={onDragEnd}
                 className={`rounded-xl border bg-white overflow-hidden shadow-sm transition-all ${
-                  dragActive && dragOverId.current === t.id ? "border-brand-400 ring-2 ring-brand-200 scale-[1.01]" :
+                  dragActive && dragOverId === t.id ? "border-brand-400 ring-2 ring-brand-200 scale-[1.01]" :
                   isSelected ? "border-brand-300 ring-1 ring-brand-200" :
                   t.status === "approved" ? "border-green-200" :
                   t.status === "archived" ? "border-amber-200" : "border-gray-300"

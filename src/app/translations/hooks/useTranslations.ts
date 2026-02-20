@@ -101,9 +101,18 @@ export function useTranslations() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this translation permanently?")) return;
-    setTranslations((p) => p.filter((t) => t.id !== id));
-    try { await authFetch(`/api/translations?id=${id}`, { method: "DELETE" }); }
-    catch { fetchTranslations(); }
+    setTranslations((p) => p.filter((t) => t.id !== id)); // optimistic
+    try {
+      const res = await authFetch(`/api/translations?id=${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setActionError(data.error || "Delete failed");
+        fetchTranslations(); // revert optimistic update
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Delete failed");
+      fetchTranslations(); // revert optimistic update
+    }
   };
 
   const addTranslation = (t: Translation) => setTranslations((p) => [t, ...p]);

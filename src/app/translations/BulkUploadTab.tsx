@@ -124,7 +124,6 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
     const CONCURRENCY = 2;
     const queue = [...pending];
     let active = 0;
-    let done = 0;
 
     await new Promise<void>((resolve) => {
       const next = () => {
@@ -135,7 +134,6 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
           active++;
           translateOne(item, rules).finally(() => {
             active--;
-            done++;
             next();
           });
         }

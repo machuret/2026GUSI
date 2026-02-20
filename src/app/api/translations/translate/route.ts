@@ -3,9 +3,22 @@ export const maxDuration = 120;
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 
-const CHUNK_WORDS = 800; // translate in chunks if text is very long
+const CHUNK_WORDS = 800;
+const CHUNK_BATCH = 2;  // max parallel OpenAI calls for long-text chunks
+const RETRY_DELAYS_MS = [2000, 5000, 12000]; // backoff delays for 429/5xx
 
-const RETRY_DELAYS_MS = [2000, 5000, 12000]; // 3 attempts: 2s, 5s, 12s
+// Module-level constant — not rebuilt on every request
+const CATEGORY_GUIDANCE: Record<string, string> = {
+  "Newsletter":     "This is a newsletter — maintain a warm, engaging tone suited to subscriber communications.",
+  "Blog Post":      "This is a blog post — preserve a conversational, informative tone with natural flow.",
+  "Social Media":   "This is social media content — keep it punchy, energetic, and platform-appropriate. Preserve emojis and hashtags.",
+  "Press Release":  "This is a press release — use formal, journalistic language. Preserve all proper nouns, titles, and dates exactly.",
+  "Announcement":   "This is an announcement — keep it clear, direct, and professional.",
+  "Sales Page":     "This is a sales page — preserve persuasive language, CTAs, and urgency cues. Do not soften selling language.",
+  "Cold Email":     "This is a cold email — maintain a professional yet personable tone. Preserve the subject line if present.",
+  "Webinar":        "This is webinar content — preserve a conversational, instructional tone suitable for live delivery.",
+  "Course Content": "This is educational course content — use clear, precise language. Preserve all technical terms and instructional structure.",
+};
 
 async function translateChunk(
   chunk: string,
@@ -34,12 +47,19 @@ async function translateChunk(
         }),
       });
 
-      // Rate limit or server error — retry after backoff
+      // Non-retryable client errors — throw immediately
+      if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+        const errText = await res.text();
+        throw new Error(`OpenAI error (${res.status}): ${errText.slice(0, 200)}`);
+      }
+
+      // Rate limit or server error — retry with backoff
       if (res.status === 429 || res.status >= 500) {
         const retryAfter = res.headers.get("retry-after");
         const delay = retryAfter
           ? parseInt(retryAfter) * 1000
           : (RETRY_DELAYS_MS[attempt] ?? 15000);
+        lastError = new Error(`OpenAI ${res.status} — retrying (attempt ${attempt + 1})`);
         if (attempt < RETRY_DELAYS_MS.length) {
           await new Promise((r) => setTimeout(r, delay));
           continue;
@@ -48,19 +68,17 @@ async function translateChunk(
         throw new Error(`OpenAI error (${res.status}) after ${attempt + 1} attempts: ${errText.slice(0, 200)}`);
       }
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`OpenAI error (${res.status}): ${errText.slice(0, 200)}`);
-      }
-
       const data = await res.json();
       const content = (data.choices?.[0]?.message?.content ?? "").trim();
       if (!content) throw new Error("OpenAI returned empty content");
       return content;
     } catch (err) {
+      // Only retry if it's our own retryable error, not a hard throw
       lastError = err instanceof Error ? err : new Error(String(err));
-      if (attempt < RETRY_DELAYS_MS.length) {
+      if (attempt < RETRY_DELAYS_MS.length && !lastError.message.startsWith("OpenAI error (")) {
         await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+      } else if (lastError.message.startsWith("OpenAI error (")) {
+        throw lastError; // non-retryable, propagate immediately
       }
     }
   }
@@ -110,19 +128,8 @@ export async function POST(req: NextRequest) {
       : "";
 
     const categoryLabel = category?.trim() || "General";
-    const categoryGuidance: Record<string, string> = {
-      "Newsletter":     "This is a newsletter — maintain a warm, engaging tone suited to subscriber communications.",
-      "Blog Post":      "This is a blog post — preserve a conversational, informative tone with natural flow.",
-      "Social Media":   "This is social media content — keep it punchy, energetic, and platform-appropriate. Preserve emojis and hashtags.",
-      "Press Release":  "This is a press release — use formal, journalistic language. Preserve all proper nouns, titles, and dates exactly.",
-      "Announcement":   "This is an announcement — keep it clear, direct, and professional.",
-      "Sales Page":     "This is a sales page — preserve persuasive language, CTAs, and urgency cues. Do not soften selling language.",
-      "Cold Email":     "This is a cold email — maintain a professional yet personable tone. Preserve the subject line if present.",
-      "Webinar":        "This is webinar content — preserve a conversational, instructional tone suitable for live delivery.",
-      "Course Content": "This is educational course content — use clear, precise language. Preserve all technical terms and instructional structure.",
-    };
-    const categoryHint = categoryGuidance[categoryLabel]
-      ? `\n\nCONTENT TYPE: ${categoryLabel}\n${categoryGuidance[categoryLabel]}`
+    const categoryHint = CATEGORY_GUIDANCE[categoryLabel]
+      ? `\n\nCONTENT TYPE: ${categoryLabel}\n${CATEGORY_GUIDANCE[categoryLabel]}`
       : `\n\nCONTENT TYPE: ${categoryLabel}\nTranslate with appropriate tone and terminology for this content type.`;
 
     const systemPrompt = `You are a professional translator. Translate the provided content accurately into ${targetLanguage}.${categoryHint}${rulesBlock}
@@ -140,16 +147,22 @@ Guidelines:
       // Short text — single call
       translated = await translateChunk(text, targetLanguage, systemPrompt, apiKey);
     } else {
-      // Long text — split into chunks and translate in parallel batches of 3
+      // Long text — split into chunks, translate in small batches to avoid rate limits
       const chunks = splitIntoChunks(text, CHUNK_WORDS);
-      const results: string[] = new Array(chunks.length);
-      const BATCH = 3;
-      for (let i = 0; i < chunks.length; i += BATCH) {
-        const batch = chunks.slice(i, i + BATCH);
-        const batchResults = await Promise.all(
+      const results: string[] = [];
+      for (let i = 0; i < chunks.length; i += CHUNK_BATCH) {
+        const batch = chunks.slice(i, i + CHUNK_BATCH);
+        const settled = await Promise.allSettled(
           batch.map((c) => translateChunk(c, targetLanguage, systemPrompt, apiKey))
         );
-        batchResults.forEach((r, j) => { results[i + j] = r; });
+        for (const outcome of settled) {
+          if (outcome.status === "fulfilled") {
+            results.push(outcome.value);
+          } else {
+            // Propagate the first chunk failure — better than silently dropping content
+            throw new Error(`Chunk translation failed: ${outcome.reason?.message ?? "unknown"}`);
+          }
+        }
       }
       translated = results.join("\n\n");
     }

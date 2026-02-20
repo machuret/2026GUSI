@@ -7,7 +7,7 @@ import {
   RULES_KEY, loadAllRules, saveAllRules,
 } from "../types";
 
-const SETTINGS_KEY = "translation_rules_v2";
+const SETTINGS_KEY = RULES_KEY; // single source of truth from types.ts
 
 export function useRules() {
   const [allRules, setAllRules] = useState<Record<string, string>>({});
@@ -21,7 +21,7 @@ export function useRules() {
       const res = await authFetch(`/api/settings?key=${SETTINGS_KEY}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.value) {
+        if (data?.value) {
           const parsed: Record<string, string> = JSON.parse(data.value);
           setAllRules(parsed);
           if (parsed["global"]) setGlobalRules(parsed["global"]);
