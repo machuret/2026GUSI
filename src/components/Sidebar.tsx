@@ -29,6 +29,7 @@ import {
   PenLine,
   Mail,
   KanbanSquare,
+  GalleryHorizontal,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasRole } from "@/lib/auth";
@@ -39,14 +40,15 @@ const mainNav = [
 ];
 
 const contentNav = [
-  { href: "/ideas",      label: "Ideas",       icon: Lightbulb },
-  { href: "/generate",  label: "Generate",    icon: Sparkles },
-  { href: "/bulk",      label: "Bulk Generate", icon: Layers },
-  { href: "/voices",    label: "Voices",      icon: Mic2 },
-  { href: "/translations", label: "Translations", icon: Languages },
-  { href: "/history",   label: "History",     icon: History },
-  { href: "/calendar",  label: "Calendar",    icon: CalendarDays },
-  { href: "/mailchimp", label: "Mailchimp",   icon: Mail },
+  { href: "/ideas",      label: "Ideas",            icon: Lightbulb },
+  { href: "/generate",  label: "Generate",         icon: Sparkles },
+  { href: "/bulk",      label: "Bulk Generate",    icon: Layers },
+  { href: "/carousel",  label: "Carousel Creator", icon: GalleryHorizontal },
+  { href: "/voices",    label: "Voices",           icon: Mic2 },
+  { href: "/translations", label: "Translations",  icon: Languages },
+  { href: "/history",   label: "History",          icon: History },
+  { href: "/calendar",  label: "Calendar",         icon: CalendarDays },
+  { href: "/mailchimp", label: "Mailchimp",        icon: Mail },
 ];
 
 const grantsNav = [
