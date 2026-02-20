@@ -12,10 +12,30 @@ export function useTranslations() {
 
   const fetchTranslations = useCallback(async () => {
     try {
-      const res = await authFetch("/api/translations");
+      // Fetch first page with a high limit — covers virtually all real-world libraries
+      const res = await authFetch("/api/translations?limit=1000&page=1");
       if (!res.ok) throw new Error(`Failed to load (${res.status})`);
       const data = await res.json();
-      setTranslations(data.translations ?? []);
+      const first: Translation[] = data.translations ?? [];
+      const total: number = data.total ?? first.length;
+
+      if (total <= first.length) {
+        // All records came back in one shot — common case
+        setTranslations(first);
+      } else {
+        // More than 1000 records: fetch remaining pages in parallel
+        const pageCount = Math.ceil(total / 1000);
+        const pageNums = Array.from({ length: pageCount - 1 }, (_, i) => i + 2);
+        const rest = await Promise.all(
+          pageNums.map((pg) =>
+            authFetch(`/api/translations?limit=1000&page=${pg}`)
+              .then((r) => r.json())
+              .then((d) => (d.translations ?? []) as Translation[])
+              .catch(() => [] as Translation[])
+          )
+        );
+        setTranslations([...first, ...rest.flat()]);
+      }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load translations");

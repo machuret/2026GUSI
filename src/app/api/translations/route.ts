@@ -11,10 +11,10 @@ export async function GET(req: NextRequest) {
     if (authError) return authError;
 
     const p = req.nextUrl.searchParams;
-    const rawPage  = parseInt(p.get("page")  ?? "1",  10);
-    const rawLimit = parseInt(p.get("limit") ?? "50", 10);
-    const page   = Math.max(1, isNaN(rawPage)  ? 1  : rawPage);
-    const limit  = Math.min(200, Math.max(1, isNaN(rawLimit) ? 50 : rawLimit));
+    const rawPage  = parseInt(p.get("page")  ?? "1",    10);
+    const rawLimit = parseInt(p.get("limit") ?? "1000", 10);
+    const page   = Math.max(1, isNaN(rawPage)  ? 1    : rawPage);
+    const limit  = Math.min(1000, Math.max(1, isNaN(rawLimit) ? 1000 : rawLimit));
     const offset = (page - 1) * limit;
     const search   = p.get("search") ?? "";
     const language = p.get("language") ?? "";
