@@ -159,22 +159,68 @@ export async function getFAQContext(opts: {
   return { faqs, block };
 }
 
+// ── Lessons context ───────────────────────────────────────────────────────────
+
+export interface LessonsContext {
+  lessons: { feedback: string; severity: string; contentType: string | null }[];
+  block: string;
+}
+
+/**
+ * Loads active lessons for a company and returns a formatted prompt block.
+ * Optionally filtered by contentType (loads global + matching type).
+ */
+export async function getLessonsContext(opts: {
+  companyId?: string;
+  contentType?: string;
+}): Promise<LessonsContext> {
+  const id = opts.companyId ?? DEMO_COMPANY_ID;
+
+  const { data: lessons } = await db
+    .from("Lesson")
+    .select("feedback, severity, contentType")
+    .eq("companyId", id)
+    .eq("active", true)
+    .order("severity", { ascending: false })
+    .limit(50);
+
+  if (!lessons || lessons.length === 0) return { lessons: [], block: "" };
+
+  const filtered = opts.contentType
+    ? lessons.filter((l) => !l.contentType || l.contentType === opts.contentType)
+    : lessons;
+
+  if (filtered.length === 0) return { lessons: [], block: "" };
+
+  const lines = filtered.map((l) => {
+    const priority = l.severity === "high" ? "MUST" : l.severity === "medium" ? "SHOULD" : "PREFER";
+    return `- [${priority}] ${l.feedback}`;
+  });
+
+  const block = `## LEARNED RULES (apply these to every response)\n${lines.join("\n")}`;
+
+  return { lessons: filtered, block };
+}
+
 // ── Combined loader ───────────────────────────────────────────────────────────
 
 /**
- * Loads all three contexts in parallel. Use this in AI routes for maximum efficiency.
+ * Loads all contexts in parallel. Use this in AI routes for maximum efficiency.
  * Returns pre-formatted blocks ready to append to any system prompt.
  */
 export async function loadAIContext(opts: {
   companyId?: string;
   botId?: string;
   faqCategory?: string;
+  contentType?: string;
   includeVault?: boolean;
   includeFAQ?: boolean;
+  includeLessons?: boolean;
 }): Promise<{
   company: CompanyContext;
   vault: VaultContext;
   faq: FAQContext;
+  lessons: LessonsContext;
   /** Concatenated block — append directly to any system prompt */
   fullBlock: string;
 }> {
@@ -182,21 +228,26 @@ export async function loadAIContext(opts: {
     companyId,
     botId,
     faqCategory,
+    contentType,
     includeVault = true,
     includeFAQ = true,
+    includeLessons = true,
   } = opts;
 
-  const [company, vault, faq] = await Promise.all([
+  const [company, vault, faq, lessons] = await Promise.all([
     getCompanyContext(companyId),
     includeVault ? getVaultContext(companyId) : Promise.resolve({ docs: [], block: "" }),
     includeFAQ
       ? getFAQContext({ companyId, botId, category: faqCategory })
       : Promise.resolve({ faqs: [], block: "" }),
+    includeLessons
+      ? getLessonsContext({ companyId, contentType })
+      : Promise.resolve({ lessons: [], block: "" }),
   ]);
 
-  const fullBlock = [company.block, vault.block, faq.block]
+  const fullBlock = [company.block, vault.block, faq.block, lessons.block]
     .filter(Boolean)
     .join("\n\n");
 
-  return { company, vault, faq, fullBlock };
+  return { company, vault, faq, lessons, fullBlock };
 }
