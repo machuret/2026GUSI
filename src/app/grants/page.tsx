@@ -1,7 +1,8 @@
 ﻿"use client";
 
 import { useState } from "react";
-import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download } from "lucide-react";
+import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck } from "lucide-react";
+import Link from "next/link";
 import { useGrants } from "@/hooks/useGrants";
 import { exportToCsv } from "@/lib/exportCsv";
 import { GrantRow } from "./components/GrantRow";
@@ -9,17 +10,55 @@ import { AddGrantModal } from "./components/AddGrantModal";
 import { GrantSearchModal } from "./components/GrantSearchModal";
 
 export default function GrantsPage() {
-  const { grants, loading, companyDNA, updateGrant, deleteGrant, addGrant } = useGrants();
+  const { grants, loading, companyDNA, updateGrant, deleteGrant, addGrant, fetchGrants } = useGrants();
   const [showAdd, setShowAdd] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [decisionFilter, setDecisionFilter] = useState("All");
-  const [sortField, setSortField] = useState<"deadlineDate" | "fitScore" | "name">("deadlineDate");
-  const [sortAsc, setSortAsc] = useState(true);
+  const [sortField, setSortField] = useState<"deadlineDate" | "fitScore" | "matchScore" | "complexityScore" | "name">("matchScore");
+  const [sortAsc, setSortAsc] = useState(false);
+  const [ranking, setRanking] = useState(false);
+  const [scoring, setScoring] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   const toggleSort = (field: typeof sortField) => {
     if (sortField === field) setSortAsc(v => !v);
-    else { setSortField(field); setSortAsc(true); }
+    else { setSortField(field); setSortAsc(field === "name"); }
+  };
+
+  const handleRank = async () => {
+    setRanking(true);
+    setActionMsg(null);
+    try {
+      const res = await fetch("/api/grants/rank", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { setActionMsg(data.error ?? "Ranking failed"); return; }
+      setActionMsg(`✓ Ranked ${data.ranked} grants by profile match`);
+      await fetchGrants();
+      setSortField("matchScore");
+      setSortAsc(false);
+    } catch { setActionMsg("Ranking failed — try again"); }
+    finally { setRanking(false); }
+  };
+
+  const handleScoreComplexity = async () => {
+    setScoring(true);
+    setActionMsg(null);
+    try {
+      const ids = grants.map((g) => g.id);
+      // Score in batches of 20
+      for (let i = 0; i < ids.length; i += 20) {
+        const batch = ids.slice(i, i + 20);
+        await fetch("/api/grants/score-complexity", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ grantIds: batch }),
+        });
+      }
+      setActionMsg(`✓ Complexity scored ${ids.length} grants`);
+      await fetchGrants();
+    } catch { setActionMsg("Scoring failed — try again"); }
+    finally { setScoring(false); }
   };
 
   const filtered = grants
@@ -33,6 +72,8 @@ export default function GrantsPage() {
       let av: string | number = 0, bv: string | number = 0;
       if (sortField === "deadlineDate") { av = a.deadlineDate ? new Date(a.deadlineDate).getTime() : Infinity; bv = b.deadlineDate ? new Date(b.deadlineDate).getTime() : Infinity; }
       else if (sortField === "fitScore") { av = a.fitScore ?? 0; bv = b.fitScore ?? 0; }
+      else if (sortField === "matchScore") { av = a.matchScore ?? -1; bv = b.matchScore ?? -1; }
+      else if (sortField === "complexityScore") { av = a.complexityScore ?? -1; bv = b.complexityScore ?? -1; }
       else { av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
       return av < bv ? (sortAsc ? -1 : 1) : av > bv ? (sortAsc ? 1 : -1) : 0;
     });
@@ -49,6 +90,14 @@ export default function GrantsPage() {
     </button>
   );
 
+  const complexityColor = (label?: string | null) => {
+    if (label === "Low") return "bg-green-100 text-green-700";
+    if (label === "Medium") return "bg-yellow-100 text-yellow-700";
+    if (label === "High") return "bg-orange-100 text-orange-700";
+    if (label === "Very High") return "bg-red-100 text-red-700";
+    return "bg-gray-100 text-gray-500";
+  };
+
   const existingNames = new Set(grants.map((g) => g.name.toLowerCase()));
 
   return (
@@ -64,7 +113,7 @@ export default function GrantsPage() {
       )}
 
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-4 flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Grants</h1>
           <p className="mt-1 text-gray-500">Track, research, and prioritise grant opportunities</p>
@@ -78,6 +127,7 @@ export default function GrantsPage() {
                 Amount: g.amount ?? "", "Geographic Scope": g.geographicScope ?? "",
                 "Project Duration": g.projectDuration ?? "", Eligibility: g.eligibility ?? "",
                 "How to Apply": g.howToApply ?? "", "Fit Score": g.fitScore ?? "",
+                "Match Score": g.matchScore ?? "", "Complexity": g.complexityLabel ?? "",
                 "Submission Effort": g.submissionEffort ?? "", Decision: g.decision ?? "",
                 Notes: g.notes ?? "", Added: new Date(g.createdAt).toLocaleDateString("en-AU"),
               }));
@@ -96,6 +146,30 @@ export default function GrantsPage() {
             <Plus className="h-4 w-4" /> Add Grant
           </button>
         </div>
+      </div>
+
+      {/* AI Actions bar */}
+      <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
+        <Link href="/grants/profile" className="flex items-center gap-2 rounded-lg border border-brand-300 bg-white px-4 py-2 text-sm font-medium text-brand-700 hover:bg-brand-100">
+          <UserCheck className="h-4 w-4" /> Grant Profile
+        </Link>
+        <button
+          onClick={handleRank}
+          disabled={ranking || grants.length === 0}
+          className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+        >
+          {ranking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          {ranking ? "Ranking…" : "Rank by Profile Match"}
+        </button>
+        <button
+          onClick={handleScoreComplexity}
+          disabled={scoring || grants.length === 0}
+          className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+        >
+          {scoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
+          {scoring ? "Scoring…" : "Score Complexity"}
+        </button>
+        {actionMsg && <span className="text-sm text-brand-700 font-medium">{actionMsg}</span>}
       </div>
 
       {/* Stats */}
@@ -150,6 +224,8 @@ export default function GrantsPage() {
                 <th className="px-4 py-3 text-left"><SortBtn field="name" label="Grant" /></th>
                 <th className="px-3 py-3 text-left"><SortBtn field="deadlineDate" label="Deadline" /></th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Amount</th>
+                <th className="px-3 py-3 text-left"><SortBtn field="matchScore" label="Match" /></th>
+                <th className="px-3 py-3 text-left"><SortBtn field="complexityScore" label="Complexity" /></th>
                 <th className="px-3 py-3 text-left"><SortBtn field="fitScore" label="Fit" /></th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Effort</th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Decision</th>

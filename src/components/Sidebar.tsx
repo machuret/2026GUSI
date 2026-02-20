@@ -23,6 +23,7 @@ import {
   LayoutTemplate,
   Languages,
   Mic2,
+  UserCheck,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasRole } from "@/lib/auth";
@@ -43,6 +44,7 @@ const contentNav = [
 
 const grantsNav = [
   { href: "/grants", label: "Grants", icon: Trophy },
+  { href: "/grants/profile", label: "Grant Profile", icon: UserCheck },
   { href: "/grants/crawler", label: "Grant Crawler", icon: Rss },
   { href: "/leads", label: "Leads", icon: Users },
 ];

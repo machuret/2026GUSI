@@ -21,6 +21,10 @@ export interface Grant {
   notes?: string | null;
   aiScore?: number | null;
   aiVerdict?: string | null;
+  matchScore?: number | null;
+  complexityScore?: number | null;
+  complexityLabel?: "Low" | "Medium" | "High" | "Very High" | null;
+  complexityNotes?: string | null;
   createdAt: string;
   updatedAt: string;
 }

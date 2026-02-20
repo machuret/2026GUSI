@@ -97,6 +97,26 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA }: Props) {
         </td>
         <td className="px-3 py-3 whitespace-nowrap"><DeadlineBadge date={grant.deadlineDate} /></td>
         <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{grant.amount || <span className="text-gray-300">—</span>}</td>
+        <td className="px-3 py-3">
+          {grant.matchScore != null ? (
+            <div className="flex items-center gap-1.5">
+              <div className="h-1.5 w-16 rounded-full bg-gray-200">
+                <div className={`h-1.5 rounded-full ${grant.matchScore >= 70 ? "bg-green-500" : grant.matchScore >= 40 ? "bg-yellow-400" : "bg-red-400"}`} style={{ width: `${grant.matchScore}%` }} />
+              </div>
+              <span className="text-xs font-semibold text-gray-700">{grant.matchScore}</span>
+            </div>
+          ) : <span className="text-gray-300 text-xs">—</span>}
+        </td>
+        <td className="px-3 py-3">
+          {grant.complexityLabel ? (
+            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+              grant.complexityLabel === "Low" ? "bg-green-100 text-green-700" :
+              grant.complexityLabel === "Medium" ? "bg-yellow-100 text-yellow-700" :
+              grant.complexityLabel === "High" ? "bg-orange-100 text-orange-700" :
+              "bg-red-100 text-red-700"
+            }`}>{grant.complexityLabel}</span>
+          ) : <span className="text-gray-300 text-xs">—</span>}
+        </td>
         <td className="px-3 py-3"><FitStars value={grant.fitScore} /></td>
         <td className="px-3 py-3"><EffortBadge value={grant.submissionEffort as Effort | null} /></td>
         <td className="px-3 py-3"><DecisionBadge value={grant.decision as "Apply" | "Maybe" | "No" | null} /></td>
@@ -125,7 +145,7 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA }: Props) {
 
       {expanded && (
         <tr className="border-b border-gray-100 bg-gray-50">
-          <td colSpan={7} className="px-6 py-5">
+          <td colSpan={9} className="px-6 py-5">
             {aiError && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{aiError}</p>}
             {researchMsg && <p className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{researchMsg}</p>}
             {(analysing || researching) && (
