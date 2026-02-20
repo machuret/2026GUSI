@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, BookOpen, ToggleLeft, ToggleRight } from "lucide-react";
+import { Plus, Trash2, BookOpen, ToggleLeft, ToggleRight, FileText, Loader2, Copy, Check } from "lucide-react";
 import { CATEGORIES } from "@/lib/content";
 import { fetchJSON } from "@/lib/fetchJSON";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -35,6 +35,9 @@ export default function LessonsPage() {
   const [form, setForm] = useState({ feedback: "", contentType: "", severity: "medium" });
   const [saving, setSaving] = useState(false);
   const [groupBy, setGroupBy] = useState<"category" | "severity">("category");
+  const [compiling, setCompiling] = useState(false);
+  const [report, setReport] = useState<string | null>(null);
+  const [reportCopied, setReportCopied] = useState(false);
 
   const fetchLessons = useCallback(async () => {
     try {
@@ -88,6 +91,31 @@ export default function LessonsPage() {
     });
   }, [fetchLessons]);
 
+  const handleCompile = useCallback(async () => {
+    setCompiling(true);
+    setReport(null);
+    try {
+      const data = await fetchJSON<{ report: string; lessonCount: number }>("/api/lessons/compile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      setReport(data.report);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to compile report");
+    } finally {
+      setCompiling(false);
+    }
+  }, []);
+
+  const handleCopyReport = useCallback(() => {
+    if (!report) return;
+    navigator.clipboard.writeText(report).then(() => {
+      setReportCopied(true);
+      setTimeout(() => setReportCopied(false), 2000);
+    });
+  }, [report]);
+
   const activeCount = useMemo(
     () => lessons.filter((l) => l.active).length,
     [lessons]
@@ -128,13 +156,41 @@ export default function LessonsPage() {
             <span className="font-medium text-brand-700">{activeCount} active</span> of {lessons.length} lessons — each one improves future content
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700"
-        >
-          <Plus className="h-4 w-4" /> Add Lesson
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCompile}
+            disabled={compiling || lessons.length === 0}
+            className="flex items-center gap-2 rounded-lg border border-brand-300 bg-brand-50 px-4 py-2.5 text-sm font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-50"
+          >
+            {compiling ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+            {compiling ? "Compiling…" : "Compile Report"}
+          </button>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700"
+          >
+            <Plus className="h-4 w-4" /> Add Lesson
+          </button>
+        </div>
       </div>
+
+      {/* Compiled report */}
+      {report && (
+        <div className="mb-6 rounded-xl border border-brand-200 bg-brand-50 p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="font-semibold text-brand-800 flex items-center gap-2">
+              <FileText className="h-4 w-4" /> AI Learning Report
+            </h3>
+            <button
+              onClick={handleCopyReport}
+              className="flex items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
+            >
+              {reportCopied ? <><Check className="h-3.5 w-3.5 text-green-600" /> Copied</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}
+            </button>
+          </div>
+          <pre className="whitespace-pre-wrap text-sm text-brand-900 leading-relaxed font-sans">{report}</pre>
+        </div>
+      )}
 
       {/* Add lesson form */}
       {showForm && (

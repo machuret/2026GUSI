@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Lightbulb, Sparkles, Loader2, BookOpen, Mail, Share2,
   Check, Archive, Trash2, RefreshCw, ChevronDown, ChevronUp,
-  GraduationCap, Bell, Trophy, FileText,
+  GraduationCap, Bell, Trophy, FileText, ThumbsUp, ThumbsDown, CheckCircle2,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 
@@ -13,7 +13,8 @@ import { authFetch } from "@/lib/authFetch";
 
 type ContentType = "newsletter" | "social_media" | "blog_post";
 type IdeaCategory = "Education" | "Touching Base" | "Company Win" | "Company Blog Post";
-type IdeaStatus = "saved" | "approved" | "archived";
+type IdeaStatus = "saved" | "approved" | "archived" | "done";
+type IdeaRating = "up" | "down" | null;
 
 interface Idea {
   id: string;
@@ -24,6 +25,8 @@ interface Idea {
   status: IdeaStatus;
   contentId?: string | null;
   contentTable?: string | null;
+  rating?: IdeaRating;
+  ratingFeedback?: string | null;
   createdAt: string;
 }
 
@@ -92,11 +95,16 @@ export default function IdeasPage() {
   const [showLibrary, setShowLibrary]           = useState(true);
 
   // Per-idea action state
-  const [savingId, setSavingId]                 = useState<string | null>(null); // index for fresh, id for saved
+  const [savingId, setSavingId]                 = useState<string | null>(null);
   const [approvingId, setApprovingId]           = useState<string | null>(null);
   const [archivingId, setArchivingId]           = useState<string | null>(null);
   const [deletingId, setDeletingId]             = useState<string | null>(null);
+  const [ratingId, setRatingId]                 = useState<string | null>(null);
   const [savedFreshIdx, setSavedFreshIdx]       = useState<Set<number>>(new Set());
+
+  // Feedback modal state
+  const [feedbackModal, setFeedbackModal]       = useState<{ id: string; title: string } | null>(null);
+  const [feedbackText, setFeedbackText]         = useState("");
 
   // ── Fetch saved ideas ──────────────────────────────────────────────────────
   const fetchLibrary = useCallback(async () => {
@@ -220,12 +228,88 @@ export default function IdeasPage() {
     }
   };
 
+  // ── Rate an idea ───────────────────────────────────────────────────────────
+  const handleRate = async (idea: Idea, rating: "up" | "down") => {
+    if (rating === "down") {
+      setFeedbackModal({ id: idea.id, title: idea.title });
+      setFeedbackText("");
+      return;
+    }
+    setRatingId(idea.id);
+    try {
+      const res = await authFetch(`/api/ideas/${idea.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating: "up" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setSavedIdeas((prev) => prev.map((i) => (i.id === idea.id ? data.idea : i)));
+    } catch { /* silently ignore */ } finally {
+      setRatingId(null);
+    }
+  };
+
+  const handleFeedbackSubmit = async () => {
+    if (!feedbackModal) return;
+    setRatingId(feedbackModal.id);
+    try {
+      const res = await authFetch(`/api/ideas/${feedbackModal.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating: "down", ratingFeedback: feedbackText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setSavedIdeas((prev) => prev.map((i) => (i.id === feedbackModal.id ? data.idea : i)));
+      setFeedbackModal(null);
+      setFeedbackText("");
+    } catch { /* silently ignore */ } finally {
+      setRatingId(null);
+    }
+  };
+
   const activeIdeas   = savedIdeas.filter((i) => i.status !== "archived");
   const archivedIdeas = savedIdeas.filter((i) => i.status === "archived");
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="mx-auto max-w-5xl space-y-8">
+
+      {/* ── Thumbs-down feedback modal ── */}
+      {feedbackModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+            <h3 className="mb-1 text-base font-semibold text-gray-900">Why did you reject this idea?</h3>
+            <p className="mb-3 text-xs text-gray-500 line-clamp-2">"{feedbackModal.title}"</p>
+            <textarea
+              autoFocus
+              rows={3}
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              placeholder="e.g. Too generic, not relevant to our audience, wrong tone..."
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+            <p className="mt-1.5 text-xs text-gray-400">This feedback will be saved as a lesson to improve future idea generation.</p>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={handleFeedbackSubmit}
+                disabled={!feedbackText.trim() || ratingId === feedbackModal.id}
+                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {ratingId === feedbackModal.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ThumbsDown className="h-3.5 w-3.5" />}
+                Submit Feedback
+              </button>
+              <button
+                onClick={() => { setFeedbackModal(null); setFeedbackText(""); }}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Header ── */}
       <div>
@@ -415,9 +499,11 @@ export default function IdeasPage() {
                     approving={approvingId === idea.id}
                     archiving={archivingId === idea.id}
                     deleting={deletingId === idea.id}
+                    rating={ratingId === idea.id}
                     onApprove={() => handleApprove(idea)}
                     onArchive={() => handleArchive(idea.id)}
                     onDelete={() => handleDelete(idea.id)}
+                    onRate={(r) => handleRate(idea, r)}
                   />
                 ))}
               </div>
@@ -437,9 +523,11 @@ export default function IdeasPage() {
                       approving={false}
                       archiving={false}
                       deleting={deletingId === idea.id}
+                      rating={ratingId === idea.id}
                       onApprove={() => handleApprove(idea)}
                       onArchive={() => handleArchive(idea.id)}
                       onDelete={() => handleDelete(idea.id)}
+                      onRate={(r) => handleRate(idea, r)}
                     />
                   ))}
                 </div>
@@ -459,21 +547,29 @@ interface IdeaRowProps {
   approving: boolean;
   archiving: boolean;
   deleting: boolean;
+  rating: boolean;
   onApprove: () => void;
   onArchive: () => void;
   onDelete: () => void;
+  onRate: (r: "up" | "down") => void;
 }
 
-function IdeaRow({ idea, approving, archiving, deleting, onApprove, onArchive, onDelete }: IdeaRowProps) {
+function IdeaRow({ idea, approving, archiving, deleting, rating, onApprove, onArchive, onDelete, onRate }: IdeaRowProps) {
   const isApproved = idea.status === "approved";
+  const isDone     = idea.status === "done";
 
   return (
     <div className={`flex items-start gap-4 rounded-xl border bg-white px-4 py-3.5 transition-all ${
-      isApproved ? "border-green-200 bg-green-50" : "border-gray-200 hover:border-brand-200"
+      isDone ? "border-purple-200 bg-purple-50" :
+      isApproved ? "border-green-200 bg-green-50" :
+      idea.rating === "down" ? "border-red-100 bg-red-50/40" :
+      "border-gray-200 hover:border-brand-200"
     }`}>
       {/* Status dot */}
       <div className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-        isApproved ? "bg-green-400" : idea.status === "archived" ? "bg-gray-300" : "bg-brand-400"
+        isDone ? "bg-purple-400" :
+        isApproved ? "bg-green-400" :
+        idea.status === "archived" ? "bg-gray-300" : "bg-brand-400"
       }`} />
 
       {/* Content */}
@@ -481,19 +577,67 @@ function IdeaRow({ idea, approving, archiving, deleting, onApprove, onArchive, o
         <div className="mb-1 flex flex-wrap gap-1.5">
           <ContentTypeBadge type={idea.contentType as ContentType} />
           <CategoryBadge cat={idea.category as IdeaCategory} />
-          {isApproved && (
+          {isDone && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-purple-300 bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+              <CheckCircle2 className="h-3 w-3" /> Done
+            </span>
+          )}
+          {isApproved && !isDone && (
             <span className="inline-flex items-center gap-1 rounded-full border border-green-300 bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
               <Check className="h-3 w-3" /> Approved
+            </span>
+          )}
+          {idea.rating === "up" && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-600">
+              <ThumbsUp className="h-3 w-3" /> Liked
+            </span>
+          )}
+          {idea.rating === "down" && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
+              <ThumbsDown className="h-3 w-3" /> Rejected
             </span>
           )}
         </div>
         <p className="text-sm font-semibold text-gray-900 leading-snug">{idea.title}</p>
         <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">{idea.summary}</p>
+        {idea.ratingFeedback && (
+          <p className="mt-1 text-xs text-red-500 italic">Feedback: {idea.ratingFeedback}</p>
+        )}
       </div>
 
       {/* Actions */}
       <div className="flex shrink-0 items-center gap-1.5">
-        {!isApproved && (
+        {/* Thumbs up/down */}
+        {!isDone && (
+          <>
+            <button
+              onClick={() => onRate("up")}
+              disabled={rating}
+              title="Good idea"
+              className={`rounded-lg border p-1.5 transition-colors disabled:opacity-50 ${
+                idea.rating === "up"
+                  ? "border-emerald-300 bg-emerald-100 text-emerald-600"
+                  : "border-gray-200 text-gray-400 hover:border-emerald-300 hover:text-emerald-600"
+              }`}
+            >
+              {rating && idea.rating !== "up" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ThumbsUp className="h-3.5 w-3.5" />}
+            </button>
+            <button
+              onClick={() => onRate("down")}
+              disabled={rating}
+              title="Reject with feedback"
+              className={`rounded-lg border p-1.5 transition-colors disabled:opacity-50 ${
+                idea.rating === "down"
+                  ? "border-red-300 bg-red-100 text-red-600"
+                  : "border-gray-200 text-gray-400 hover:border-red-300 hover:text-red-500"
+              }`}
+            >
+              {rating && idea.rating !== "down" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ThumbsDown className="h-3.5 w-3.5" />}
+            </button>
+          </>
+        )}
+
+        {!isApproved && !isDone && (
           <button
             onClick={onApprove}
             disabled={approving}
@@ -505,7 +649,7 @@ function IdeaRow({ idea, approving, archiving, deleting, onApprove, onArchive, o
           </button>
         )}
 
-        {isApproved && idea.contentId && (
+        {(isApproved || isDone) && idea.contentId && (
           <button
             onClick={onApprove}
             disabled={approving}
