@@ -1,9 +1,10 @@
 ﻿"use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import {
-  Globe, Link, Loader2, Plus, AlertCircle,
-  Rss, Search, Filter, Info, Zap,
+  Globe, Loader2, Plus, AlertCircle,
+  Rss, Search, Info, Zap, Trophy, PenLine, UserCheck, KanbanSquare, Link2,
 } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { useGrants } from "@/hooks/useGrants";
@@ -45,6 +46,7 @@ export default function GrantCrawlerPage() {
   const [jsWarning, setJsWarning] = useState<string | null>(null);
   const [isPartial, setIsPartial] = useState(false);
   const [htmlLength, setHtmlLength] = useState(0);
+  const [lastCrawledUrl, setLastCrawledUrl] = useState<string>("");
   const [lastCrawledSite, setLastCrawledSite] = useState<string>("");
   const [adding, setAdding] = useState<Record<number, boolean>>({});
   const [added, setAdded] = useState<Record<number, boolean>>({});
@@ -61,7 +63,7 @@ export default function GrantCrawlerPage() {
   const crawl = async (url: string, siteName?: string, siteId?: string) => {
     setCrawling(url); setCrawlError(null); setJsWarning(null);
     setResults([]); setPageTitle(""); setIsPartial(false); setHtmlLength(0);
-    setAdded({}); setLastCrawledSite(siteName || url);
+    setAdded({}); setLastCrawledUrl(url); setLastCrawledSite(siteName || url);
     try {
       const res = await authFetch("/api/grants/crawl", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -82,7 +84,7 @@ export default function GrantCrawlerPage() {
   const handleAdd = async (grant: CrawledGrant, idx: number) => {
     setAdding((p) => ({ ...p, [idx]: true })); setAddError(null);
     try {
-      const res = await fetch("/api/grants", {
+      const res = await authFetch("/api/grants", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           companyId: DEMO_COMPANY_ID, name: grant.name, founder: grant.founder, url: grant.url,
@@ -109,6 +111,25 @@ export default function GrantCrawlerPage() {
 
   return (
     <div className="mx-auto max-w-6xl">
+      {/* Grants suite nav */}
+      <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5">
+        <Link href="/grants" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-brand-600">
+          <Trophy className="h-3.5 w-3.5" /> All Grants
+        </Link>
+        <Link href="/grants/crm" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-indigo-600">
+          <KanbanSquare className="h-3.5 w-3.5" /> CRM
+        </Link>
+        <Link href="/grants/builder" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-emerald-600">
+          <PenLine className="h-3.5 w-3.5" /> Builder
+        </Link>
+        <Link href="/grants/profile" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-brand-600">
+          <UserCheck className="h-3.5 w-3.5" /> Profile
+        </Link>
+        <span className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 border border-brand-200">
+          <Rss className="h-3.5 w-3.5" /> Crawler
+        </span>
+      </div>
+
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-100">
@@ -125,7 +146,7 @@ export default function GrantCrawlerPage() {
           {/* Custom URL */}
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <h2 className="mb-3 text-sm font-semibold text-gray-800 flex items-center gap-2">
-              <Link className="h-4 w-4 text-brand-500" /> Custom URL
+              <Link2 className="h-4 w-4 text-brand-500" /> Custom URL
             </h2>
             <input value={customUrl} onChange={(e) => setCustomUrl(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && customUrl.trim() && crawl(customUrl.trim())}
@@ -259,8 +280,8 @@ export default function GrantCrawlerPage() {
                     </button>
                   )}
                   <button
-                    onClick={() => crawl(lastCrawledSite.startsWith("http") ? lastCrawledSite : customUrl, lastCrawledSite)}
-                    disabled={isCrawling || !lastCrawledSite}
+                    onClick={() => crawl(lastCrawledUrl || customUrl, lastCrawledSite)}
+                    disabled={isCrawling || !lastCrawledUrl}
                     className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50">
                     <Search className="h-3.5 w-3.5" /> Re-crawl
                   </button>

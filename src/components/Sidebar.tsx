@@ -28,6 +28,7 @@ import {
   Lightbulb,
   PenLine,
   Mail,
+  KanbanSquare,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasRole } from "@/lib/auth";
@@ -49,10 +50,14 @@ const contentNav = [
 ];
 
 const grantsNav = [
-  { href: "/grants", label: "Grants", icon: Trophy },
+  { href: "/grants",         label: "Grants",        icon: Trophy },
+  { href: "/grants/crm",     label: "Grants CRM",    icon: KanbanSquare },
   { href: "/grants/builder", label: "Grant Builder", icon: PenLine },
   { href: "/grants/profile", label: "Grant Profile", icon: UserCheck },
   { href: "/grants/crawler", label: "Grant Crawler", icon: Rss },
+];
+
+const leadsNav = [
   { href: "/leads", label: "Leads", icon: Users },
 ];
 
@@ -145,9 +150,15 @@ export function Sidebar() {
 
         <div className="my-3 border-t border-gray-700" />
         <p className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Growth
+          Grants
         </p>
         {grantsNav.map(navLink)}
+
+        <div className="my-3 border-t border-gray-700" />
+        <p className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
+          Leads
+        </p>
+        {leadsNav.map(navLink)}
 
         {(canAccessSettings || userRole === null) && (
           <>

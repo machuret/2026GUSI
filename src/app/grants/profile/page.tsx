@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Save, Loader2, CheckCircle, Target, Building2, MapPin, DollarSign, Tag, Star } from "lucide-react";
+import Link from "next/link";
+import { Save, Loader2, CheckCircle, Target, Building2, MapPin, DollarSign, Tag, Star, ArrowLeft, Trophy, PenLine, Rss, KanbanSquare } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 
 const ORG_TYPES = ["Non-profit / Charity", "Social Enterprise", "SME (Small-Medium Business)", "Startup", "University / Research Institute", "Government / Council", "Indigenous Organisation", "Other"];
 const SECTORS = ["Health & Medical", "Education & Training", "Technology & Innovation", "Environment & Sustainability", "Arts & Culture", "Community Services", "Agriculture & Food", "Export & Trade", "Manufacturing", "Other"];
@@ -53,7 +55,7 @@ export default function GrantProfilePage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    fetch("/api/grant-profile")
+    authFetch("/api/grant-profile")
       .then((r) => r.json())
       .then((d) => { if (d.profile) setProfile({ ...EMPTY, ...d.profile }); })
       .catch(() => {})
@@ -72,7 +74,7 @@ export default function GrantProfilePage() {
     setSaving(true);
     setSaved(false);
     try {
-      const res = await fetch("/api/grant-profile", {
+      const res = await authFetch("/api/grant-profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profile),
@@ -117,6 +119,25 @@ export default function GrantProfilePage() {
 
   return (
     <div className="mx-auto max-w-4xl">
+      {/* Grants suite nav */}
+      <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5">
+        <Link href="/grants" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-brand-600">
+          <Trophy className="h-3.5 w-3.5" /> All Grants
+        </Link>
+        <Link href="/grants/crm" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-indigo-600">
+          <KanbanSquare className="h-3.5 w-3.5" /> CRM
+        </Link>
+        <Link href="/grants/builder" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-emerald-600">
+          <PenLine className="h-3.5 w-3.5" /> Builder
+        </Link>
+        <span className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 border border-brand-200">
+          <Target className="h-3.5 w-3.5" /> Profile
+        </span>
+        <Link href="/grants/crawler" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-brand-600">
+          <Rss className="h-3.5 w-3.5" /> Crawler
+        </Link>
+      </div>
+
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Grant Profile</h1>

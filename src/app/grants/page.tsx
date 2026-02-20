@@ -1,16 +1,17 @@
 ﻿"use client";
 
 import { useState } from "react";
-import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare } from "lucide-react";
+import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss } from "lucide-react";
 import Link from "next/link";
-import { useGrants } from "@/hooks/useGrants";
+import { useGrants, type Grant } from "@/hooks/useGrants";
 import { exportToCsv } from "@/lib/exportCsv";
 import { GrantRow } from "./components/GrantRow";
 import { AddGrantModal } from "./components/AddGrantModal";
 import { GrantSearchModal } from "./components/GrantSearchModal";
 
 export default function GrantsPage() {
-  const { grants, loading, companyDNA, updateGrant, deleteGrant, addGrant, fetchGrants } = useGrants();
+  const { grants, loading, companyDNA, updateGrant: updateGrantRaw, deleteGrant, addGrant, fetchGrants } = useGrants();
+  const updateGrant = async (id: string, d: Partial<Grant>) => { await updateGrantRaw(id, d); };
   const [showAdd, setShowAdd] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
@@ -111,6 +112,25 @@ export default function GrantsPage() {
           existingNames={existingNames}
         />
       )}
+
+      {/* Grants suite nav */}
+      <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5">
+        <span className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 border border-brand-200">
+          <Trophy className="h-3.5 w-3.5" /> All Grants
+        </span>
+        <Link href="/grants/crm" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-indigo-600">
+          <KanbanSquare className="h-3.5 w-3.5" /> CRM
+        </Link>
+        <Link href="/grants/builder" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-emerald-600">
+          <PenLine className="h-3.5 w-3.5" /> Builder
+        </Link>
+        <Link href="/grants/profile" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-brand-600">
+          <UserCheck className="h-3.5 w-3.5" /> Profile
+        </Link>
+        <Link href="/grants/crawler" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-brand-600">
+          <Rss className="h-3.5 w-3.5" /> Crawler
+        </Link>
+      </div>
 
       {/* Header */}
       <div className="mb-4 flex items-start justify-between">
