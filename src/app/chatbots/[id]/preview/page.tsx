@@ -34,6 +34,7 @@ export default function ChatPreviewPage({ params }: { params: { id: string } }) 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const visitorId = useRef<string>("preview_visitor");
+  const lang = useRef<string>("en");
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -47,10 +48,13 @@ export default function ChatPreviewPage({ params }: { params: { id: string } }) 
     }
     visitorId.current = vid;
 
+    const browserLang = (navigator.language || "en").toLowerCase().startsWith("es") ? "es" : "en";
+    lang.current = browserLang;
+
     fetch(`/api/chat/session`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ botId: params.id, visitorId: visitorId.current, lang: "en" }),
+      body: JSON.stringify({ botId: params.id, visitorId: visitorId.current, lang: browserLang }),
     })
       .then((r) => r.json())
       .then((data) => {
@@ -84,7 +88,7 @@ export default function ChatPreviewPage({ params }: { params: { id: string } }) 
       const res = await fetch("/api/chat/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ botId: params.id, sessionId, message: text, lang: "en" }),
+        body: JSON.stringify({ botId: params.id, sessionId, message: text, lang: lang.current }),
       });
       const data = await res.json();
       setMessages((prev) => {

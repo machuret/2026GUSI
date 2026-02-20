@@ -31,15 +31,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     if (error) throw error;
 
-    // Enrich with lead info
-    const enriched = await Promise.all((sessions ?? []).map(async (s) => {
-      const { data: lead } = await db
-        .from("ChatLead")
-        .select("name, email, phone, company")
-        .eq("sessionId", s.id)
-        .maybeSingle();
-      return { ...s, lead };
-    }));
+    // Enrich with lead info — single query for all sessions (no N+1)
+    const sessionIds = (sessions ?? []).map((s) => s.id);
+    const { data: allLeads } = sessionIds.length > 0
+      ? await db.from("ChatLead").select("sessionId, name, email, phone, company").in("sessionId", sessionIds)
+      : { data: [] };
+    const leadMap = Object.fromEntries((allLeads ?? []).map((l) => [l.sessionId, l]));
+    const enriched = (sessions ?? []).map((s) => ({ ...s, lead: leadMap[s.id] ?? null }));
 
     return NextResponse.json({ sessions: enriched });
   } catch (error) {

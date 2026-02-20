@@ -1,11 +1,14 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
+import { callOpenAIWithUsage } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { getVaultContext, getLessonsContext } from "@/lib/aiContext";
 import { z } from "zod";
+
+// gpt-4o-mini: 10x cheaper than gpt-4o, fast enough for chat
+const CHAT_MODEL = "gpt-4o-mini";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -18,29 +21,34 @@ export async function OPTIONS() {
 }
 
 const schema = z.object({
-  botId:     z.string().min(1),
-  sessionId: z.string().min(1),
-  message:   z.string().min(1).max(2000),
-  lang:      z.enum(["es", "en"]).optional(), // browser-detected language
-  // Lead capture fields (optional — sent when visitor submits contact form)
-  leadName:  z.string().optional(),
-  leadEmail: z.string().email().optional(),
-  leadPhone: z.string().optional(),
-  leadCompany: z.string().optional(),
+  botId:       z.string().uuid(),
+  sessionId:   z.string().uuid(),
+  message:     z.string().min(1).max(2000),
+  lang:        z.enum(["es", "en"]).default("en"),
+  leadName:    z.string().max(200).optional(),
+  leadEmail:   z.string().email().optional(),
+  leadPhone:   z.string().max(50).optional(),
+  leadCompany: z.string().max(200).optional(),
 });
 
-// Classify intent as support or sales using GPT-4o-mini
-async function classifyIntent(message: string, history: string): Promise<"support" | "sales" | "general"> {
+// Safe Postgres FTS query — returns null if no usable words
+function buildTsQuery(text: string): string | null {
+  const words = text.replace(/[^a-zA-Z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 2).slice(0, 8);
+  return words.length > 0 ? words.join(" & ") : null;
+}
+
+// Classify intent with gpt-4o-mini (cheap + fast)
+async function classifyIntent(message: string, historyText: string): Promise<"support" | "sales" | "general"> {
   try {
     const result = await callOpenAIWithUsage({
-      systemPrompt: `Classify the user's intent as exactly one of: support, sales, general.
-- support: troubleshooting, help with existing product/service, account issues, technical problems
+      systemPrompt: `Classify the visitor's intent as exactly one of: support, sales, general.
+- support: troubleshooting, existing product help, account issues, technical problems
 - sales: pricing, buying, demos, new features, product info for purchase decisions
-- general: greetings, unclear, other
-Return ONLY the single word.`,
-      userPrompt: `Recent conversation:\n${history}\n\nLatest message: ${message}`,
-      model: "gpt-4o-mini",
-      maxTokens: 10,
+- general: greetings, unclear, off-topic
+Return ONLY the single word, lowercase.`,
+      userPrompt: `Conversation:\n${historyText || "(none)"}\n\nLatest: ${message}`,
+      model: CHAT_MODEL,
+      maxTokens: 5,
       temperature: 0,
       jsonMode: false,
     });
@@ -52,61 +60,46 @@ Return ONLY the single word.`,
   }
 }
 
-// Build a safe full-text search query — skip if too short or no valid words
-function buildTsQuery(text: string): string | null {
-  const words = text.replace(/[^a-zA-Z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 2).slice(0, 8);
-  if (words.length === 0) return null;
-  return words.join(" & ");
-}
-
-// Search knowledge base articles for relevant docs
-async function searchKnowledge(botId: string, query: string, category: string): Promise<string> {
+// Search bot KB — falls back to top-3 articles if no FTS match
+async function searchKnowledge(botId: string, query: string, intent: string): Promise<string> {
   const tsQuery = buildTsQuery(query);
+  let docs: { title: string; content: string }[] | null = null;
 
-  let docs = null;
   if (tsQuery) {
     const { data } = await db
       .from("KnowledgeBase")
-      .select("title, content, category")
-      .eq("botId", botId)
-      .or(`category.eq.${category},category.eq.general`)
-      .textSearch("searchVector", tsQuery, { type: "plain" })
-      .limit(4);
-    docs = data;
-  }
-
-  if (!docs || docs.length === 0) {
-    const { data: fallback } = await db
-      .from("KnowledgeBase")
       .select("title, content")
       .eq("botId", botId)
+      .or(`category.eq.${intent},category.eq.general`)
+      .textSearch("searchVector", tsQuery, { type: "plain" })
       .limit(3);
-    if (!fallback || fallback.length === 0) return "";
-    return fallback.map((d) => `## ${d.title}\n${d.content.slice(0, 600)}`).join("\n\n");
+    docs = data;
   }
-
-  return docs.map((d) => `## ${d.title}\n${d.content.slice(0, 600)}`).join("\n\n");
+  if (!docs || docs.length === 0) {
+    const { data: fallback } = await db.from("KnowledgeBase").select("title, content").eq("botId", botId).limit(3);
+    docs = fallback;
+  }
+  if (!docs || docs.length === 0) return "";
+  return docs.map((d) => `### ${d.title}\n${d.content.slice(0, 800)}`).join("\n\n");
 }
 
-// Search FAQ table for matching Q&A pairs
-async function searchFAQs(botId: string, query: string, category: string): Promise<string> {
+// Search FAQs for verbatim Q&A pairs
+async function searchFAQs(botId: string, query: string, intent: string): Promise<string> {
   const tsQuery = buildTsQuery(query);
   if (!tsQuery) return "";
-
   const { data: faqs } = await db
     .from("ChatFAQ")
-    .select("question, answer, category")
+    .select("question, answer")
     .eq("botId", botId)
     .eq("active", true)
-    .or(`category.eq.${category},category.eq.general`)
+    .or(`category.eq.${intent},category.eq.general`)
     .textSearch("searchVector", tsQuery, { type: "plain" })
-    .limit(5);
-
+    .limit(4);
   if (!faqs || faqs.length === 0) return "";
   return faqs.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
 }
 
-// Fetch active rules ordered by priority
+// Fetch active bot rules by priority
 async function fetchRules(botId: string): Promise<string> {
   const { data: rules } = await db
     .from("ChatBotRule")
@@ -115,20 +108,30 @@ async function fetchRules(botId: string): Promise<string> {
     .eq("active", true)
     .order("priority", { ascending: false })
     .limit(20);
-
   if (!rules || rules.length === 0) return "";
   return rules.map((r) => `- [${r.category}] ${r.rule}`).join("\n");
 }
 
-// Detect if bot should ask for lead details
+// Vault: truncate per-document (not mid-string) within a 2400-char budget
+async function buildVaultBlock(companyId: string): Promise<string> {
+  const vault = await getVaultContext(companyId);
+  if (!vault.docs || vault.docs.length === 0) return vault.block ? vault.block.slice(0, 2400) : "";
+  const perDoc = Math.floor(2400 / Math.min(vault.docs.length, 4));
+  return vault.docs
+    .slice(0, 4)
+    .map((d: { filename?: string; title?: string; content: string }) =>
+      `### ${d.filename ?? d.title ?? "Doc"}\n${d.content.slice(0, perDoc)}`
+    )
+    .join("\n\n");
+}
+
+// Lead capture trigger
 function shouldCaptureLead(messageCount: number, hasLead: boolean, reply: string): boolean {
   if (hasLead) return false;
   if (messageCount < 3) return false;
-  // Trigger on every 4th message after the 3rd
   if (messageCount % 4 === 0) return true;
-  // Also trigger if reply suggests escalation
-  const escalationWords = ["team will", "get back to you", "contact you", "follow up", "reach out"];
-  return escalationWords.some((w) => reply.toLowerCase().includes(w));
+  const phrases = ["team will", "get back to you", "contact you", "follow up", "reach out", "someone will"];
+  return phrases.some((w) => reply.toLowerCase().includes(w));
 }
 
 export async function POST(req: NextRequest) {
@@ -136,167 +139,149 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = schema.parse(body);
 
-    // Verify session belongs to this bot
+    // ── 1. Validate session ──────────────────────────────────────────────────
     const { data: session } = await db
       .from("ChatSession")
-      .select("id, botId, messageCount, detectedIntent, status")
+      .select("id, botId, messageCount, detectedIntent, status, lang")
       .eq("id", data.sessionId)
       .eq("botId", data.botId)
       .maybeSingle();
 
-    if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
-    if (session.status === "closed") return NextResponse.json({ error: "Session is closed" }, { status: 400 });
+    if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404, headers: CORS_HEADERS });
+    if (session.status === "closed") return NextResponse.json({ error: "Session is closed" }, { status: 400, headers: CORS_HEADERS });
 
-    // Get bot config + company info in parallel
-    const [{ data: bot }, { data: companyInfo }, { data: company }] = await Promise.all([
-      db.from("ChatBot").select("systemPrompt, name").eq("id", data.botId).maybeSingle(),
-      db.from("CompanyInfo").select("*").eq("companyId", DEMO_COMPANY_ID).maybeSingle(),
-      db.from("Company").select("name, industry, website").eq("id", DEMO_COMPANY_ID).maybeSingle(),
-    ]);
-
-    if (!bot) return NextResponse.json({ error: "Bot not found" }, { status: 404 });
-
-    // Build company context block from CompanyInfo (same data as companyDNA elsewhere)
-    const companyContext = [
-      company?.name       ? `Company: ${company.name}` : null,
-      company?.industry   ? `Industry: ${company.industry}` : null,
-      company?.website    ? `Website: ${company.website}` : null,
-      companyInfo?.bulkContent     ? companyInfo.bulkContent : null,
-      companyInfo?.values          ? `Values: ${companyInfo.values}` : null,
-      companyInfo?.corePhilosophy  ? `Philosophy: ${companyInfo.corePhilosophy}` : null,
-      companyInfo?.founders        ? `Founders: ${companyInfo.founders}` : null,
-      companyInfo?.achievements    ? `Achievements: ${companyInfo.achievements}` : null,
-    ].filter(Boolean).join("\n");
-
-    // Handle lead capture submission
+    // ── 2. Lead-only submission — save lead, return early (no AI call) ───────
     if (data.leadName || data.leadEmail) {
-      const { data: existingLead } = await db
-        .from("ChatLead")
-        .select("id")
-        .eq("sessionId", data.sessionId)
-        .maybeSingle();
-
-      if (!existingLead) {
+      const { data: existingLead } = await db.from("ChatLead").select("id").eq("sessionId", data.sessionId).maybeSingle();
+      if (!existingLead && data.leadEmail) {
         await db.from("ChatLead").insert({
           sessionId: data.sessionId,
           botId: data.botId,
           name: data.leadName ?? null,
-          email: data.leadEmail ?? null,
+          email: data.leadEmail,
           phone: data.leadPhone ?? null,
           company: data.leadCompany ?? null,
           intent: session.detectedIntent ?? "general",
           notes: `Captured after ${session.messageCount} messages`,
         });
       }
+      return NextResponse.json(
+        { reply: null, intent: session.detectedIntent, messageCount: session.messageCount, askForLead: false, leadSaved: true },
+        { headers: CORS_HEADERS }
+      );
     }
 
-    // Fetch recent conversation history (last 10 messages)
-    const { data: history } = await db
-      .from("ChatMessage")
-      .select("role, content")
-      .eq("sessionId", data.sessionId)
-      .order("createdAt", { ascending: false })
-      .limit(10);
-
-    const historyMessages = (history ?? []).reverse();
-    const historyText = historyMessages.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n");
-
-    // Classify intent (use cached if already detected)
-    let intent = session.detectedIntent as "support" | "sales" | "general" | null;
-    if (!intent || intent === "general") {
-      intent = await classifyIntent(data.message, historyText);
-      if (intent !== "general") {
-        await db.from("ChatSession").update({ detectedIntent: intent }).eq("id", data.sessionId);
-      }
-    }
-
-    // Parallel: KB articles + FAQ matches + bot rules + vault + lessons
-    const resolvedIntent = intent ?? "general";
-    const [knowledgeContext, faqContext, rulesContext, vault, lessons] = await Promise.all([
-      searchKnowledge(data.botId, data.message, resolvedIntent),
-      searchFAQs(data.botId, data.message, resolvedIntent),
-      fetchRules(data.botId),
-      getVaultContext(DEMO_COMPANY_ID),
-      getLessonsContext({ companyId: DEMO_COMPANY_ID }),
+    // ── 3. Load bot + company + history in parallel ──────────────────────────
+    const [
+      { data: bot },
+      { data: companyInfo },
+      { data: company },
+      { data: rawHistory },
+    ] = await Promise.all([
+      db.from("ChatBot").select("systemPrompt, name").eq("id", data.botId).maybeSingle(),
+      db.from("CompanyInfo").select("bulkContent, values, corePhilosophy, founders, achievements").eq("companyId", DEMO_COMPANY_ID).maybeSingle(),
+      db.from("Company").select("name, industry, website").eq("id", DEMO_COMPANY_ID).maybeSingle(),
+      // Last 20 rows = 10 exchanges; filter out [Lead captured] system messages
+      db.from("ChatMessage")
+        .select("role, content")
+        .eq("sessionId", data.sessionId)
+        .neq("content", "[Lead captured]")
+        .order("createdAt", { ascending: false })
+        .limit(20),
     ]);
 
-    // Cap vault to avoid token overflow (keep most relevant ~3000 chars)
-    const vaultBlock = vault.block ? vault.block.slice(0, 3000) : "";
+    if (!bot) return NextResponse.json({ error: "Bot not found" }, { status: 404, headers: CORS_HEADERS });
 
-    // Language instruction — always respond in the visitor's detected language
-    const langInstruction = data.lang === "es"
-      ? "\n## LANGUAGE\nThe visitor's browser is set to Spanish. You MUST respond entirely in Spanish (español) for every message, regardless of the language the visitor writes in."
-      : "\n## LANGUAGE\nRespond in English unless the visitor writes in another language, in which case match their language.";
+    const historyMessages = (rawHistory ?? []).reverse();
+    const historyText = historyMessages
+      .map((m) => `${m.role === "user" ? "Visitor" : "Assistant"}: ${m.content}`)
+      .join("\n");
 
-    // Build system prompt — modular sections, each clearly labelled
-    const systemPrompt = [
-      bot.systemPrompt,
-      langInstruction,
-      companyContext
-        ? `\n## COMPANY INFORMATION\n${companyContext}`
-        : "",
-      lessons.block || "",
-      rulesContext
-        ? `\n## RULES (follow these strictly, in priority order)\n${rulesContext}`
-        : "",
-      faqContext
-        ? `\n## FREQUENTLY ASKED QUESTIONS (use these exact answers when relevant)\n${faqContext}`
-        : "",
-      knowledgeContext
-        ? `\n## KNOWLEDGE BASE ARTICLES (use for detailed answers)\n${knowledgeContext}`
-        : "",
-      vaultBlock
-        ? `\n## DOCUMENT VAULT (reference material — use facts and details from here)\n${vaultBlock}`
-        : "",
-      `\n## CONTEXT\nCurrent conversation intent: ${resolvedIntent}`,
-      `\n## GUIDELINES\n- Be concise, warm, and professional\n- Use company info, vault docs, and knowledge base to answer accurately\n- Prefer FAQ answers verbatim when they match the question\n- If you don't know something, say so honestly — never fabricate\n- If the visitor needs help you cannot provide, offer to escalate to the team\n- Do NOT ask for contact details — the system handles that separately`,
+    // ── 4. Classify intent + load all context in parallel ────────────────────
+    const cachedIntent = session.detectedIntent as "support" | "sales" | "general" | null;
+    const needsClassify = !cachedIntent || cachedIntent === "general";
+
+    const [resolvedIntent, knowledgeContext, faqContext, rulesContext, vaultBlock, lessons] =
+      await Promise.all([
+        needsClassify ? classifyIntent(data.message, historyText) : Promise.resolve(cachedIntent as "support" | "sales" | "general"),
+        searchKnowledge(data.botId, data.message, cachedIntent ?? "general"),
+        searchFAQs(data.botId, data.message, cachedIntent ?? "general"),
+        fetchRules(data.botId),
+        buildVaultBlock(DEMO_COMPANY_ID),
+        getLessonsContext({ companyId: DEMO_COMPANY_ID }),
+      ]);
+
+    // Persist newly classified intent (fire-and-forget)
+    if (needsClassify && resolvedIntent !== "general") {
+      db.from("ChatSession").update({ detectedIntent: resolvedIntent }).eq("id", data.sessionId).then(() => {});
+    }
+
+    // ── 5. Company context (capped to prevent token blowout) ─────────────────
+    const companyContext = [
+      company?.name     ? `Company: ${company.name}` : null,
+      company?.industry ? `Industry: ${company.industry}` : null,
+      company?.website  ? `Website: ${company.website}` : null,
+      companyInfo?.values         ? `Values: ${String(companyInfo.values).slice(0, 300)}` : null,
+      companyInfo?.corePhilosophy ? `Philosophy: ${String(companyInfo.corePhilosophy).slice(0, 300)}` : null,
+      companyInfo?.founders       ? `Founders: ${String(companyInfo.founders).slice(0, 200)}` : null,
+      companyInfo?.achievements   ? `Achievements: ${String(companyInfo.achievements).slice(0, 200)}` : null,
+      companyInfo?.bulkContent    ? String(companyInfo.bulkContent).slice(0, 800) : null,
     ].filter(Boolean).join("\n");
 
-    // Build messages array for OpenAI (history + current message)
+    // ── 6. Language ──────────────────────────────────────────────────────────
+    const lang = data.lang ?? session.lang ?? "en";
+    const langInstruction = lang === "es"
+      ? "## LANGUAGE\nRespond entirely in Spanish (español) for every message."
+      : "## LANGUAGE\nRespond in English unless the visitor writes in another language — then match their language.";
+
+    // ── 7. System prompt ─────────────────────────────────────────────────────
+    const systemPrompt = [
+      bot.systemPrompt?.trim(),
+      langInstruction,
+      companyContext        ? `## COMPANY\n${companyContext}` : null,
+      lessons.block         ? lessons.block : null,
+      rulesContext          ? `## RULES (apply strictly)\n${rulesContext}` : null,
+      faqContext            ? `## EXACT FAQ ANSWERS (use verbatim when question matches)\n${faqContext}` : null,
+      knowledgeContext      ? `## KNOWLEDGE BASE\n${knowledgeContext}` : null,
+      vaultBlock            ? `## REFERENCE DOCUMENTS\n${vaultBlock}` : null,
+      `## CONTEXT\nVisitor intent: ${resolvedIntent}`,
+      `## GUIDELINES\n- Be concise, warm, professional — 2-4 sentences unless detail needed\n- Use FAQ answers verbatim when question matches\n- Draw on company info, KB, and reference docs for accuracy\n- Never fabricate — if unsure, say so and offer to connect with the team\n- Do NOT ask for contact details — the system handles lead capture separately`,
+    ].filter(Boolean).join("\n\n");
+
+    // ── 8. Call OpenAI with full conversation history ────────────────────────
     const chatMessages = historyMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
     chatMessages.push({ role: "user", content: data.message });
 
-    // Call OpenAI via shared helper (includes retry + usage logging)
     const aiResult = await callOpenAIWithUsage({
       systemPrompt,
-      userPrompt: "", // messages array handles the conversation
-      model: MODEL_CONFIG.generate,
-      maxTokens: 600,
-      temperature: 0.5,
+      userPrompt: "",
+      model: CHAT_MODEL,
+      maxTokens: 500,
+      temperature: 0.4,
       jsonMode: false,
       extraMessages: chatMessages,
     });
 
     const reply = aiResult.content.trim() || "I'm sorry, I couldn't generate a response. Please try again.";
-    const promptTokens = aiResult.promptTokens;
-    const completionTokens = aiResult.completionTokens;
 
-    // Save user message + assistant reply
+    // ── 9. Persist messages + session ────────────────────────────────────────
     const newCount = (session.messageCount ?? 0) + 1;
     await Promise.all([
       db.from("ChatMessage").insert([
-        { sessionId: data.sessionId, role: "user", content: data.message },
+        { sessionId: data.sessionId, role: "user",      content: data.message },
         { sessionId: data.sessionId, role: "assistant", content: reply },
       ]),
-      db.from("ChatSession").update({ messageCount: newCount, updatedAt: new Date().toISOString() }).eq("id", data.sessionId),
+      db.from("ChatSession").update({ messageCount: newCount, lang, updatedAt: new Date().toISOString() }).eq("id", data.sessionId),
     ]);
 
-    logAiUsage({ model: MODEL_CONFIG.generate, feature: "chatbot", promptTokens, completionTokens });
+    logAiUsage({ model: CHAT_MODEL, feature: "chatbot", promptTokens: aiResult.promptTokens, completionTokens: aiResult.completionTokens });
 
-    // Check lead status (reuse earlier check if lead was just submitted)
-    const leadAlreadyCaptured = !!(data.leadName || data.leadEmail);
-    let askForLead = false;
-    if (!leadAlreadyCaptured) {
-      const { data: existingLead } = await db
-        .from("ChatLead")
-        .select("id")
-        .eq("sessionId", data.sessionId)
-        .maybeSingle();
-      askForLead = shouldCaptureLead(newCount, !!existingLead, reply);
-    }
+    // ── 10. Lead capture check ───────────────────────────────────────────────
+    const { data: existingLead } = await db.from("ChatLead").select("id").eq("sessionId", data.sessionId).maybeSingle();
+    const askForLead = shouldCaptureLead(newCount, !!existingLead, reply);
 
     return NextResponse.json(
-      { reply, intent, messageCount: newCount, askForLead },
+      { reply, intent: resolvedIntent, messageCount: newCount, askForLead },
       { headers: CORS_HEADERS }
     );
   } catch (err) {
