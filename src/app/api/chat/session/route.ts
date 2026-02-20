@@ -16,18 +16,19 @@ export async function OPTIONS() {
 const schema = z.object({
   botId:     z.string().min(1),
   visitorId: z.string().min(1),
+  lang:      z.enum(["en", "es"]).default("en"),
 });
 
 // POST /api/chat/session — create or resume a session for a visitor
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { botId, visitorId } = schema.parse(body);
+    const { botId, visitorId, lang } = schema.parse(body);
 
     // Verify bot exists and is active
     const { data: bot } = await db
       .from("ChatBot")
-      .select("id, name, widgetTitle, welcomeMessage, widgetColor, avatarEmoji, systemPrompt")
+      .select("id, name, widgetTitle, welcomeMessage, widgetColor, avatarEmoji")
       .eq("id", botId)
       .eq("active", true)
       .maybeSingle();
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
     // Create new session
     const { data: session, error } = await db
       .from("ChatSession")
-      .insert({ botId, visitorId, status: "active", messageCount: 0 })
+      .insert({ botId, visitorId, status: "active", messageCount: 0, lang })
       .select("id")
       .single();
 

@@ -264,15 +264,29 @@ export async function POST(req: NextRequest) {
 
     const reply = aiResult.content.trim() || "I'm sorry, I couldn't generate a response. Please try again.";
 
-    // ── 9. Persist messages + session ────────────────────────────────────────
+    // ── 9. Persist messages + session (with dedup guard) ────────────────────
+    // Prevent double-save if client retries the same request within 10 seconds
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString();
+    const { data: recentDup } = await db
+      .from("ChatMessage")
+      .select("id")
+      .eq("sessionId", data.sessionId)
+      .eq("role", "user")
+      .eq("content", data.message)
+      .gte("createdAt", tenSecondsAgo)
+      .limit(1)
+      .maybeSingle();
+
     const newCount = (session.messageCount ?? 0) + 1;
-    await Promise.all([
-      db.from("ChatMessage").insert([
-        { sessionId: data.sessionId, role: "user",      content: data.message },
-        { sessionId: data.sessionId, role: "assistant", content: reply },
-      ]),
-      db.from("ChatSession").update({ messageCount: newCount, lang, updatedAt: new Date().toISOString() }).eq("id", data.sessionId),
-    ]);
+    if (!recentDup) {
+      await Promise.all([
+        db.from("ChatMessage").insert([
+          { sessionId: data.sessionId, role: "user",      content: data.message },
+          { sessionId: data.sessionId, role: "assistant", content: reply },
+        ]),
+        db.from("ChatSession").update({ messageCount: newCount, lang, updatedAt: new Date().toISOString() }).eq("id", data.sessionId),
+      ]);
+    }
 
     logAiUsage({ model: CHAT_MODEL, feature: "chatbot", promptTokens: aiResult.promptTokens, completionTokens: aiResult.completionTokens });
 
