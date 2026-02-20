@@ -64,7 +64,7 @@ export function useGrants() {
         info?.achievements   ? `Achievements: ${info.achievements}` : null,
         info?.products       ? `Products: ${info.products}`         : null,
       ].filter(Boolean);
-      if (parts.length > 0) setCompanyDNA(parts.join("\n"));
+      if (parts.length > 0) setCompanyDNA(parts.join("\n").slice(0, 2500));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load grants");
     } finally {

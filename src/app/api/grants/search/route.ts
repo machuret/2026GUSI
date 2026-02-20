@@ -14,7 +14,7 @@ const bodySchema = z.object({
   deadlineUrgency: z.string().optional(),
   eligibilityType: z.string().optional(),
   grantType: z.string().optional(),
-  companyDNA: z.string().max(3000).optional(),
+  companyDNA: z.string().max(5000).optional(),
   existingNames: z.array(z.string()).max(500).optional(),
 }).refine(
   (d) => d.query || d.grantType || d.orgType || d.geographicScope,
