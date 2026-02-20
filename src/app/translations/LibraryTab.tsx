@@ -1,17 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import JSZip from "jszip";
 import {
   ChevronDown, ChevronUp, Copy, Check, ThumbsUp, Archive,
-  Trash2, Pencil, Save, Loader2, X, RefreshCw, MessageSquare, Search, Download,
+  Trash2, Pencil, Save, Loader2, X, RefreshCw, MessageSquare, Search, Download, GripVertical,
 } from "lucide-react";
 import type { Translation, TranslationStatus } from "./types";
-import { LANG_COLORS, STATUS_STYLES } from "./types";
+import { LANG_COLORS, LANG_FLAGS, STATUS_STYLES } from "./types";
 
-function LangBadge({ lang }: { lang: string }) {
-  const key = Object.keys(LANG_COLORS).find((k) => lang.startsWith(k));
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${key ? LANG_COLORS[key] : "bg-gray-100 text-gray-600"}`}>{lang}</span>;
+function FlagBadge({ lang }: { lang: string }) {
+  const flag = LANG_FLAGS[lang] ?? "";
+  const colorKey = Object.keys(LANG_COLORS).find((k) => lang.startsWith(k));
+  const colorCls = colorKey ? LANG_COLORS[colorKey] : "bg-gray-100 text-gray-600";
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${colorCls}`}>
+      {flag && <span className="text-sm leading-none">{flag}</span>}
+      {lang}
+    </span>
+  );
 }
 
 function StatusBadge({ status }: { status: TranslationStatus }) {
@@ -29,6 +36,10 @@ interface Props {
 }
 
 export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, onSaveRecheck, onDelete }: Props) {
+  const [order, setOrder] = useState<string[]>([]); // local display order by id
+  const dragId = useRef<string | null>(null);
+  const dragOverId = useRef<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -125,7 +136,16 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
     return result;
   }, [translations, filterStatus, filterLang, filterCat, search, dateFrom, dateTo, sort]);
 
-  const allFilteredIds = filtered.map((t) => t.id);
+  // Apply local drag order on top of filtered results
+  const orderedFiltered = useMemo(() => {
+    if (order.length === 0) return filtered;
+    const map = new Map(filtered.map((t) => [t.id, t]));
+    const ordered = order.map((id) => map.get(id)).filter(Boolean) as Translation[];
+    const rest = filtered.filter((t) => !order.includes(t.id));
+    return [...ordered, ...rest];
+  }, [filtered, order]);
+
+  const allFilteredIds = orderedFiltered.map((t) => t.id);
   const allSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selected.has(id));
   const someSelected = allFilteredIds.some((id) => selected.has(id));
 
@@ -179,6 +199,29 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
     setRecheckFeedback("");
     setUpdatingId(null);
   };
+
+  // Drag-to-reorder handlers
+  const onDragStart = (id: string) => { dragId.current = id; setDragActive(true); };
+  const onDragOver = (e: React.DragEvent, id: string) => { e.preventDefault(); dragOverId.current = id; };
+  const onDrop = () => {
+    const from = dragId.current;
+    const to = dragOverId.current;
+    if (!from || !to || from === to) { setDragActive(false); return; }
+    setOrder((prev) => {
+      const base = prev.length ? prev : filtered.map((t) => t.id);
+      const arr = [...base];
+      const fi = arr.indexOf(from);
+      const ti = arr.indexOf(to);
+      if (fi === -1 || ti === -1) return base;
+      arr.splice(fi, 1);
+      arr.splice(ti, 0, from);
+      return arr;
+    });
+    dragId.current = null;
+    dragOverId.current = null;
+    setDragActive(false);
+  };
+  const onDragEnd = () => { setDragActive(false); };
 
   return (
     <div>
@@ -258,8 +301,11 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
             </button>
           )}
           <div className="ml-auto flex items-center gap-3">
-            <span className="text-xs text-gray-500">{filtered.length} of {translations.length}</span>
-            {filtered.length > 0 && (
+            <span className="text-xs text-gray-500">{orderedFiltered.length} of {translations.length}</span>
+            {order.length > 0 && (
+              <button onClick={() => setOrder([])} className="text-xs text-gray-400 hover:text-gray-600 hover:underline">Reset order</button>
+            )}
+            {orderedFiltered.length > 0 && (
               <button onClick={handleToggleSelectAll}
                 className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline">
                 {allSelected ? "Deselect all" : "Select all"}
@@ -278,7 +324,7 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map((t) => {
+          {orderedFiltered.map((t) => {
             const isExpanded = expandedId === t.id;
             const isEditing = editingId === t.id;
             const isRechecking = recheckId === t.id;
@@ -286,13 +332,25 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
             const isSelected = selected.has(t.id);
 
             return (
-              <div key={t.id} className={`rounded-xl border bg-white overflow-hidden shadow-sm transition-colors ${
-                isSelected ? "border-brand-300 ring-1 ring-brand-200" :
-                t.status === "approved" ? "border-green-200" :
-                t.status === "archived" ? "border-amber-200" : "border-gray-300"
-              }`}>
+              <div
+                key={t.id}
+                draggable
+                onDragStart={() => onDragStart(t.id)}
+                onDragOver={(e) => onDragOver(e, t.id)}
+                onDrop={onDrop}
+                onDragEnd={onDragEnd}
+                className={`rounded-xl border bg-white overflow-hidden shadow-sm transition-all ${
+                  dragActive && dragOverId.current === t.id ? "border-brand-400 ring-2 ring-brand-200 scale-[1.01]" :
+                  isSelected ? "border-brand-300 ring-1 ring-brand-200" :
+                  t.status === "approved" ? "border-green-200" :
+                  t.status === "archived" ? "border-amber-200" : "border-gray-300"
+                }`}>
                 {/* Row header */}
                 <div className="flex items-center gap-3 px-4 py-3">
+                  {/* Drag handle */}
+                  <div className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 flex-shrink-0" title="Drag to reorder">
+                    <GripVertical className="h-4 w-4" />
+                  </div>
                   {/* Checkbox */}
                   <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(t.id)}
                     className="h-4 w-4 rounded border-gray-300 accent-brand-600 cursor-pointer flex-shrink-0" />
@@ -300,7 +358,7 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold text-gray-900">{t.title}</p>
-                        <LangBadge lang={t.language} />
+                        <FlagBadge lang={t.language} />
                         <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{t.category}</span>
                         <StatusBadge status={t.status} />
                         {t.feedback && (

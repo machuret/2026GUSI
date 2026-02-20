@@ -25,6 +25,35 @@ export const CONTENT_CATEGORIES = [
   "Announcement", "Sales Page", "Cold Email", "Webinar", "Course Content", "General",
 ];
 
+export const LANG_FLAGS: Record<string, string> = {
+  Spanish: "🇪🇸",
+  French: "🇫🇷",
+  German: "🇩🇪",
+  Italian: "🇮🇹",
+  Portuguese: "🇵🇹",
+  Dutch: "🇳🇱",
+  Polish: "🇵🇱",
+  Russian: "🇷🇺",
+  Japanese: "🇯🇵",
+  "Chinese (Simplified)": "🇨🇳",
+  "Chinese (Traditional)": "🇹🇼",
+  Korean: "🇰🇷",
+  Arabic: "🇸🇦",
+  Hindi: "🇮🇳",
+  Turkish: "🇹🇷",
+  Swedish: "🇸🇪",
+  Norwegian: "🇳🇴",
+  Danish: "🇩🇰",
+  Finnish: "🇫🇮",
+  Greek: "🇬🇷",
+  Hebrew: "🇮🇱",
+  Thai: "🇹🇭",
+  Vietnamese: "🇻🇳",
+  Indonesian: "🇮🇩",
+  Malay: "🇲🇾",
+  English: "🇬🇧",
+};
+
 export const LANG_COLORS: Record<string, string> = {
   Spanish: "bg-red-100 text-red-700",
   French: "bg-blue-100 text-blue-700",
