@@ -33,21 +33,20 @@ export default function ChatPreviewPage({ params }: { params: { id: string } }) 
   const [initError, setInitError] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const visitorId = useRef(
-    typeof window !== "undefined"
-      ? (localStorage.getItem("gusi_visitor_id") || (() => {
-          const id = "v_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
-          localStorage.setItem("gusi_visitor_id", id);
-          return id;
-        })())
-      : "preview_visitor"
-  );
+  const visitorId = useRef<string>("preview_visitor");
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   useEffect(() => {
+    let vid = localStorage.getItem("gusi_visitor_id");
+    if (!vid) {
+      vid = "v_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem("gusi_visitor_id", vid);
+    }
+    visitorId.current = vid;
+
     fetch(`/api/chat/session`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
