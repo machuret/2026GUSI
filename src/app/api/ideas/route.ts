@@ -81,8 +81,8 @@ export async function POST(req: NextRequest) {
     };
 
     const systemPrompt = `You are a creative content strategist. Generate fresh, specific, actionable content ideas.
-Return ONLY a valid JSON array of idea objects. No markdown, no explanation, just the array.
-Each object must have exactly these fields:
+Return a JSON object with a single key "ideas" containing an array of idea objects. No markdown, no explanation.
+Each idea object must have exactly these fields:
 - "title": string — a compelling, specific headline (max 80 chars)
 - "summary": string — 1-2 sentence description of what the content covers and why it matters (max 200 chars)
 - "contentType": one of ${JSON.stringify(parsed.contentTypes)}
@@ -96,7 +96,7 @@ Rules:
     const userPrompt = `Generate ${parsed.count} content ideas.
 Content types to cover: ${parsed.contentTypes.map((t) => contentTypeLabels[t]).join(", ")}
 Categories to cover: ${parsed.categories.join(", ")}
-Spread ideas across all requested content types and categories. Return only the JSON array.`;
+Spread ideas across all requested content types and categories. Return {"ideas": [...]}.`;
 
     const aiResult = await callOpenAIWithUsage({
       systemPrompt,
