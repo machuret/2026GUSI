@@ -5,13 +5,26 @@ import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { z } from "zod";
 
 const updateSchema = z.object({
-  name:           z.string().min(1).max(100).optional(),
-  systemPrompt:   z.string().min(10).max(4000).optional(),
-  widgetTitle:    z.string().max(60).optional(),
-  widgetColor:    z.string().optional(),
-  avatarEmoji:    z.string().max(4).optional(),
-  welcomeMessage: z.string().max(300).optional(),
-  active:         z.boolean().optional(),
+  name:                z.string().min(1).max(100).optional(),
+  systemPrompt:        z.string().min(10).max(4000).optional(),
+  widgetTitle:         z.string().max(60).optional(),
+  widgetColor:         z.string().optional(),
+  avatarEmoji:         z.string().max(4).optional(),
+  welcomeMessage:      z.string().max(300).optional(),
+  active:              z.boolean().optional(),
+  // Widget style
+  widgetPosition:      z.enum(["bottom-right", "bottom-left"]).optional(),
+  widgetBorderRadius:  z.number().int().min(0).max(24).optional(),
+  widgetFontSize:      z.number().int().min(12).max(18).optional(),
+  headerTextColor:     z.string().optional(),
+  botBubbleColor:      z.string().optional(),
+  botTextColor:        z.string().optional(),
+  userBubbleColor:     z.string().optional(),
+  userTextColor:       z.string().optional(),
+  showBranding:        z.boolean().optional(),
+  placeholderText:     z.string().max(80).optional(),
+  windowHeight:        z.number().int().min(400).max(700).optional(),
+  windowWidth:         z.number().int().min(300).max(480).optional(),
 });
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
