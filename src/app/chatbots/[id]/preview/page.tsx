@@ -93,7 +93,10 @@ export default function ChatPreviewPage({ params }: { params: { id: string } }) 
       const data = await res.json();
       setMessages((prev) => {
         const without = prev.filter((m) => !m.typing);
-        return [...without, { role: "bot", content: data.error ? "Sorry, something went wrong. Please try again." : data.reply }];
+        const content = data.error
+          ? `Sorry, something went wrong. Please try again.`
+          : (data.reply ?? "I couldn't generate a response. Please try again.");
+        return [...without, { role: "bot", content }];
       });
     } catch {
       setMessages((prev) => {

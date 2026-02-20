@@ -21,8 +21,8 @@ export async function OPTIONS() {
 }
 
 const schema = z.object({
-  botId:       z.string().uuid(),
-  sessionId:   z.string().uuid(),
+  botId:       z.string().min(1),
+  sessionId:   z.string().min(1),
   message:     z.string().min(1).max(2000),
   lang:        z.enum(["es", "en"]).default("en"),
   leadName:    z.string().max(200).optional(),
@@ -119,8 +119,8 @@ async function buildVaultBlock(companyId: string): Promise<string> {
   const perDoc = Math.floor(2400 / Math.min(vault.docs.length, 4));
   return vault.docs
     .slice(0, 4)
-    .map((d: { filename?: string; title?: string; content: string }) =>
-      `### ${d.filename ?? d.title ?? "Doc"}\n${d.content.slice(0, perDoc)}`
+    .map((d: { filename?: string; content: string }) =>
+      `### ${d.filename ?? "Doc"}\n${d.content.slice(0, perDoc)}`
     )
     .join("\n\n");
 }
