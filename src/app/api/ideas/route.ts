@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { logAiUsage } from "@/lib/aiUsage";
+import { logActivity } from "@/lib/activity";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
 
@@ -60,9 +61,10 @@ export async function POST(req: NextRequest) {
       if (!title || !summary || !contentType || !category) {
         return NextResponse.json({ error: "title, summary, contentType and category are required" }, { status: 400 });
       }
+      const appUser = await logActivity(authUser.id, authUser.email || "", "ideas.save", title.slice(0, 80));
       const { data, error } = await db
         .from("Idea")
-        .insert({ companyId: DEMO_COMPANY_ID, title, summary, contentType, category, status: "saved" })
+        .insert({ companyId: DEMO_COMPANY_ID, userId: appUser.id, title, summary, contentType, category, status: "saved" })
         .select()
         .single();
       if (error) throw new Error(error.message);
