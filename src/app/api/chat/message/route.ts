@@ -1,8 +1,9 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { callOpenAI, callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
+import { callOpenAI, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
+import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
 
 const schema = z.object({
@@ -90,14 +91,26 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
     if (session.status === "closed") return NextResponse.json({ error: "Session is closed" }, { status: 400 });
 
-    // Get bot config
-    const { data: bot } = await db
-      .from("ChatBot")
-      .select("systemPrompt, name")
-      .eq("id", data.botId)
-      .maybeSingle();
+    // Get bot config + company info in parallel
+    const [{ data: bot }, { data: companyInfo }, { data: company }] = await Promise.all([
+      db.from("ChatBot").select("systemPrompt, name").eq("id", data.botId).maybeSingle(),
+      db.from("CompanyInfo").select("*").eq("companyId", DEMO_COMPANY_ID).maybeSingle(),
+      db.from("Company").select("name, industry, website").eq("id", DEMO_COMPANY_ID).maybeSingle(),
+    ]);
 
     if (!bot) return NextResponse.json({ error: "Bot not found" }, { status: 404 });
+
+    // Build company context block from CompanyInfo (same data as companyDNA elsewhere)
+    const companyContext = [
+      company?.name       ? `Company: ${company.name}` : null,
+      company?.industry   ? `Industry: ${company.industry}` : null,
+      company?.website    ? `Website: ${company.website}` : null,
+      companyInfo?.bulkContent     ? companyInfo.bulkContent : null,
+      companyInfo?.values          ? `Values: ${companyInfo.values}` : null,
+      companyInfo?.corePhilosophy  ? `Philosophy: ${companyInfo.corePhilosophy}` : null,
+      companyInfo?.founders        ? `Founders: ${companyInfo.founders}` : null,
+      companyInfo?.achievements    ? `Achievements: ${companyInfo.achievements}` : null,
+    ].filter(Boolean).join("\n");
 
     // Handle lead capture submission
     if (data.leadName || data.leadEmail) {
@@ -144,16 +157,19 @@ export async function POST(req: NextRequest) {
     // Search knowledge base
     const knowledgeContext = await searchKnowledge(data.botId, data.message, intent ?? "general");
 
-    // Build system prompt
-    const systemPrompt = `${bot.systemPrompt}
-
-${knowledgeContext ? `KNOWLEDGE BASE (use this to answer accurately):\n${knowledgeContext}\n` : ""}
-Current conversation intent: ${intent ?? "general"}
-Guidelines:
+    // Build system prompt — company info + bot persona + KB context
+    const systemPrompt = [
+      bot.systemPrompt,
+      companyContext ? `\nCOMPANY INFORMATION:\n${companyContext}` : "",
+      knowledgeContext ? `\nKNOWLEDGE BASE (use this to answer accurately):\n${knowledgeContext}` : "",
+      `\nCurrent conversation intent: ${intent ?? "general"}`,
+      `Guidelines:
 - Be concise, warm, and professional
+- Use the company information above to answer questions about the organisation accurately
 - If you don't know something, say so honestly — don't make up information
 - If the visitor needs urgent help you cannot provide, offer to escalate to the team
-- Do NOT ask for contact details — the system handles that separately`;
+- Do NOT ask for contact details — the system handles that separately`,
+    ].filter(Boolean).join("\n");
 
     // Build messages array for OpenAI
     const messages = historyMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
