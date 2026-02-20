@@ -29,6 +29,8 @@ type CallOptions = {
   maxTokens?: number;
   temperature?: number;
   jsonMode?: boolean;
+  /** Optional full conversation history — replaces the single userPrompt message */
+  extraMessages?: { role: "user" | "assistant"; content: string }[];
 };
 
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
@@ -58,14 +60,16 @@ export async function callOpenAI({
 /**
  * Like callOpenAI but also returns token usage for accurate cost tracking.
  */
-export async function callOpenAIWithUsage({
-  systemPrompt,
-  userPrompt,
-  model = MODEL_CONFIG.generate,
-  maxTokens = 1000,
-  temperature = 0.3,
-  jsonMode = true,
-}: CallOptions): Promise<UsageResult> {
+export async function callOpenAIWithUsage(options: CallOptions): Promise<UsageResult> {
+  const {
+    systemPrompt,
+    userPrompt,
+    model = MODEL_CONFIG.generate,
+    maxTokens = 1000,
+    temperature = 0.3,
+    jsonMode = true,
+    extraMessages,
+  } = options;
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
 
@@ -84,7 +88,9 @@ export async function callOpenAIWithUsage({
         model,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
+          ...(extraMessages && extraMessages.length > 0
+            ? extraMessages
+            : [{ role: "user", content: userPrompt }]),
         ],
         temperature,
         max_tokens: maxTokens,

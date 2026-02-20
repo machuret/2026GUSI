@@ -1,11 +1,21 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { callOpenAI, MODEL_CONFIG } from "@/lib/openai";
+import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { getVaultContext, getLessonsContext } from "@/lib/aiContext";
 import { z } from "zod";
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
 
 const schema = z.object({
   botId:     z.string().min(1),
@@ -22,7 +32,7 @@ const schema = z.object({
 // Classify intent as support or sales using GPT-4o-mini
 async function classifyIntent(message: string, history: string): Promise<"support" | "sales" | "general"> {
   try {
-    const result = await callOpenAI({
+    const result = await callOpenAIWithUsage({
       systemPrompt: `Classify the user's intent as exactly one of: support, sales, general.
 - support: troubleshooting, help with existing product/service, account issues, technical problems
 - sales: pricing, buying, demos, new features, product info for purchase decisions
@@ -34,7 +44,7 @@ Return ONLY the single word.`,
       temperature: 0,
       jsonMode: false,
     });
-    const intent = result.trim().toLowerCase();
+    const intent = result.content.trim().toLowerCase();
     if (intent === "support" || intent === "sales") return intent;
     return "general";
   } catch {
@@ -42,16 +52,28 @@ Return ONLY the single word.`,
   }
 }
 
+// Build a safe full-text search query — skip if too short or no valid words
+function buildTsQuery(text: string): string | null {
+  const words = text.replace(/[^a-zA-Z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 2).slice(0, 8);
+  if (words.length === 0) return null;
+  return words.join(" & ");
+}
+
 // Search knowledge base articles for relevant docs
 async function searchKnowledge(botId: string, query: string, category: string): Promise<string> {
-  const tsQuery = query.split(" ").filter(Boolean).slice(0, 8).join(" & ");
-  const { data: docs } = await db
-    .from("KnowledgeBase")
-    .select("title, content, category")
-    .eq("botId", botId)
-    .or(`category.eq.${category},category.eq.general`)
-    .textSearch("searchVector", tsQuery, { type: "plain" })
-    .limit(4);
+  const tsQuery = buildTsQuery(query);
+
+  let docs = null;
+  if (tsQuery) {
+    const { data } = await db
+      .from("KnowledgeBase")
+      .select("title, content, category")
+      .eq("botId", botId)
+      .or(`category.eq.${category},category.eq.general`)
+      .textSearch("searchVector", tsQuery, { type: "plain" })
+      .limit(4);
+    docs = data;
+  }
 
   if (!docs || docs.length === 0) {
     const { data: fallback } = await db
@@ -68,7 +90,9 @@ async function searchKnowledge(botId: string, query: string, category: string): 
 
 // Search FAQ table for matching Q&A pairs
 async function searchFAQs(botId: string, query: string, category: string): Promise<string> {
-  const tsQuery = query.split(" ").filter(Boolean).slice(0, 8).join(" & ");
+  const tsQuery = buildTsQuery(query);
+  if (!tsQuery) return "";
+
   const { data: faqs } = await db
     .from("ChatFAQ")
     .select("question, answer, category")
@@ -196,6 +220,9 @@ export async function POST(req: NextRequest) {
       getLessonsContext({ companyId: DEMO_COMPANY_ID }),
     ]);
 
+    // Cap vault to avoid token overflow (keep most relevant ~3000 chars)
+    const vaultBlock = vault.block ? vault.block.slice(0, 3000) : "";
+
     // Language instruction — always respond in the visitor's detected language
     const langInstruction = data.lang === "es"
       ? "\n## LANGUAGE\nThe visitor's browser is set to Spanish. You MUST respond entirely in Spanish (español) for every message, regardless of the language the visitor writes in."
@@ -218,41 +245,31 @@ export async function POST(req: NextRequest) {
       knowledgeContext
         ? `\n## KNOWLEDGE BASE ARTICLES (use for detailed answers)\n${knowledgeContext}`
         : "",
-      vault.block
-        ? `\n## DOCUMENT VAULT (reference material — use facts and details from here)\n${vault.block}`
+      vaultBlock
+        ? `\n## DOCUMENT VAULT (reference material — use facts and details from here)\n${vaultBlock}`
         : "",
       `\n## CONTEXT\nCurrent conversation intent: ${resolvedIntent}`,
       `\n## GUIDELINES\n- Be concise, warm, and professional\n- Use company info, vault docs, and knowledge base to answer accurately\n- Prefer FAQ answers verbatim when they match the question\n- If you don't know something, say so honestly — never fabricate\n- If the visitor needs help you cannot provide, offer to escalate to the team\n- Do NOT ask for contact details — the system handles that separately`,
     ].filter(Boolean).join("\n");
 
-    // Build messages array for OpenAI
-    const messages = historyMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
-    messages.push({ role: "user", content: data.message });
+    // Build messages array for OpenAI (history + current message)
+    const chatMessages = historyMessages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+    chatMessages.push({ role: "user", content: data.message });
 
-    // Call OpenAI with full conversation history
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error("OPENAI_API_KEY not configured");
-
-    const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: MODEL_CONFIG.generate,
-        messages: [{ role: "system", content: systemPrompt }, ...messages],
-        temperature: 0.5,
-        max_tokens: 600,
-      }),
+    // Call OpenAI via shared helper (includes retry + usage logging)
+    const aiResult = await callOpenAIWithUsage({
+      systemPrompt,
+      userPrompt: "", // messages array handles the conversation
+      model: MODEL_CONFIG.generate,
+      maxTokens: 600,
+      temperature: 0.5,
+      jsonMode: false,
+      extraMessages: chatMessages,
     });
 
-    if (!aiRes.ok) {
-      const err = await aiRes.text();
-      throw new Error(`OpenAI error: ${err.slice(0, 200)}`);
-    }
-
-    const aiData = await aiRes.json();
-    const reply = (aiData.choices?.[0]?.message?.content ?? "I'm sorry, I couldn't generate a response. Please try again.").trim();
-    const promptTokens = aiData.usage?.prompt_tokens ?? 0;
-    const completionTokens = aiData.usage?.completion_tokens ?? 0;
+    const reply = aiResult.content.trim() || "I'm sorry, I couldn't generate a response. Please try again.";
+    const promptTokens = aiResult.promptTokens;
+    const completionTokens = aiResult.completionTokens;
 
     // Save user message + assistant reply
     const newCount = (session.messageCount ?? 0) + 1;
@@ -266,22 +283,26 @@ export async function POST(req: NextRequest) {
 
     logAiUsage({ model: MODEL_CONFIG.generate, feature: "chatbot", promptTokens, completionTokens });
 
-    // Check if we should prompt for lead capture
-    const { data: existingLead } = await db
-      .from("ChatLead")
-      .select("id")
-      .eq("sessionId", data.sessionId)
-      .maybeSingle();
+    // Check lead status (reuse earlier check if lead was just submitted)
+    const leadAlreadyCaptured = !!(data.leadName || data.leadEmail);
+    let askForLead = false;
+    if (!leadAlreadyCaptured) {
+      const { data: existingLead } = await db
+        .from("ChatLead")
+        .select("id")
+        .eq("sessionId", data.sessionId)
+        .maybeSingle();
+      askForLead = shouldCaptureLead(newCount, !!existingLead, reply);
+    }
 
-    const askForLead = shouldCaptureLead(newCount, !!existingLead, reply);
-
-    return NextResponse.json({
-      reply,
-      intent,
-      messageCount: newCount,
-      askForLead,
-    });
+    return NextResponse.json(
+      { reply, intent, messageCount: newCount, askForLead },
+      { headers: CORS_HEADERS }
+    );
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed" },
+      { status: 500, headers: CORS_HEADERS }
+    );
   }
 }

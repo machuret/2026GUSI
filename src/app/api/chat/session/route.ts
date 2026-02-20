@@ -3,6 +3,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { z } from "zod";
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 const schema = z.object({
   botId:     z.string().min(1),
   visitorId: z.string().min(1),
@@ -51,7 +61,7 @@ export async function POST(req: NextRequest) {
         detectedIntent: existing.detectedIntent,
         messages: messages ?? [],
         bot: { name: bot.name, widgetTitle: bot.widgetTitle, widgetColor: bot.widgetColor, avatarEmoji: bot.avatarEmoji, welcomeMessage: bot.welcomeMessage },
-      });
+      }, { headers: CORS_HEADERS });
     }
 
     // Create new session
@@ -70,8 +80,8 @@ export async function POST(req: NextRequest) {
       detectedIntent: null,
       messages: [],
       bot: { name: bot.name, widgetTitle: bot.widgetTitle, widgetColor: bot.widgetColor, avatarEmoji: bot.avatarEmoji, welcomeMessage: bot.welcomeMessage },
-    });
+    }, { headers: CORS_HEADERS });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500, headers: CORS_HEADERS });
   }
 }
