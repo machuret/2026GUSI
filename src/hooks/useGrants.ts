@@ -51,17 +51,20 @@ export function useGrants() {
 
       setGrants(grantsData.grants ?? []);
 
-      const info = companyData.companyInfo;
-      if (info) {
-        const parts = [
-          info.bulkContent,
-          info.values        ? `Values: ${info.values}`             : null,
-          info.corePhilosophy? `Philosophy: ${info.corePhilosophy}` : null,
-          info.founders      ? `Founders: ${info.founders}`         : null,
-          info.achievements  ? `Achievements: ${info.achievements}` : null,
-        ].filter(Boolean);
-        setCompanyDNA(parts.join("\n"));
-      }
+      // /api/company returns { company, info } — not companyInfo
+      const info = companyData.info;
+      const company = companyData.company;
+      const parts = [
+        company?.name        ? `Company: ${company.name}`           : null,
+        company?.industry    ? `Industry: ${company.industry}`      : null,
+        info?.bulkContent    ? info.bulkContent                     : null,
+        info?.values         ? `Values: ${info.values}`             : null,
+        info?.corePhilosophy ? `Philosophy: ${info.corePhilosophy}` : null,
+        info?.founders       ? `Founders: ${info.founders}`         : null,
+        info?.achievements   ? `Achievements: ${info.achievements}` : null,
+        info?.products       ? `Products: ${info.products}`         : null,
+      ].filter(Boolean);
+      if (parts.length > 0) setCompanyDNA(parts.join("\n"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load grants");
     } finally {

@@ -47,7 +47,7 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA }: Props) {
   };
 
   const handleAnalyse = async () => {
-    if (!companyDNA) { setAiError("No company DNA found. Add company info first."); setExpanded(true); return; }
+    if (!companyDNA) { setAiError("No company info found — please fill in Settings → Company Info first."); setExpanded(true); return; }
     setAnalysing(true); setAiError(null); setAnalysis(null); setExpanded(true);
     try {
       const res = await authFetch("/api/grants/analyse", {

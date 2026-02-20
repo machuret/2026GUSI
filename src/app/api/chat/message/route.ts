@@ -40,28 +40,58 @@ Return ONLY the single word.`,
   }
 }
 
-// Search knowledge base for relevant docs
+// Search knowledge base articles for relevant docs
 async function searchKnowledge(botId: string, query: string, category: string): Promise<string> {
+  const tsQuery = query.split(" ").filter(Boolean).slice(0, 8).join(" & ");
   const { data: docs } = await db
     .from("KnowledgeBase")
     .select("title, content, category")
     .eq("botId", botId)
     .or(`category.eq.${category},category.eq.general`)
-    .textSearch("searchVector", query.split(" ").filter(Boolean).join(" & "), { type: "plain" })
+    .textSearch("searchVector", tsQuery, { type: "plain" })
     .limit(4);
 
   if (!docs || docs.length === 0) {
-    // Fallback: just get recent general docs if no search match
     const { data: fallback } = await db
       .from("KnowledgeBase")
       .select("title, content")
       .eq("botId", botId)
       .limit(3);
     if (!fallback || fallback.length === 0) return "";
-    return fallback.map((d) => `## ${d.title}\n${d.content.slice(0, 800)}`).join("\n\n");
+    return fallback.map((d) => `## ${d.title}\n${d.content.slice(0, 600)}`).join("\n\n");
   }
 
-  return docs.map((d) => `## ${d.title}\n${d.content.slice(0, 800)}`).join("\n\n");
+  return docs.map((d) => `## ${d.title}\n${d.content.slice(0, 600)}`).join("\n\n");
+}
+
+// Search FAQ table for matching Q&A pairs
+async function searchFAQs(botId: string, query: string, category: string): Promise<string> {
+  const tsQuery = query.split(" ").filter(Boolean).slice(0, 8).join(" & ");
+  const { data: faqs } = await db
+    .from("ChatFAQ")
+    .select("question, answer, category")
+    .eq("botId", botId)
+    .eq("active", true)
+    .or(`category.eq.${category},category.eq.general`)
+    .textSearch("searchVector", tsQuery, { type: "plain" })
+    .limit(5);
+
+  if (!faqs || faqs.length === 0) return "";
+  return faqs.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
+}
+
+// Fetch active rules ordered by priority
+async function fetchRules(botId: string): Promise<string> {
+  const { data: rules } = await db
+    .from("ChatBotRule")
+    .select("rule, category")
+    .eq("botId", botId)
+    .eq("active", true)
+    .order("priority", { ascending: false })
+    .limit(20);
+
+  if (!rules || rules.length === 0) return "";
+  return rules.map((r) => `- [${r.category}] ${r.rule}`).join("\n");
 }
 
 // Detect if bot should ask for lead details
@@ -154,21 +184,31 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Search knowledge base
-    const knowledgeContext = await searchKnowledge(data.botId, data.message, intent ?? "general");
+    // Parallel: KB articles + FAQ matches + bot rules
+    const resolvedIntent = intent ?? "general";
+    const [knowledgeContext, faqContext, rulesContext] = await Promise.all([
+      searchKnowledge(data.botId, data.message, resolvedIntent),
+      searchFAQs(data.botId, data.message, resolvedIntent),
+      fetchRules(data.botId),
+    ]);
 
-    // Build system prompt — company info + bot persona + KB context
+    // Build system prompt — modular sections, each clearly labelled
     const systemPrompt = [
       bot.systemPrompt,
-      companyContext ? `\nCOMPANY INFORMATION:\n${companyContext}` : "",
-      knowledgeContext ? `\nKNOWLEDGE BASE (use this to answer accurately):\n${knowledgeContext}` : "",
-      `\nCurrent conversation intent: ${intent ?? "general"}`,
-      `Guidelines:
-- Be concise, warm, and professional
-- Use the company information above to answer questions about the organisation accurately
-- If you don't know something, say so honestly — don't make up information
-- If the visitor needs urgent help you cannot provide, offer to escalate to the team
-- Do NOT ask for contact details — the system handles that separately`,
+      companyContext
+        ? `\n## COMPANY INFORMATION\n${companyContext}`
+        : "",
+      rulesContext
+        ? `\n## RULES (follow these strictly, in priority order)\n${rulesContext}`
+        : "",
+      faqContext
+        ? `\n## FREQUENTLY ASKED QUESTIONS (use these exact answers when relevant)\n${faqContext}`
+        : "",
+      knowledgeContext
+        ? `\n## KNOWLEDGE BASE ARTICLES (use for detailed answers)\n${knowledgeContext}`
+        : "",
+      `\n## CONTEXT\nCurrent conversation intent: ${resolvedIntent}`,
+      `\n## GUIDELINES\n- Be concise, warm, and professional\n- Use company info and knowledge base to answer accurately\n- Prefer FAQ answers verbatim when they match the question\n- If you don't know something, say so honestly — never fabricate\n- If the visitor needs help you cannot provide, offer to escalate to the team\n- Do NOT ask for contact details — the system handles that separately`,
     ].filter(Boolean).join("\n");
 
     // Build messages array for OpenAI
