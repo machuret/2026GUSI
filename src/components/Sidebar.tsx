@@ -25,6 +25,7 @@ import {
   Mic2,
   UserCheck,
   BotMessageSquare,
+  Lightbulb,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasRole } from "@/lib/auth";
@@ -35,6 +36,7 @@ const mainNav = [
 ];
 
 const contentNav = [
+  { href: "/ideas",    label: "Ideas",    icon: Lightbulb },
   { href: "/generate", label: "Generate", icon: Sparkles },
   { href: "/bulk", label: "Bulk Generate", icon: Layers },
   { href: "/voices", label: "Voices", icon: Mic2 },
