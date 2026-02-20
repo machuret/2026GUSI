@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   ExternalLink, Trash2, ChevronDown, ChevronUp,
-  FileText, Loader2, Save, Sparkles, FlaskConical,
+  FileText, Loader2, Save, Sparkles, FlaskConical, PenLine,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import type { Grant } from "@/hooks/useGrants";
@@ -136,6 +137,9 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA }: Props) {
             <button onClick={() => { setEditing(true); setExpanded(true); }} title="Edit" className="text-gray-400 hover:text-brand-600">
               <FileText className="h-4 w-4" />
             </button>
+            <Link href={`/grants/builder?grantId=${grant.id}`} title="Write Application" className="text-emerald-400 hover:text-emerald-600">
+              <PenLine className="h-4 w-4" />
+            </Link>
             <button onClick={del} disabled={deleting} title="Delete" className="text-gray-300 hover:text-red-500 disabled:opacity-40">
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             </button>
@@ -191,6 +195,9 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA }: Props) {
                   <button onClick={handleResearch} disabled={researching} className="flex items-center gap-1 text-xs text-brand-600 hover:underline disabled:opacity-50">
                     <Sparkles className="h-3 w-3" /> AI auto-fill missing fields
                   </button>
+                  <Link href={`/grants/builder?grantId=${grant.id}`} className="flex items-center gap-1 text-xs text-emerald-600 hover:underline font-medium">
+                    <PenLine className="h-3 w-3" /> Write Application →
+                  </Link>
                 </div>
               </div>
             )}

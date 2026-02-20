@@ -26,6 +26,8 @@ import {
   UserCheck,
   BotMessageSquare,
   Lightbulb,
+  PenLine,
+  Mail,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasRole } from "@/lib/auth";
@@ -36,17 +38,19 @@ const mainNav = [
 ];
 
 const contentNav = [
-  { href: "/ideas",    label: "Ideas",    icon: Lightbulb },
-  { href: "/generate", label: "Generate", icon: Sparkles },
-  { href: "/bulk", label: "Bulk Generate", icon: Layers },
-  { href: "/voices", label: "Voices", icon: Mic2 },
+  { href: "/ideas",      label: "Ideas",       icon: Lightbulb },
+  { href: "/generate",  label: "Generate",    icon: Sparkles },
+  { href: "/bulk",      label: "Bulk Generate", icon: Layers },
+  { href: "/voices",    label: "Voices",      icon: Mic2 },
   { href: "/translations", label: "Translations", icon: Languages },
-  { href: "/history", label: "History", icon: History },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/history",   label: "History",     icon: History },
+  { href: "/calendar",  label: "Calendar",    icon: CalendarDays },
+  { href: "/mailchimp", label: "Mailchimp",   icon: Mail },
 ];
 
 const grantsNav = [
   { href: "/grants", label: "Grants", icon: Trophy },
+  { href: "/grants/builder", label: "Grant Builder", icon: PenLine },
   { href: "/grants/profile", label: "Grant Profile", icon: UserCheck },
   { href: "/grants/crawler", label: "Grant Crawler", icon: Rss },
   { href: "/leads", label: "Leads", icon: Users },
