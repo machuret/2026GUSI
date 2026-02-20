@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, PenLine, Sparkles, ExternalLink, Loader2,
-  ChevronDown, ChevronUp, StickyNote, FlaskConical,
+  ChevronDown, ChevronUp, StickyNote, FlaskConical, X,
 } from "lucide-react";
 import { useGrants } from "@/hooks/useGrants";
 import { authFetch } from "@/lib/authFetch";
@@ -29,13 +29,18 @@ function GrantCrmCard({
   companyDNA,
 }: {
   grant: Grant;
-  onUpdate: (id: string, d: Partial<Grant>) => Promise<void>;
+  onUpdate: (id: string, d: Partial<Grant>) => Promise<unknown>;
   companyDNA: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [notes, setNotes] = useState(grant.crmNotes ?? "");
   const [savingNotes, setSavingNotes] = useState(false);
   const [status, setStatus] = useState<CrmStatus | null>(grant.crmStatus ?? null);
+  const [removingFromCrm, setRemovingFromCrm] = useState(false);
+
+  // Sync local state when parent grant prop changes (e.g. after research auto-fill)
+  useEffect(() => { setNotes(grant.crmNotes ?? ""); }, [grant.crmNotes]);
+  useEffect(() => { setStatus(grant.crmStatus ?? null); }, [grant.crmStatus]);
   const [researching, setResearching] = useState(false);
   const [researchMsg, setResearchMsg] = useState<string | null>(null);
   const [researchErr, setResearchErr] = useState<string | null>(null);
@@ -49,6 +54,12 @@ function GrantCrmCard({
   const moveStatus = async (s: CrmStatus) => {
     setStatus(s);
     await onUpdate(grant.id, { crmStatus: s });
+  };
+
+  const removeFromCrm = async () => {
+    setRemovingFromCrm(true);
+    try { await onUpdate(grant.id, { crmStatus: null }); }
+    finally { setRemovingFromCrm(false); }
   };
 
   const handleResearch = async () => {
@@ -125,7 +136,7 @@ function GrantCrmCard({
         </div>
 
         {/* Action buttons */}
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           {grant.url && (
             <a href={grant.url} target="_blank" rel="noopener noreferrer" title="Open grant URL"
               className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:text-brand-600 hover:border-brand-300">
@@ -141,6 +152,11 @@ function GrantCrmCard({
             className="flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100">
             <PenLine className="h-3 w-3" /> Write App
           </Link>
+          <button onClick={removeFromCrm} disabled={removingFromCrm} title="Remove from CRM"
+            className="ml-auto flex items-center gap-1 rounded-md border border-red-100 px-2 py-1 text-xs text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40">
+            {removingFromCrm ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+            Remove
+          </button>
         </div>
       </div>
 
@@ -207,13 +223,12 @@ export default function GrantsCrmPage() {
     return !search || g.name.toLowerCase().includes(q) || (g.founder ?? "").toLowerCase().includes(q);
   });
 
-  const getColumn = useCallback((status: CrmStatus) =>
-    filtered.filter((g) => g.crmStatus === status),
-  [filtered]);
+  const getColumn = (status: CrmStatus) => filtered.filter((g) => g.crmStatus === status);
 
   const totalInCrm = crmGrants.length;
   const wonCount = crmGrants.filter((g) => g.crmStatus === "Won").length;
   const activeCount = crmGrants.filter((g) => g.crmStatus === "Active" || g.crmStatus === "Submitted").length;
+  const researchingCount = crmGrants.filter((g) => g.crmStatus === "Researching" || g.crmStatus === "Pipeline").length;
 
   return (
     <div className="mx-auto max-w-[1600px]">
@@ -239,10 +254,14 @@ export default function GrantsCrmPage() {
       </div>
 
       {/* Stats */}
-      <div className="mb-5 grid grid-cols-3 gap-3 sm:grid-cols-3">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-          <p className="text-xs text-gray-400">In CRM</p>
+          <p className="text-xs text-gray-400">Total in CRM</p>
           <p className="text-2xl font-bold text-gray-900">{totalInCrm}</p>
+        </div>
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+          <p className="text-xs text-blue-600">Researching / Pipeline</p>
+          <p className="text-2xl font-bold text-blue-800">{researchingCount}</p>
         </div>
         <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
           <p className="text-xs text-brand-600">Active / Submitted</p>

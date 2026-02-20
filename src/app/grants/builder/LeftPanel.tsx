@@ -76,7 +76,7 @@ export default function LeftPanel({
             <option value="">Select a grant…</option>
             {grants.map((g) => (
               <option key={g.id} value={g.id}>
-                {g.name}
+                {g.crmStatus ? `[${g.crmStatus}] ` : ""}{g.name}
                 {g.amount ? ` — ${g.amount}` : ""}
                 {g.matchScore != null ? ` (${g.matchScore}%)` : ""}
               </option>
@@ -85,6 +85,19 @@ export default function LeftPanel({
         )}
         {selectedGrant && (
           <div className="mt-3 space-y-1 text-xs text-gray-500 border-t border-gray-100 pt-3">
+            {selectedGrant.crmStatus && (
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  selectedGrant.crmStatus === "Won"       ? "bg-green-100 text-green-700" :
+                  selectedGrant.crmStatus === "Lost"      ? "bg-gray-100 text-gray-500" :
+                  selectedGrant.crmStatus === "Active"    ? "bg-brand-100 text-brand-700" :
+                  selectedGrant.crmStatus === "Submitted" ? "bg-orange-100 text-orange-700" :
+                  selectedGrant.crmStatus === "Pipeline"  ? "bg-purple-100 text-purple-700" :
+                  "bg-blue-100 text-blue-700"
+                }`}>CRM: {selectedGrant.crmStatus}</span>
+                <Link href="/grants/crm" className="text-indigo-500 hover:underline text-[10px] font-medium">View in CRM →</Link>
+              </div>
+            )}
             {selectedGrant.founder && (
               <p><span className="font-medium text-gray-700">Funder:</span> {selectedGrant.founder}</p>
             )}

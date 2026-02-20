@@ -76,7 +76,7 @@ export function useGrants() {
 
   useEffect(() => { fetchGrants(); }, [fetchGrants]);
 
-  const updateGrant = useCallback(async (id: string, data: Partial<Grant>) => {
+  const updateGrant = useCallback(async (id: string, data: Partial<Grant>): Promise<{ success: boolean; grant?: Grant }> => {
     const res = await fetch(`/api/grants/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

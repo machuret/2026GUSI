@@ -98,7 +98,19 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA }: Props) {
               {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
             <div className="min-w-0">
-              <p className="font-medium text-gray-900 text-sm">{grant.name}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-medium text-gray-900 text-sm">{grant.name}</p>
+                {grant.crmStatus && (
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    grant.crmStatus === "Won"       ? "bg-green-100 text-green-700" :
+                    grant.crmStatus === "Lost"      ? "bg-gray-100 text-gray-500" :
+                    grant.crmStatus === "Active"    ? "bg-brand-100 text-brand-700" :
+                    grant.crmStatus === "Submitted" ? "bg-orange-100 text-orange-700" :
+                    grant.crmStatus === "Pipeline"  ? "bg-purple-100 text-purple-700" :
+                    "bg-blue-100 text-blue-700"
+                  }`}>{grant.crmStatus}</span>
+                )}
+              </div>
               {grant.founder && <p className="text-xs text-gray-400 mt-0.5">{grant.founder}</p>}
               <p className="text-xs text-gray-300 mt-0.5">Added {new Date(grant.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</p>
             </div>

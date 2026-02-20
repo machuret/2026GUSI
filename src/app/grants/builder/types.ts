@@ -8,6 +8,7 @@ export interface Grant {
   aiVerdict?: string | null;
   url?: string | null;
   decision?: string | null;
+  crmStatus?: string | null;
 }
 
 export interface WritingBrief {

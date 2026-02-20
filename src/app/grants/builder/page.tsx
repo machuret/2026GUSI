@@ -64,8 +64,9 @@ export default function GrantBuilderPage() {
     ])
       .then(([gData, dData]) => {
         const all: Grant[] = gData.grants ?? [];
-        const apply = all.filter((g) => g.decision === "Apply");
-        setGrants(apply.length > 0 ? apply : all);
+        // Prioritise Apply + CRM grants; fall back to all if none qualify
+        const priority = all.filter((g) => g.decision === "Apply" || g.crmStatus != null);
+        setGrants(priority.length > 0 ? priority : all);
         setDrafts(dData.drafts ?? []);
       })
       .catch(() => {})
