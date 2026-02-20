@@ -1,13 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import {
   Upload, X, Sparkles, CheckCircle2, AlertCircle,
-  Loader2, Save, ChevronDown, ChevronUp, FileText,
+  Loader2, Save, ChevronDown, ChevronUp, FileText, StopCircle, RotateCcw,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import type { Translation } from "./types";
-import { LANGUAGES, CONTENT_CATEGORIES } from "./types";
+import { LANGUAGES, CONTENT_CATEGORIES, loadCustomCategories } from "./types";
 
 interface FileItem {
   id: string;
@@ -28,13 +28,18 @@ interface Props {
 
 export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef(false); // cancel signal
   const [files, setFiles] = useState<FileItem[]>([]);
   const [targetLanguage, setTargetLanguage] = useState("Spanish");
   const [category, setCategory] = useState("General");
+  const [customCats, setCustomCats] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState(0); // 0-100
+  const [cancelled, setCancelled] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => { setCustomCats(loadCustomCategories()); }, []);
+  const allCategories = [...CONTENT_CATEGORIES, ...customCats.filter(c => !CONTENT_CATEGORIES.includes(c))];
 
   const handleFileDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -84,12 +89,16 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
     setFiles((prev) => prev.map((f) => f.id === id ? { ...f, ...patch } : f));
 
   const translateOne = async (item: FileItem, rules: string): Promise<void> => {
+    if (abortRef.current) {
+      updateFile(item.id, { status: "pending", error: "" });
+      return;
+    }
     updateFile(item.id, { status: "translating", error: "" });
     try {
       const res = await authFetch("/api/translations/translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: item.text, targetLanguage, rules }),
+        body: JSON.stringify({ text: item.text, targetLanguage, category, rules }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -102,24 +111,49 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
     }
   };
 
+  // Concurrency-limited runner: max 2 in-flight at once
   const handleTranslateAll = async () => {
     const pending = files.filter((f) => f.status === "pending" || f.status === "error");
     if (pending.length === 0) return;
+
+    abortRef.current = false;
+    setCancelled(false);
     setRunning(true);
-    setProgress(0);
 
     const rules = buildCombinedRules(targetLanguage);
-    const CHUNK = 3;
-    let completed = 0;
+    const CONCURRENCY = 2;
+    const queue = [...pending];
+    let active = 0;
+    let done = 0;
 
-    for (let i = 0; i < pending.length; i += CHUNK) {
-      const chunk = pending.slice(i, i + CHUNK);
-      await Promise.allSettled(chunk.map((item) => translateOne(item, rules)));
-      completed += chunk.length;
-      setProgress(Math.round((completed / pending.length) * 100));
-    }
+    await new Promise<void>((resolve) => {
+      const next = () => {
+        if (abortRef.current) { resolve(); return; }
+        if (queue.length === 0 && active === 0) { resolve(); return; }
+        while (active < CONCURRENCY && queue.length > 0) {
+          const item = queue.shift()!;
+          active++;
+          translateOne(item, rules).finally(() => {
+            active--;
+            done++;
+            next();
+          });
+        }
+      };
+      next();
+    });
 
+    if (abortRef.current) setCancelled(true);
     setRunning(false);
+  };
+
+  const handleCancel = () => {
+    abortRef.current = true;
+  };
+
+  const handleRetryOne = async (item: FileItem) => {
+    const rules = buildCombinedRules(targetLanguage);
+    await translateOne(item, rules);
   };
 
   const handleSaveOne = async (item: FileItem) => {
@@ -158,7 +192,12 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
   const doneCount = files.filter((f) => f.status === "done").length;
   const errorCount = files.filter((f) => f.status === "error").length;
   const pendingCount = files.filter((f) => f.status === "pending").length;
+  const translatingCount = files.filter((f) => f.status === "translating").length;
   const unsavedDone = files.filter((f) => f.status === "done" && !savedIds.has(f.id)).length;
+  const totalProcessed = doneCount + errorCount;
+  const totalToProcess = files.length;
+  const progress = totalToProcess > 0 ? Math.round((totalProcessed / totalToProcess) * 100) : 0;
+  const batchDone = !running && !cancelled && totalProcessed > 0 && pendingCount === 0 && translatingCount === 0;
 
   return (
     <div className="space-y-5">
@@ -193,18 +232,25 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
                 <label className="mb-1 block text-xs font-medium text-gray-700">Category</label>
                 <select value={category} onChange={(e) => setCategory(e.target.value)}
                   className="w-full rounded-lg border border-gray-400 px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 bg-white">
-                  {CONTENT_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {allCategories.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleTranslateAll}
-                  disabled={running || pendingCount + errorCount === 0}
-                  className="flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 shadow-sm"
-                >
-                  {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {running ? "Translating…" : `Translate ${pendingCount + errorCount} file${pendingCount + errorCount !== 1 ? "s" : ""}`}
-                </button>
+              <div className="flex gap-2 flex-wrap">
+                {!running ? (
+                  <button
+                    onClick={handleTranslateAll}
+                    disabled={pendingCount + errorCount === 0}
+                    className="flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 shadow-sm"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {`Translate ${pendingCount + errorCount} file${pendingCount + errorCount !== 1 ? "s" : ""}`}
+                  </button>
+                ) : (
+                  <button onClick={handleCancel}
+                    className="flex items-center gap-2 rounded-lg bg-red-600 px-5 py-2 text-sm font-semibold text-white hover:bg-red-700 shadow-sm">
+                    <StopCircle className="h-4 w-4" /> Cancel
+                  </button>
+                )}
                 {unsavedDone > 0 && !running && (
                   <button onClick={handleSaveAll}
                     className="flex items-center gap-2 rounded-lg bg-green-600 px-5 py-2 text-sm font-semibold text-white hover:bg-green-700 shadow-sm">
@@ -215,28 +261,30 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
             </div>
 
             {/* Progress bar */}
-            {(running || (progress > 0 && progress < 100)) && (
+            {(running || totalProcessed > 0) && (
               <div className="mt-4">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-gray-700">Progress</span>
-                  <span className="text-xs font-semibold text-brand-600">{progress}%</span>
+                  <span className="text-xs font-medium text-gray-700">
+                    {running ? `Translating… (${translatingCount} active)` : cancelled ? "Cancelled" : "Progress"}
+                  </span>
+                  <span className="text-xs font-semibold text-brand-600">{totalProcessed}/{totalToProcess}</span>
                 </div>
                 <div className="h-2.5 w-full rounded-full bg-gray-200 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-brand-600 transition-all duration-300"
+                    className={`h-full rounded-full transition-all duration-300 ${cancelled ? "bg-amber-400" : "bg-brand-600"}`}
                     style={{ width: `${progress}%` }}
                   />
                 </div>
                 <div className="mt-1.5 flex gap-4 text-xs text-gray-500">
                   {doneCount > 0 && <span className="text-green-600 font-medium">✓ {doneCount} done</span>}
                   {errorCount > 0 && <span className="text-red-500 font-medium">✗ {errorCount} failed</span>}
-                  <span>{files.filter((f) => f.status === "translating").length > 0 ? "Translating…" : ""}</span>
+                  {pendingCount > 0 && running && <span className="text-gray-400">{pendingCount} queued</span>}
                 </div>
               </div>
             )}
 
             {/* Summary when done */}
-            {!running && progress === 100 && (
+            {batchDone && (
               <div className="mt-3 flex items-center gap-3 rounded-lg bg-gray-50 border border-gray-200 px-4 py-2.5">
                 <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
                 <span className="text-sm font-medium text-gray-700">
@@ -244,9 +292,16 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
                 </span>
                 {errorCount > 0 && (
                   <button onClick={handleTranslateAll} className="ml-auto text-xs text-brand-600 hover:underline font-medium">
-                    Retry failed
+                    Retry {errorCount} failed
                   </button>
                 )}
+              </div>
+            )}
+            {cancelled && (
+              <div className="mt-3 flex items-center gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5">
+                <StopCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                <span className="text-sm font-medium text-amber-800">Cancelled — {doneCount} done, {pendingCount} remaining</span>
+                <button onClick={handleTranslateAll} className="ml-auto text-xs text-brand-600 hover:underline font-medium">Resume</button>
               </div>
             )}
           </div>
@@ -291,13 +346,19 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
                     )}
                     {item.status === "error" && (
                       <span className="flex items-center gap-1 text-xs text-red-500 font-medium">
-                        <AlertCircle className="h-3.5 w-3.5" /> Error
+                        <AlertCircle className="h-3.5 w-3.5" /> Failed
                       </span>
                     )}
                   </div>
 
                   {/* Actions */}
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {item.status === "error" && !running && (
+                      <button onClick={() => handleRetryOne(item)}
+                        className="flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
+                        <RotateCcw className="h-3 w-3" /> Retry
+                      </button>
+                    )}
                     {item.status === "done" && !savedIds.has(item.id) && (
                       <button onClick={() => handleSaveOne(item)} disabled={savingId === item.id}
                         className="flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">

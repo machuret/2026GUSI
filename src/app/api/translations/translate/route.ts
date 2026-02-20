@@ -1,9 +1,11 @@
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 120;
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 
 const CHUNK_WORDS = 800; // translate in chunks if text is very long
+
+const RETRY_DELAYS_MS = [2000, 5000, 12000]; // 3 attempts: 2s, 5s, 12s
 
 async function translateChunk(
   chunk: string,
@@ -11,28 +13,59 @@ async function translateChunk(
   systemPrompt: string,
   apiKey: string
 ): Promise<string> {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: chunk },
-      ],
-      temperature: 0.2,
-      max_tokens: 2000,
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`OpenAI error (${res.status}): ${err.slice(0, 200)}`);
+  let lastError: Error = new Error("Unknown error");
+
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: chunk },
+          ],
+          temperature: 0.2,
+          max_tokens: 4000,
+        }),
+      });
+
+      // Rate limit or server error — retry after backoff
+      if (res.status === 429 || res.status >= 500) {
+        const retryAfter = res.headers.get("retry-after");
+        const delay = retryAfter
+          ? parseInt(retryAfter) * 1000
+          : (RETRY_DELAYS_MS[attempt] ?? 15000);
+        if (attempt < RETRY_DELAYS_MS.length) {
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+        const errText = await res.text();
+        throw new Error(`OpenAI error (${res.status}) after ${attempt + 1} attempts: ${errText.slice(0, 200)}`);
+      }
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`OpenAI error (${res.status}): ${errText.slice(0, 200)}`);
+      }
+
+      const data = await res.json();
+      const content = (data.choices?.[0]?.message?.content ?? "").trim();
+      if (!content) throw new Error("OpenAI returned empty content");
+      return content;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < RETRY_DELAYS_MS.length) {
+        await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+      }
+    }
   }
-  const data = await res.json();
-  return (data.choices?.[0]?.message?.content ?? "").trim();
+
+  throw lastError;
 }
 
 function splitIntoChunks(text: string, maxWords: number): string[] {
