@@ -84,13 +84,14 @@ export const SCRAPE_SOURCES: ScrapeSrc[] = [
       { key: "maxItems", label: "Max results", type: "number", default: 30, min: 1, max: 200 },
     ],
     buildInput: (fields) => {
-      const specialty = (fields.specialty as string) || "doctor";
-      const city = (fields.city as string) || "";
-      const state = (fields.state as string) || "";
-      // easyapi/webmd-doctor-scraper accepts keyword + location fields
+      const specialty = encodeURIComponent((fields.specialty as string) || "doctor");
+      const city = encodeURIComponent((fields.city as string) || "");
+      const state = encodeURIComponent((fields.state as string) || "");
+      // Actor requires a WebMD search URL — build it from the user's inputs
+      const locationPart = city ? `&city=${city}&state=${state}` : (state ? `&state=${state}` : "");
+      const searchUrl = `https://doctor.webmd.com/results?q=${specialty}&d=40&newpatient=false&isvirtualvisit=false&entity=all&gender=all${locationPart}`;
       return {
-        keyword: specialty,
-        location: [city, state].filter(Boolean).join(", "),
+        searchUrls: [searchUrl],
         maxItems: fields.maxItems ?? 30,
         proxyConfiguration: { useApifyProxy: true },
       };

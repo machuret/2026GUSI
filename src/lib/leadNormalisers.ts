@@ -41,19 +41,20 @@ function normaliseDoctolib(item: Record<string, unknown>): NormalisedLead {
 }
 
 function normaliseWebMD(item: Record<string, unknown>): NormalisedLead {
-  // easyapi/webmd-doctor-scraper can return nested or flat structures
-  const nameObj = item.name as Record<string, string> | undefined;
-  const locationObj = item.location as Record<string, string> | undefined;
-  const addressObj = item.address as Record<string, string> | undefined;
-  const urlsObj = item.urls as Record<string, string> | undefined;
-  const practiceObj = item.practice as Record<string, string> | undefined;
+  // Actual output schema from easyapi/webmd-doctor-scraper:
+  // name: { first, middle, last, full, suffix }
+  // location: { name, address, city, state, zipcode, ... }
+  // urls: { profile, appointment, website }
+  // ratings: { averageRating, reviewCount }
+  // specialties: string[]
+  // gender: "M" | "F"
+  const nameObj     = (typeof item.name === "object" && item.name !== null) ? item.name as Record<string, string> : undefined;
+  const locationObj = (typeof item.location === "object" && item.location !== null) ? item.location as Record<string, unknown> : undefined;
+  const urlsObj     = (typeof item.urls === "object" && item.urls !== null) ? item.urls as Record<string, string> : undefined;
+  const ratingsObj  = (typeof item.ratings === "object" && item.ratings !== null) ? item.ratings as Record<string, unknown> : undefined;
 
-  // Name — try nested object first, then flat fields
-  const fullName = nameObj?.full
-    ?? (item.fullName as string)
-    ?? (item.name as string)
-    ?? [item.firstName, item.lastName].filter(Boolean).join(" ")
-    ?? "";
+  // Name
+  const fullName  = nameObj?.full  ?? (item.fullName as string) ?? [item.firstName, item.lastName].filter(Boolean).join(" ") ?? "";
   const firstName = nameObj?.first ?? (item.firstName as string) ?? "";
   const lastName  = nameObj?.last  ?? (item.lastName  as string) ?? "";
 
@@ -62,22 +63,33 @@ function normaliseWebMD(item: Record<string, unknown>): NormalisedLead {
     ? item.specialties as string[]
     : typeof item.specialty === "string" ? [item.specialty] : [];
 
-  // Company / practice name
-  const company = practiceObj?.name
-    ?? locationObj?.name
+  // Practice / company name comes from location.name
+  const company = (locationObj?.name as string)
     ?? (item.practiceName as string)
     ?? (item.hospital as string)
     ?? (item.company as string)
     ?? "";
 
-  // Location
-  const city  = locationObj?.city  ?? addressObj?.city  ?? (item.city  as string) ?? "";
-  const state = locationObj?.state ?? addressObj?.state ?? (item.state as string) ?? "";
-  const addr  = locationObj?.address ?? addressObj?.street ?? (item.address as string) ?? "";
-  const rawLocation = [addr, city, state].filter(Boolean).join(", ");
+  // Location fields
+  const city    = (locationObj?.city  as string) ?? (item.city  as string) ?? "";
+  const state   = (locationObj?.state as string) ?? (item.state as string) ?? "";
+  const addr    = (locationObj?.address as string) ?? (item.address as string) ?? "";
+  const zipcode = (locationObj?.zipcode as string) ?? "";
+  const rawLocation = [addr, city, state, zipcode].filter(Boolean).join(", ");
 
-  // Email — some actors return it, most don't
+  // Rating
+  const rating = typeof ratingsObj?.averageRating === "number" ? ratingsObj.averageRating as number : null;
+
+  // Email
   const email = (item.email as string) ?? (item.emailAddress as string) ?? "";
+
+  // Gender — actor returns "M" or "F", expand to readable
+  const genderRaw = (item.gender as string) ?? "";
+  const gender = genderRaw === "M" ? "Male" : genderRaw === "F" ? "Female" : genderRaw;
+
+  // Notes — strip HTML tags from bio
+  const bioRaw = (item.bio as string) ?? "";
+  const notes = bioRaw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 500) || undefined;
 
   return {
     source: "webmd",
@@ -85,7 +97,7 @@ function normaliseWebMD(item: Record<string, unknown>): NormalisedLead {
     firstName,
     lastName,
     email,
-    gender: (item.gender ?? "") as string,
+    gender,
     jobTitle: specialties[0] ?? (item.jobTitle as string) ?? "",
     specialties,
     company,
@@ -95,6 +107,8 @@ function normaliseWebMD(item: Record<string, unknown>): NormalisedLead {
     country: "United States",
     profileUrl: urlsObj?.profile ?? (item.profileUrl as string) ?? (item.url as string) ?? "",
     website: urlsObj?.website ?? (item.website as string) ?? "",
+    rating,
+    notes,
     rawData: item,
   };
 }
