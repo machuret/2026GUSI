@@ -71,6 +71,7 @@ export interface BuildPromptOptions {
   promptTemplate: PromptTemplate | null;
   lessons: Lesson[];
   vaultDocs?: VaultDoc[];
+  faqBlock?: string;
   brief?: ContentBriefOptions;
 }
 
@@ -119,6 +120,7 @@ export function buildSystemPrompt({
   promptTemplate,
   lessons,
   vaultDocs,
+  faqBlock,
   brief,
 }: BuildPromptOptions): string {
   const toneIndex = brief?.tone ?? 2;
@@ -239,8 +241,13 @@ ${styleProfile.summary ? `- Summary: ${styleProfile.summary}` : ""}`
 
   const industry = companyIndustry ? ` (${companyIndustry})` : "";
 
+  // 10b. FAQ block (from chatbot FAQ database)
+  const faqSection = faqBlock
+    ? `\n\n${faqBlock}`
+    : "";
+
   return `You are the content writer for ${companyName}${industry}. You are writing a ${categoryLabel}.
-${dnaBlock}${identityBlock}${styleBlock}${examplesBlock}${rulesBlock}${platformBlock}${customBlock}${vaultBlock}${lessonsBlock}${briefBlock}
+${dnaBlock}${identityBlock}${styleBlock}${examplesBlock}${rulesBlock}${platformBlock}${customBlock}${vaultBlock}${faqSection}${lessonsBlock}${briefBlock}
 
 OUTPUT RULES:
 1. Follow the Writing DNA above as your primary instruction — it defines the voice, tone, structure, and vocabulary you must use.

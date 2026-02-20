@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity";
 import { logAiUsage } from "@/lib/aiUsage";
 import { findContentById, updateContent, createContent } from "@/lib/content";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { loadAIContext } from "@/lib/aiContext";
 import { z } from "zod";
 
 const reviseSchema = z.object({
@@ -29,12 +30,13 @@ export async function POST(req: NextRequest) {
 
     const { record: original, category, categoryLabel } = found;
 
-    // Fetch lessons and style profile in parallel
-    const [{ data: lessonsData }, { data: styleProfile }] = await Promise.all([
+    // Fetch lessons, style profile, and AI context in parallel
+    const [{ data: lessonsData }, { data: styleProfile }, aiCtx] = await Promise.all([
       db.from("Lesson").select("*").eq("companyId", original.companyId).eq("active", true)
         .or(`contentType.eq.${category},contentType.is.null`)
         .order("createdAt", { ascending: false }).limit(20),
       db.from("StyleProfile").select("*").eq("companyId", original.companyId).maybeSingle(),
+      loadAIContext({ companyId: original.companyId }),
     ]);
 
     const lessonsList = lessonsData ?? [];
@@ -58,9 +60,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Cannot revise: no rejection feedback found on this content" }, { status: 400 });
     }
 
-    const company = original.company as { name: string } | null;
-    const systemPrompt = `You are revising ${categoryLabel} content for ${company?.name ?? "this company"}. The previous version was REJECTED with specific feedback. You must fix ALL issues mentioned in the feedback while maintaining the company's voice.
-${styleProfile ? `\nStyle: ${styleProfile.tone}. Vocabulary: ${Array.isArray(styleProfile.vocabulary) ? styleProfile.vocabulary.join(", ") : ""}` : ""}
+    const systemPrompt = `You are revising ${categoryLabel} content for ${aiCtx.company.companyName}. The previous version was REJECTED with specific feedback. You must fix ALL issues mentioned in the feedback while maintaining the company's voice.
+
+${aiCtx.fullBlock}
+${styleProfile ? `\nSTYLE: ${styleProfile.tone}. Vocabulary: ${Array.isArray(styleProfile.vocabulary) ? styleProfile.vocabulary.join(", ") : ""}` : ""}
 ${lessonsContext}
 
 REJECTION FEEDBACK ON PREVIOUS VERSION:
@@ -72,8 +75,9 @@ ${original.output}
 IMPORTANT:
 1. Address EVERY point in the feedback
 2. Apply ALL lessons learned
-3. Keep the same general topic and intent as the original prompt
-4. Output ONLY the revised content — no commentary`;
+3. Use company info and vault knowledge to ensure factual accuracy
+4. Keep the same general topic and intent as the original prompt
+5. Output ONLY the revised content — no commentary`;
 
     const aiResult = await callOpenAIWithUsage({
       systemPrompt,

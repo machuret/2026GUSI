@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { logAiUsage } from "@/lib/aiUsage";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
+import { loadAIContext } from "@/lib/aiContext";
+import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
 
 const generateSchema = z.object({
@@ -21,9 +23,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const { response: authError } = await requireAuth();
     if (authError) return authError;
 
-    const [{ data: author }, { data: style }] = await Promise.all([
+    const [{ data: author }, { data: style }, aiCtx] = await Promise.all([
       db.from("Author").select("name, bio").eq("id", params.id).maybeSingle(),
       db.from("AuthorStyleProfile").select("*").eq("authorId", params.id).maybeSingle(),
+      loadAIContext({ companyId: DEMO_COMPANY_ID }),
     ]);
 
     if (!author) return NextResponse.json({ error: "Author not found" }, { status: 404 });
@@ -59,8 +62,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const systemPrompt = `${style.systemPrompt}
 ${examplesBlock}
 
+${aiCtx.fullBlock}
+
 GENERATION RULES:
 - Write EXACTLY like ${author.name} — same rhythm, vocabulary, sentence patterns, quirks
+- Use the company information and vault knowledge above to ensure factual accuracy
 - Content type: ${data.contentType}${data.platform !== "website" ? ` for ${data.platform}` : ""}
 - Target length: ~${data.targetWords} words
 - Output ONLY the finished content — no meta-commentary, no "here is your content"`;
