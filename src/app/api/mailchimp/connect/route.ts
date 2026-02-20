@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
@@ -67,3 +68,4 @@ export async function DELETE() {
 
   return NextResponse.json({ success: true });
 }
+

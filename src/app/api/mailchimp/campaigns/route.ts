@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
@@ -17,3 +18,4 @@ export async function GET() {
 
   return NextResponse.json({ campaigns: data ?? [] });
 }
+
