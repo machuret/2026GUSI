@@ -78,7 +78,7 @@ export default function ChatbotSettingsPage({ params }: { params: { id: string }
     } finally { setSaving(false); }
   };
 
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://your-app.vercel.app";
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://theaibrain.info";
 
   const scriptSnippet = `<!-- Paste before </body> in WordPress -->
 <script>
