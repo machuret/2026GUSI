@@ -24,6 +24,7 @@ import {
   Languages,
   Mic2,
   UserCheck,
+  BotMessageSquare,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasRole } from "@/lib/auth";
@@ -55,6 +56,7 @@ const settingsNav = [
   { href: "/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/prompts", label: "Prompt Management", icon: FileText },
   { href: "/lessons", label: "Lessons", icon: BookOpen },
+  { href: "/chatbots", label: "Chatbots", icon: BotMessageSquare },
   { href: "/activity", label: "Activity Log", icon: Activity },
   { href: "/admin", label: "User Management", icon: Shield },
 ];
