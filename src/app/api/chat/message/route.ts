@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { callOpenAI, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { getVaultContext, getLessonsContext } from "@/lib/aiContext";
 import { z } from "zod";
 
 const schema = z.object({
@@ -185,12 +186,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Parallel: KB articles + FAQ matches + bot rules
+    // Parallel: KB articles + FAQ matches + bot rules + vault + lessons
     const resolvedIntent = intent ?? "general";
-    const [knowledgeContext, faqContext, rulesContext] = await Promise.all([
+    const [knowledgeContext, faqContext, rulesContext, vault, lessons] = await Promise.all([
       searchKnowledge(data.botId, data.message, resolvedIntent),
       searchFAQs(data.botId, data.message, resolvedIntent),
       fetchRules(data.botId),
+      getVaultContext(DEMO_COMPANY_ID),
+      getLessonsContext({ companyId: DEMO_COMPANY_ID }),
     ]);
 
     // Language instruction — always respond in the visitor's detected language
@@ -205,6 +208,7 @@ export async function POST(req: NextRequest) {
       companyContext
         ? `\n## COMPANY INFORMATION\n${companyContext}`
         : "",
+      lessons.block || "",
       rulesContext
         ? `\n## RULES (follow these strictly, in priority order)\n${rulesContext}`
         : "",
@@ -214,8 +218,11 @@ export async function POST(req: NextRequest) {
       knowledgeContext
         ? `\n## KNOWLEDGE BASE ARTICLES (use for detailed answers)\n${knowledgeContext}`
         : "",
+      vault.block
+        ? `\n## DOCUMENT VAULT (reference material — use facts and details from here)\n${vault.block}`
+        : "",
       `\n## CONTEXT\nCurrent conversation intent: ${resolvedIntent}`,
-      `\n## GUIDELINES\n- Be concise, warm, and professional\n- Use company info and knowledge base to answer accurately\n- Prefer FAQ answers verbatim when they match the question\n- If you don't know something, say so honestly — never fabricate\n- If the visitor needs help you cannot provide, offer to escalate to the team\n- Do NOT ask for contact details — the system handles that separately`,
+      `\n## GUIDELINES\n- Be concise, warm, and professional\n- Use company info, vault docs, and knowledge base to answer accurately\n- Prefer FAQ answers verbatim when they match the question\n- If you don't know something, say so honestly — never fabricate\n- If the visitor needs help you cannot provide, offer to escalate to the team\n- Do NOT ask for contact details — the system handles that separately`,
     ].filter(Boolean).join("\n");
 
     // Build messages array for OpenAI
