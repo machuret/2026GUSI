@@ -48,6 +48,30 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   var isOpen = false;
   var isLoading = false;
 
+  // ── Language detection ───────────────────────────────────────────────────────
+  var browserLang = (navigator.language || navigator.userLanguage || "en").toLowerCase();
+  var isSpanish = browserLang.startsWith("es");
+  var LANG = isSpanish ? "es" : "en";
+
+  var T = {
+    typing:          isSpanish ? "Escribiendo…"                                         : "Typing…",
+    errorGeneric:    isSpanish ? "Lo sentimos, algo salió mal. Inténtalo de nuevo."     : "Sorry, something went wrong. Please try again.",
+    errorConn:       isSpanish ? "Error de conexión. Inténtalo de nuevo."               : "Connection error. Please try again.",
+    errorSession:    isSpanish ? "¡Hola! ¿En qué puedo ayudarte hoy?"                  : "Hi! How can I help you today?",
+    leadPrompt:      isSpanish ? "✉️ ¡Déjanos tus datos y te contactaremos!"            : "✉️ Leave your details and we'll follow up!",
+    leadName:        isSpanish ? "Tu nombre"                                            : "Your name",
+    leadEmail:       isSpanish ? "Correo electrónico *"                                 : "Email address *",
+    leadPhone:       isSpanish ? "Teléfono (opcional)"                                  : "Phone number (optional)",
+    leadCompany:     isSpanish ? "Empresa (opcional)"                                   : "Company (optional)",
+    leadSubmit:      isSpanish ? "Enviar mis datos"                                     : "Send my details",
+    leadSkip:        isSpanish ? "Omitir por ahora"                                     : "Skip for now",
+    leadNeedEmail:   isSpanish ? "Por favor ingresa tu correo para que podamos contactarte." : "Please enter your email so we can follow up!",
+    leadThanks:      isSpanish ? "¡Gracias{name}! Te contactaremos a {email}. ¿Puedo ayudarte en algo más?" : "Thanks{name}! We'll be in touch at {email}. Is there anything else I can help with?",
+    leadSkipped:     isSpanish ? "¡Sin problema! Puedes seguir chateando."              : "No problem! Feel free to keep chatting.",
+    placeholder:     isSpanish ? "Escribe un mensaje…"                                  : "Type a message…",
+    close:           isSpanish ? "Cerrar"                                               : "Close",
+  };
+
   // ── Styles ──────────────────────────────────────────────────────────────────
   var style = document.createElement("style");
   style.textContent = \`
@@ -125,20 +149,20 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   win.innerHTML = \`
     <div id="gusi-chat-header">
       <span>\${EMOJI} \${TITLE}</span>
-      <button id="gusi-chat-close" title="Close">×</button>
+      <button id="gusi-chat-close" title="\${T.close}">×</button>
     </div>
     <div id="gusi-chat-messages"></div>
     <div id="gusi-lead-form" style="display:none">
-      <p>✉️ Leave your details and we'll follow up!</p>
-      <input id="gusi-lead-name" placeholder="Your name" />
-      <input id="gusi-lead-email" type="email" placeholder="Email address *" />
-      <input id="gusi-lead-phone" placeholder="Phone number (optional)" />
-      <input id="gusi-lead-company" placeholder="Company (optional)" />
-      <button id="gusi-lead-submit">Send my details</button>
-      <button id="gusi-lead-skip">Skip for now</button>
+      <p>\${T.leadPrompt}</p>
+      <input id="gusi-lead-name" placeholder="\${T.leadName}" />
+      <input id="gusi-lead-email" type="email" placeholder="\${T.leadEmail}" />
+      <input id="gusi-lead-phone" placeholder="\${T.leadPhone}" />
+      <input id="gusi-lead-company" placeholder="\${T.leadCompany}" />
+      <button id="gusi-lead-submit">\${T.leadSubmit}</button>
+      <button id="gusi-lead-skip">\${T.leadSkip}</button>
     </div>
     <div id="gusi-chat-input-row">
-      <input id="gusi-chat-input" placeholder="Type a message…" />
+      <input id="gusi-chat-input" placeholder="\${T.placeholder}" />
       <button id="gusi-chat-send">➤</button>
     </div>
   \`;
@@ -173,7 +197,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       var res = await fetch(ORIGIN + "/api/chat/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ botId: BOT_ID, visitorId: visitorId }),
+        body: JSON.stringify({ botId: BOT_ID, visitorId: visitorId, lang: LANG }),
       });
       var data = await res.json();
       sessionId = data.sessionId;
@@ -187,7 +211,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         });
       }
     } catch(e) {
-      addMessage("bot", "Hi! How can I help you today?");
+      addMessage("bot", T.errorSession);
     }
   }
 
@@ -199,19 +223,19 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     document.getElementById("gusi-chat-input").value = "";
 
     addMessage("user", text);
-    var typingDiv = addMessage("bot typing", "Typing…");
+    var typingDiv = addMessage("bot typing", T.typing);
 
     try {
       var res = await fetch(ORIGIN + "/api/chat/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ botId: BOT_ID, sessionId: sessionId, message: text }),
+        body: JSON.stringify({ botId: BOT_ID, sessionId: sessionId, message: text, lang: LANG }),
       });
       var data = await res.json();
       typingDiv.remove();
 
       if (data.error) {
-        addMessage("bot", "Sorry, something went wrong. Please try again.");
+        addMessage("bot", T.errorGeneric);
       } else {
         addMessage("bot", data.reply);
         messageCount = data.messageCount || messageCount + 1;
@@ -219,7 +243,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       }
     } catch(e) {
       typingDiv.remove();
-      addMessage("bot", "Connection error. Please try again.");
+      addMessage("bot", T.errorConn);
     }
 
     isLoading = false;
@@ -233,7 +257,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     localStorage.setItem("gusi_lead_" + BOT_ID, "1");
 
     if (skip) {
-      addMessage("bot", "No problem! Feel free to keep chatting.");
+      addMessage("bot", T.leadSkipped);
       return;
     }
 
@@ -242,17 +266,26 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     var phone   = document.getElementById("gusi-lead-phone").value.trim();
     var company = document.getElementById("gusi-lead-company").value.trim();
 
-    if (!email) { addMessage("bot", "Please enter your email so we can follow up!"); showLeadForm(); leadCaptured = false; localStorage.removeItem("gusi_lead_" + BOT_ID); return; }
+    if (!email) {
+      addMessage("bot", T.leadNeedEmail);
+      showLeadForm();
+      leadCaptured = false;
+      localStorage.removeItem("gusi_lead_" + BOT_ID);
+      return;
+    }
 
     try {
       await fetch(ORIGIN + "/api/chat/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ botId: BOT_ID, sessionId: sessionId, message: "[Lead captured]", leadName: name, leadEmail: email, leadPhone: phone, leadCompany: company }),
+        body: JSON.stringify({ botId: BOT_ID, sessionId: sessionId, message: "[Lead captured]", lang: LANG, leadName: name, leadEmail: email, leadPhone: phone, leadCompany: company }),
       });
-      addMessage("bot", "Thanks" + (name ? ", " + name : "") + "! We'll be in touch at " + email + ". Is there anything else I can help with?");
+      var thanks = T.leadThanks
+        .replace("{name}", name ? ", " + name : "")
+        .replace("{email}", email);
+      addMessage("bot", thanks);
     } catch(e) {
-      addMessage("bot", "Thanks! We'll be in touch soon.");
+      addMessage("bot", isSpanish ? "¡Gracias! Nos pondremos en contacto pronto." : "Thanks! We'll be in touch soon.");
     }
   }
 

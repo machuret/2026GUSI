@@ -10,6 +10,7 @@ const schema = z.object({
   botId:     z.string().min(1),
   sessionId: z.string().min(1),
   message:   z.string().min(1).max(2000),
+  lang:      z.enum(["es", "en"]).optional(), // browser-detected language
   // Lead capture fields (optional — sent when visitor submits contact form)
   leadName:  z.string().optional(),
   leadEmail: z.string().email().optional(),
@@ -192,9 +193,15 @@ export async function POST(req: NextRequest) {
       fetchRules(data.botId),
     ]);
 
+    // Language instruction — always respond in the visitor's detected language
+    const langInstruction = data.lang === "es"
+      ? "\n## LANGUAGE\nThe visitor's browser is set to Spanish. You MUST respond entirely in Spanish (español) for every message, regardless of the language the visitor writes in."
+      : "\n## LANGUAGE\nRespond in English unless the visitor writes in another language, in which case match their language.";
+
     // Build system prompt — modular sections, each clearly labelled
     const systemPrompt = [
       bot.systemPrompt,
+      langInstruction,
       companyContext
         ? `\n## COMPANY INFORMATION\n${companyContext}`
         : "",

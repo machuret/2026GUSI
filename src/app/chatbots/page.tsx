@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, MessageSquare, Users, Copy, Check, Settings, BookOpen, Loader2, Bot, ToggleLeft, ToggleRight } from "lucide-react";
+import { Plus, MessageSquare, Users, Copy, Check, Settings, BookOpen, Loader2, Bot, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 interface ChatBot {
@@ -66,6 +66,17 @@ export default function ChatbotsPage() {
       }
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleDelete = async (bot: ChatBot) => {
+    if (!confirm(`Delete "${bot.name}" permanently? This cannot be undone.`)) return;
+    setBots((prev) => prev.filter((b) => b.id !== bot.id));
+    try {
+      const res = await fetch(`/api/chatbots/${bot.id}`, { method: "DELETE" });
+      if (!res.ok) fetchBots(); // revert on failure
+    } catch {
+      fetchBots();
     }
   };
 
@@ -182,6 +193,9 @@ export default function ChatbotsPage() {
                 <div className="flex items-center gap-2">
                   <button onClick={() => toggleActive(bot)} title={bot.active ? "Deactivate" : "Activate"} className="text-gray-400 hover:text-brand-600">
                     {bot.active ? <ToggleRight className="h-6 w-6 text-green-500" /> : <ToggleLeft className="h-6 w-6" />}
+                  </button>
+                  <button onClick={() => handleDelete(bot)} title="Delete chatbot" className="text-gray-300 hover:text-red-500 transition-colors">
+                    <Trash2 className="h-4 w-4" />
                   </button>
                   <Link href={`/chatbots/${bot.id}/knowledge`} className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
                     <BookOpen className="h-3.5 w-3.5" /> Train
