@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   ExternalLink, Trash2, ChevronDown, ChevronUp,
-  FileText, Loader2, Save, Sparkles, FlaskConical, PenLine,
+  FileText, Loader2, Save, Sparkles, FlaskConical, PenLine, KanbanSquare,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import type { Grant } from "@/hooks/useGrants";
@@ -29,9 +29,11 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [analysing, setAnalysing] = useState(false);
   const [researching, setResearching] = useState(false);
+  const [sendingToCrm, setSendingToCrm] = useState(false);
   const [analysis, setAnalysis] = useState<GrantAnalysis | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [researchMsg, setResearchMsg] = useState<string | null>(null);
+  const inCrm = !!grant.crmStatus;
   const set = (k: keyof Grant, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
 
   const save = async () => {
@@ -45,6 +47,12 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA }: Props) {
     setDeleting(true);
     try { await onDelete(grant.id); }
     finally { setDeleting(false); }
+  };
+
+  const sendToCrm = async () => {
+    setSendingToCrm(true);
+    try { await onUpdate(grant.id, { crmStatus: "Researching" }); }
+    finally { setSendingToCrm(false); }
   };
 
   const handleAnalyse = async () => {
@@ -140,6 +148,15 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA }: Props) {
             <Link href={`/grants/builder?grantId=${grant.id}`} title="Write Application" className="text-emerald-400 hover:text-emerald-600">
               <PenLine className="h-4 w-4" />
             </Link>
+            {inCrm ? (
+              <Link href="/grants/crm" title="View in CRM" className="text-indigo-400 hover:text-indigo-600">
+                <KanbanSquare className="h-4 w-4" />
+              </Link>
+            ) : (
+              <button onClick={sendToCrm} disabled={sendingToCrm} title="Send to CRM" className="text-indigo-300 hover:text-indigo-500 disabled:opacity-40">
+                {sendingToCrm ? <Loader2 className="h-4 w-4 animate-spin" /> : <KanbanSquare className="h-4 w-4" />}
+              </button>
+            )}
             <button onClick={del} disabled={deleting} title="Delete" className="text-gray-300 hover:text-red-500 disabled:opacity-40">
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             </button>

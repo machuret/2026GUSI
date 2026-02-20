@@ -18,6 +18,8 @@ const updateSchema = z.object({
   submissionEffort: z.enum(["Low", "Medium", "High"]).optional().nullable(),
   decision: z.enum(["Apply", "Maybe", "No"]).optional().nullable(),
   notes: z.string().optional().nullable(),
+  crmStatus: z.enum(["Researching", "Pipeline", "Active", "Submitted", "Won", "Lost"]).optional().nullable(),
+  crmNotes: z.string().optional().nullable(),
 });
 
 // PATCH /api/grants/[id]

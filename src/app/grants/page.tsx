@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useState } from "react";
-import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck } from "lucide-react";
+import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare } from "lucide-react";
 import Link from "next/link";
 import { useGrants } from "@/hooks/useGrants";
 import { exportToCsv } from "@/lib/exportCsv";
@@ -152,6 +152,9 @@ export default function GrantsPage() {
       <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
         <Link href="/grants/profile" className="flex items-center gap-2 rounded-lg border border-brand-300 bg-white px-4 py-2 text-sm font-medium text-brand-700 hover:bg-brand-100">
           <UserCheck className="h-4 w-4" /> Grant Profile
+        </Link>
+        <Link href="/grants/crm" className="flex items-center gap-2 rounded-lg border border-indigo-300 bg-white px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50">
+          <KanbanSquare className="h-4 w-4" /> Grants CRM
         </Link>
         <button
           onClick={handleRank}
