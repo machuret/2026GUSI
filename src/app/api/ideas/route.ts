@@ -6,6 +6,7 @@ import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { logAiUsage } from "@/lib/aiUsage";
 import { logActivity } from "@/lib/activity";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { loadAIContext } from "@/lib/aiContext";
 import { z } from "zod";
 
 const CONTENT_TYPES = ["newsletter", "social_media", "blog_post"] as const;
@@ -80,7 +81,9 @@ export async function POST(req: NextRequest) {
       blog_post:    "Blog Post",
     };
 
-    const systemPrompt = `You are a creative content strategist. Generate fresh, specific, actionable content ideas.
+    const { fullBlock } = await loadAIContext({ companyId: DEMO_COMPANY_ID, includeFAQ: false });
+
+    const systemPrompt = `You are a creative content strategist for a specific company. Generate fresh, specific, actionable content ideas tailored to this company's industry, products, and voice.
 Return a JSON object with a single key "ideas" containing an array of idea objects. No markdown, no explanation.
 Each idea object must have exactly these fields:
 - "title": string — a compelling, specific headline (max 80 chars)
@@ -89,9 +92,12 @@ Each idea object must have exactly these fields:
 - "category": one of ${JSON.stringify(parsed.categories)}
 
 Rules:
+- Ground ideas in the company's actual products, services, values, and industry — not generic advice
 - Be specific, not generic. "5 Ways to Reduce Churn Using Onboarding Emails" beats "Email Tips"
 - Vary the angle: some educational, some story-driven, some data-backed
-- Each idea must be immediately actionable — someone should be able to write it today`;
+- Each idea must be immediately actionable — someone should be able to write it today
+
+${fullBlock}`;
 
     const userPrompt = `Generate ${parsed.count} content ideas.
 Content types to cover: ${parsed.contentTypes.map((t) => contentTypeLabels[t]).join(", ")}
