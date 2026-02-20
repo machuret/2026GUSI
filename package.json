@@ -18,6 +18,7 @@
     "@supabase/supabase-js": "^2.96.0",
     "@types/pdf-parse": "^1.1.5",
     "axios": "^1.7.9",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.469.0",
     "mammoth": "^1.11.0",
     "next": "14.2.22",

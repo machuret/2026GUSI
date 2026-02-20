@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import JSZip from "jszip";
 import {
   ChevronDown, ChevronUp, Copy, Check, ThumbsUp, Archive,
-  Trash2, Pencil, Save, Loader2, X, RefreshCw, MessageSquare, Search,
+  Trash2, Pencil, Save, Loader2, X, RefreshCw, MessageSquare, Search, Download,
 } from "lucide-react";
 import type { Translation, TranslationStatus } from "./types";
-import { CONTENT_CATEGORIES, LANG_COLORS, STATUS_STYLES } from "./types";
+import { LANG_COLORS, STATUS_STYLES } from "./types";
 
 function LangBadge({ lang }: { lang: string }) {
   const key = Object.keys(LANG_COLORS).find((k) => lang.startsWith(k));
@@ -43,6 +44,8 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [downloading, setDownloading] = useState(false);
 
   const usedLangs = useMemo(() => Array.from(new Set(translations.map((t) => t.language))).sort(), [translations]);
   const usedCats = useMemo(() => Array.from(new Set(translations.map((t) => t.category))).sort(), [translations]);
@@ -58,6 +61,48 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
   const clearFilters = () => {
     setFilterStatus("all"); setFilterLang("all"); setFilterCat("all");
     setSearch(""); setDateFrom(""); setDateTo(""); setSort("newest");
+  };
+
+  // toggleSelectAll is defined after `filtered` as handleToggleSelectAll
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => { const next = new Set(Array.from(prev)); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  };
+
+  const handleBulkDownload = async () => {
+    const toDownload = filtered.filter((t) => selected.has(t.id));
+    if (toDownload.length === 0) return;
+    setDownloading(true);
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder("translations")!;
+      toDownload.forEach((t) => {
+        const safeName = t.title.replace(/[^a-z0-9_\-\s]/gi, "_").trim() || t.id;
+        const content = [
+          `Title: ${t.title}`,
+          `Language: ${t.language}`,
+          `Category: ${t.category}`,
+          `Status: ${t.status}`,
+          `Date: ${new Date(t.publishedAt).toLocaleDateString("en-AU")}`,
+          "",
+          "=== TRANSLATION ===",
+          "",
+          t.translatedText,
+          ...(t.originalText ? ["", "=== ORIGINAL ===", "", t.originalText] : []),
+          ...(t.feedback ? ["", "=== FEEDBACK ===", "", t.feedback] : []),
+        ].join("\n");
+        folder.file(`${safeName}_${t.language.replace(/\s+/g, "_")}.txt`, content);
+      });
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `translations_${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const filtered = useMemo(() => {
@@ -79,6 +124,18 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
     if (sort === "oldest") result = [...result].reverse();
     return result;
   }, [translations, filterStatus, filterLang, filterCat, search, dateFrom, dateTo, sort]);
+
+  const allFilteredIds = filtered.map((t) => t.id);
+  const allSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selected.has(id));
+  const someSelected = allFilteredIds.some((id) => selected.has(id));
+
+  const handleToggleSelectAll = () => {
+    if (allSelected) {
+      setSelected((prev) => { const next = new Set(Array.from(prev)); allFilteredIds.forEach((id) => next.delete(id)); return next; });
+    } else {
+      setSelected(new Set(Array.from(selected).concat(allFilteredIds)));
+    }
+  };
 
   const handleCopy = (t: Translation) => {
     navigator.clipboard.writeText(t.translatedText);
@@ -137,6 +194,19 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
         ))}
       </div>
 
+      {/* Bulk action bar */}
+      {someSelected && (
+        <div className="mb-3 flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5">
+          <span className="text-sm font-semibold text-brand-700">{selected.size} selected</span>
+          <button onClick={handleBulkDownload} disabled={downloading}
+            className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+            {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            {downloading ? "Zipping…" : `Download ${selected.size} as ZIP`}
+          </button>
+          <button onClick={() => setSelected(new Set())} className="ml-auto text-xs text-brand-600 hover:underline">Clear selection</button>
+        </div>
+      )}
+
       {/* Search + filters */}
       <div className="mb-4 space-y-2">
         {/* Search bar */}
@@ -187,7 +257,15 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
               <X className="h-3 w-3" /> Clear all
             </button>
           )}
-          <span className="ml-auto text-xs text-gray-500">{filtered.length} of {translations.length}</span>
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-xs text-gray-500">{filtered.length} of {translations.length}</span>
+            {filtered.length > 0 && (
+              <button onClick={handleToggleSelectAll}
+                className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline">
+                {allSelected ? "Deselect all" : "Select all"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -205,11 +283,19 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
             const isEditing = editingId === t.id;
             const isRechecking = recheckId === t.id;
             const isUpdating = updatingId === t.id;
+            const isSelected = selected.has(t.id);
 
             return (
-              <div key={t.id} className={`rounded-xl border bg-white overflow-hidden shadow-sm transition-colors ${t.status === "approved" ? "border-green-200" : t.status === "archived" ? "border-amber-200" : "border-gray-300"}`}>
+              <div key={t.id} className={`rounded-xl border bg-white overflow-hidden shadow-sm transition-colors ${
+                isSelected ? "border-brand-300 ring-1 ring-brand-200" :
+                t.status === "approved" ? "border-green-200" :
+                t.status === "archived" ? "border-amber-200" : "border-gray-300"
+              }`}>
                 {/* Row header */}
                 <div className="flex items-center gap-3 px-4 py-3">
+                  {/* Checkbox */}
+                  <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(t.id)}
+                    className="h-4 w-4 rounded border-gray-300 accent-brand-600 cursor-pointer flex-shrink-0" />
                   <button onClick={() => setExpandedId(isExpanded ? null : t.id)} className="flex min-w-0 flex-1 items-start gap-3 text-left">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
