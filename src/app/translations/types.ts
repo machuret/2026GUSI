@@ -60,10 +60,18 @@ export const LANG_DEFAULT_RULES: Record<string, string> = {
 };
 
 export const RULES_KEY = "translation_rules_v2";
+export const CUSTOM_CATEGORIES_KEY = "translation_custom_categories_v1";
 
 export function loadAllRules(): Record<string, string> {
   try { const r = localStorage.getItem(RULES_KEY); return r ? JSON.parse(r) : {}; } catch { return {}; }
 }
 export function saveAllRules(r: Record<string, string>) {
   localStorage.setItem(RULES_KEY, JSON.stringify(r));
+}
+
+export function loadCustomCategories(): string[] {
+  try { const r = localStorage.getItem(CUSTOM_CATEGORIES_KEY); return r ? JSON.parse(r) : []; } catch { return []; }
+}
+export function saveCustomCategories(cats: string[]) {
+  localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(cats));
 }
