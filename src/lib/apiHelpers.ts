@@ -1,19 +1,37 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { ZodError } from "zod";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 import { logger } from "@/lib/logger";
 import { db } from "@/lib/db";
 import { hasRole } from "@/lib/auth";
 
 /**
+ * Reads the Bearer token from the Authorization header (via next/headers),
+ * or falls back to cookie-based Supabase session.
+ */
+function getSupabaseClient() {
+  const token = headers().get("authorization")?.replace("Bearer ", "").trim() ?? null;
+  if (token) {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    );
+    return { supabase, token };
+  }
+  return { supabase: createServerSupabase(), token: null };
+}
+
+/**
  * Verify the request has a valid Supabase session.
- * Returns the auth user or a 401 NextResponse.
+ * Accepts Bearer token in Authorization header OR cookie-based session.
  */
 export async function requireAuth() {
-  const supabase = createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, token } = getSupabaseClient();
+  const { data: { user } } = token
+    ? await supabase.auth.getUser(token)
+    : await supabase.auth.getUser();
   if (!user) return { user: null, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   return { user, response: null };
 }
@@ -23,8 +41,10 @@ export async function requireAuth() {
  * Use on Settings routes: company, vault, templates, prompts, lessons.
  */
 export async function requireAdminAuth() {
-  const supabase = createServerSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase, token } = getSupabaseClient();
+  const { data: { user } } = token
+    ? await supabase.auth.getUser(token)
+    : await supabase.auth.getUser();
   if (!user) return { user: null, appUser: null, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
 
   const { data: appUser } = await db.from("User").select("id, role, active").eq("authId", user.id).maybeSingle();
@@ -39,8 +59,10 @@ export async function requireAdminAuth() {
  * Use on User Management routes.
  */
 export async function requireSuperAdminAuth() {
-  const supabase = createServerSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase, token } = getSupabaseClient();
+  const { data: { user } } = token
+    ? await supabase.auth.getUser(token)
+    : await supabase.auth.getUser();
   if (!user) return { user: null, appUser: null, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
 
   const { data: appUser } = await db.from("User").select("id, role, active").eq("authId", user.id).maybeSingle();
