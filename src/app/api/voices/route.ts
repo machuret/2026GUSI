@@ -18,12 +18,27 @@ export async function GET() {
 
     const { data: authors, error } = await db
       .from("Author")
-      .select("*, AuthorStyleProfile(tone, summary, updatedAt, tokenCount)")
+      .select("*")
       .eq("companyId", DEMO_COMPANY_ID)
       .order("createdAt", { ascending: false });
 
     if (error) throw error;
-    return NextResponse.json({ authors: authors ?? [] });
+    if (!authors || authors.length === 0) return NextResponse.json({ authors: [] });
+
+    // Fetch style profiles separately — avoids FK join issues in Supabase schema cache
+    const authorIds = authors.map((a) => a.id);
+    const { data: profiles } = await db
+      .from("AuthorStyleProfile")
+      .select("authorId, tone, summary, updatedAt, tokenCount")
+      .in("authorId", authorIds);
+
+    const profileMap = new Map((profiles ?? []).map((p) => [p.authorId, p]));
+    const enriched = authors.map((a) => ({
+      ...a,
+      AuthorStyleProfile: profileMap.has(a.id) ? [profileMap.get(a.id)] : [],
+    }));
+
+    return NextResponse.json({ authors: enriched });
   } catch (err) {
     return handleApiError(err, "Voices GET");
   }
