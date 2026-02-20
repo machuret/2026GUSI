@@ -34,7 +34,7 @@ export function TranslateTab({
   const [newCatInput, setNewCatInput] = useState("");
   const newCatRef = useRef<HTMLInputElement>(null);
 
-  const [saveTitle, setSaveTitle] = useState("");
+  const [title, setTitle] = useState("");
   const [saveDate, setSaveDate] = useState(new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
@@ -97,14 +97,14 @@ export function TranslateTab({
   };
 
   const handleSave = async () => {
-    if (!saveTitle.trim() || !translated) return;
+    if (!title.trim() || !translated) return;
     setSaving(true);
     try {
       const res = await authFetch("/api/translations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: saveTitle.trim(),
+          title: title.trim(),
           originalText: transcript,
           translatedText: translated,
           language: targetLanguage,
@@ -116,7 +116,7 @@ export function TranslateTab({
       if (!res.ok) { onError(data.error || "Save failed"); return; }
       onSaved(data.translation);
       setSavedOk(true);
-      setTranscript(""); setTranslated(""); setSaveTitle("");
+      setTranscript(""); setTranslated(""); setTitle("");
       setSaveDate(new Date().toISOString().slice(0, 10));
       setEdgeConfirmed(false);
     } catch (err) {
@@ -138,6 +138,17 @@ export function TranslateTab({
               <option key={l} value={l}>{l}{allRules[l] ? " ✓" : ""}</option>
             ))}
           </select>
+        </div>
+
+        {/* Title */}
+        <div className="flex-1 min-w-48">
+          <label className={lbl}>Title</label>
+          <input
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="e.g. Q1 Newsletter — Spanish"
+            className={inp}
+          />
         </div>
 
         {/* Content Category */}
@@ -253,8 +264,8 @@ export function TranslateTab({
             <div className="col-span-2 sm:col-span-1">
               <label className="mb-1 block text-xs font-medium text-green-800">Title *</label>
               <input
-                value={saveTitle}
-                onChange={(e) => setSaveTitle(e.target.value)}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
                 className="w-full rounded-lg border border-green-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-200"
                 placeholder="e.g. Q1 Newsletter — Spanish"
               />
@@ -284,7 +295,7 @@ export function TranslateTab({
           <div className="flex items-center gap-3">
             <button
               onClick={handleSave}
-              disabled={saving || !saveTitle.trim()}
+              disabled={saving || !title.trim()}
               className="flex items-center gap-2 rounded-lg bg-green-600 px-5 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50 shadow-sm"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

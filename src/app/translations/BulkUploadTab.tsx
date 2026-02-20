@@ -11,7 +11,8 @@ import { LANGUAGES, CONTENT_CATEGORIES } from "./types";
 
 interface FileItem {
   id: string;
-  name: string;
+  name: string;   // original filename (read-only)
+  title: string;  // editable title, pre-filled from filename
   text: string;
   status: "pending" | "translating" | "done" | "error";
   translated: string;
@@ -52,16 +53,19 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
       (f) =>
         new Promise<FileItem>((resolve) => {
           const reader = new FileReader();
-          reader.onload = () =>
+          reader.onload = () => {
+            const baseName = f.name.replace(/\.txt$/i, "");
             resolve({
               id: `${f.name}-${Date.now()}-${Math.random()}`,
-              name: f.name.replace(/\.txt$/i, ""),
+              name: baseName,
+              title: baseName,
               text: (reader.result as string).trim(),
               status: "pending",
               translated: "",
               error: "",
               expanded: false,
             });
+          };
           reader.readAsText(f);
         })
     );
@@ -126,7 +130,7 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: item.name,
+          title: item.title.trim() || item.name,
           originalText: item.text,
           translatedText: item.translated,
           language: targetLanguage,
@@ -265,8 +269,14 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
                   }`} />
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{item.name}</p>
-                    <p className="text-xs text-gray-500">{item.text.split(/\s+/).filter(Boolean).length} words</p>
+                    <input
+                      value={item.title}
+                      onChange={e => updateFile(item.id, { title: e.target.value })}
+                      disabled={item.status === "translating" || running}
+                      className="w-full truncate rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold text-gray-900 hover:border-gray-300 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-200 disabled:pointer-events-none"
+                      title="Click to edit title"
+                    />
+                    <p className="text-xs text-gray-400 px-1">{item.name}.txt · {item.text.split(/\s+/).filter(Boolean).length} words</p>
                   </div>
 
                   {/* Status indicator */}
