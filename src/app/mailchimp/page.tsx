@@ -24,6 +24,8 @@ export default function MailchimpPage() {
   const [audiences,   setAudiences]   = useState<MCAudience[]>([]);
   const [campaigns,   setCampaigns]   = useState<MCCampaign[]>([]);
   const [syncing,     setSyncing]     = useState(false);
+  const [syncError,   setSyncError]   = useState<string | null>(null);
+  const [syncResult,  setSyncResult]  = useState<{ audiences: number; campaigns: number } | null>(null);
   const [lastSync,    setLastSync]    = useState<string | null>(null);
   const [loading,     setLoading]     = useState(true);
 
@@ -50,6 +52,8 @@ export default function MailchimpPage() {
   // ── Sync ──────────────────────────────────────────────────────────────────
   const handleSync = useCallback(async () => {
     setSyncing(true);
+    setSyncError(null);
+    setSyncResult(null);
     try {
       const res  = await authFetch("/api/mailchimp/sync", { method: "POST" });
       const data = await res.json();
@@ -62,8 +66,9 @@ export default function MailchimpPage() {
       setAudiences(audRes.audiences ?? []);
       setCampaigns(campRes.campaigns ?? []);
       setLastSync(new Date().toISOString());
+      setSyncResult({ audiences: data.audiences ?? 0, campaigns: data.campaigns ?? 0 });
     } catch (err) {
-      console.error("Sync failed:", err);
+      setSyncError(err instanceof Error ? err.message : "Sync failed");
     } finally {
       setSyncing(false);
     }
@@ -124,6 +129,18 @@ export default function MailchimpPage() {
           );
         })}
       </div>
+
+      {/* Sync feedback */}
+      {syncError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span className="font-semibold">Sync failed:</span> {syncError}
+        </div>
+      )}
+      {syncResult && !syncError && (
+        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+          Synced <span className="font-semibold">{syncResult.audiences} audience{syncResult.audiences !== 1 ? "s" : ""}</span> and <span className="font-semibold">{syncResult.campaigns} campaign{syncResult.campaigns !== 1 ? "s" : ""}</span> from Mailchimp.
+        </div>
+      )}
 
       {/* Tab content */}
       {loading ? (

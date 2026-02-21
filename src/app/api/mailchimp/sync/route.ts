@@ -3,10 +3,13 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { MailchimpClient } from "@/lib/mailchimp";
+import { requireAuth } from "@/lib/apiHelpers";
 
 export const runtime = "nodejs";
 
 export async function POST() {
+  const { response: authError } = await requireAuth();
+  if (authError) return authError;
   const { data: conn } = await db
     .from("MailchimpConnection")
     .select("apiKey, dataCenter")
@@ -27,7 +30,7 @@ export async function POST() {
     ]);
 
     if (audiences.length > 0) {
-      await db.from("MailchimpAudience").upsert(
+      const { error: audErr } = await db.from("MailchimpAudience").upsert(
         audiences.map((a) => ({
           id:          a.id,
           companyId:   DEMO_COMPANY_ID,
@@ -39,10 +42,11 @@ export async function POST() {
         })),
         { onConflict: "id" }
       );
+      if (audErr) throw new Error(`Failed to save audiences: ${audErr.message}`);
     }
 
     if (campaigns.length > 0) {
-      await db.from("MailchimpCampaign").upsert(
+      const { error: campErr } = await db.from("MailchimpCampaign").upsert(
         campaigns.map((c) => ({
           id:               c.id,
           companyId:        DEMO_COMPANY_ID,
@@ -59,6 +63,7 @@ export async function POST() {
         })),
         { onConflict: "id" }
       );
+      if (campErr) throw new Error(`Failed to save campaigns: ${campErr.message}`);
     }
 
     return NextResponse.json({
