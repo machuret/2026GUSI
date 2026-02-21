@@ -1,21 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Library, Search, X, BookOpen } from "lucide-react";
+import { Library, Search, X, BookOpen, ArrowUpDown, Globe } from "lucide-react";
 import { LibraryCard } from "@/components/library/LibraryCard";
 import { CATEGORIES, type ContentWithMeta } from "@/lib/content";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { DESTINATIONS } from "@/components/library/DestinationPicker";
 
 const STATUS_FILTERS = [
-  { value: "all",      label: "All Approved" },
+  { value: "all",      label: "All" },
   { value: "APPROVED", label: "Approved" },
   { value: "PUBLISHED",label: "Published" },
+] as const;
+
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
 ] as const;
 
 type LibraryItem = ContentWithMeta & { isEdited?: boolean; scheduledAt?: string | null };
 
 export default function LibraryPage() {
-  const [items, setItems]           = useState<LibraryItem[]>([]);
+  const [allItems, setAllItems]     = useState<LibraryItem[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -23,6 +29,8 @@ export default function LibraryPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter]   = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [sort, setSort]             = useState<"newest" | "oldest">("newest");
+  const [destinationFilter, setDestinationFilter] = useState<string>("all");
 
   // Debounce search
   useEffect(() => {
@@ -30,27 +38,45 @@ export default function LibraryPage() {
     return () => clearTimeout(t);
   }, [search]);
 
+  // Always fetch ALL approved+published — filtering/sorting done client-side
+  // so counts are always accurate regardless of active filters
   const fetchLibrary = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ companyId: DEMO_COMPANY_ID, limit: "100" });
-      if (statusFilter !== "all") params.set("status", statusFilter);
-      if (categoryFilter !== "all") params.set("category", categoryFilter);
-      if (debouncedSearch) params.set("search", debouncedSearch);
-
+      const params = new URLSearchParams({ companyId: DEMO_COMPANY_ID, limit: "200" });
       const res = await fetch(`/api/content/library?${params}`);
       if (!res.ok) throw new Error(`Failed to load library (${res.status})`);
       const data = await res.json();
-      setItems(data.items ?? []);
+      setAllItems(data.items ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load library");
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, categoryFilter, debouncedSearch]);
+  }, []);
 
   useEffect(() => { fetchLibrary(); }, [fetchLibrary]);
+
+  // Client-side filter + sort
+  const items = useMemo(() => {
+    let filtered = allItems;
+    if (statusFilter !== "all") filtered = filtered.filter((i) => i.status === statusFilter);
+    if (categoryFilter !== "all") filtered = filtered.filter((i) => i.category === categoryFilter);
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
+      filtered = filtered.filter((i) => i.output.toLowerCase().includes(q) || i.prompt.toLowerCase().includes(q));
+    }
+    if (destinationFilter !== "all") {
+      filtered = filtered.filter((i) => {
+        const d = i.destinations;
+        return Array.isArray(d) && d.includes(destinationFilter);
+      });
+    }
+    return sort === "oldest"
+      ? [...filtered].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      : filtered;
+  }, [allItems, statusFilter, categoryFilter, debouncedSearch, sort, destinationFilter]);
 
   const handlePublish = useCallback(async (id: string, category: string) => {
     setActionError(null);
@@ -60,8 +86,9 @@ export default function LibraryPage() {
       body: JSON.stringify({ contentId: id, category, action: "publish" }),
     });
     if (!res.ok) { const d = await res.json().catch(() => ({})); setActionError(d.error || "Publish failed"); return; }
-    fetchLibrary();
-  }, [fetchLibrary]);
+    // Optimistic update
+    setAllItems((prev) => prev.map((i) => i.id === id ? { ...i, status: "PUBLISHED" } : i));
+  }, []);
 
   const handleEdit = useCallback(async (id: string, category: string, output: string) => {
     setActionError(null);
@@ -71,8 +98,9 @@ export default function LibraryPage() {
       body: JSON.stringify({ contentId: id, category, action: "edit", output }),
     });
     if (!res.ok) { const d = await res.json().catch(() => ({})); setActionError(d.error || "Edit failed"); return; }
-    fetchLibrary();
-  }, [fetchLibrary]);
+    // Optimistic update — also sync output so editText re-initialises correctly
+    setAllItems((prev) => prev.map((i) => i.id === id ? { ...i, output, isEdited: true } : i));
+  }, []);
 
   const handleDelete = useCallback(async (id: string, category: string) => {
     setActionError(null);
@@ -82,8 +110,13 @@ export default function LibraryPage() {
       body: JSON.stringify({ contentId: id, category, action: "delete" }),
     });
     if (!res.ok) { const d = await res.json().catch(() => ({})); setActionError(d.error || "Delete failed"); return; }
-    fetchLibrary();
-  }, [fetchLibrary]);
+    // Optimistic remove
+    setAllItems((prev) => prev.filter((i) => i.id !== id));
+  }, []);
+
+  const handleDestinationsChanged = useCallback((id: string, destinations: string[]) => {
+    setAllItems((prev) => prev.map((i) => i.id === id ? { ...i, destinations } : i));
+  }, []);
 
   const handleChangeCategory = useCallback(async (id: string, category: string, newCategory: string) => {
     setActionError(null);
@@ -93,21 +126,24 @@ export default function LibraryPage() {
       body: JSON.stringify({ contentId: id, category, action: "change-category", newCategory }),
     });
     if (!res.ok) { const d = await res.json().catch(() => ({})); setActionError(d.error || "Category change failed"); return; }
+    // Refetch — new row was inserted in a different table
     fetchLibrary();
   }, [fetchLibrary]);
 
+  // Counts always from full unfiltered set
   const counts = useMemo(() => ({
-    all:       items.length,
-    APPROVED:  items.filter((i) => i.status === "APPROVED").length,
-    PUBLISHED: items.filter((i) => i.status === "PUBLISHED").length,
-  }), [items]);
+    all:       allItems.length,
+    APPROVED:  allItems.filter((i) => i.status === "APPROVED").length,
+    PUBLISHED: allItems.filter((i) => i.status === "PUBLISHED").length,
+  }), [allItems]);
 
-  const hasFilters = statusFilter !== "all" || categoryFilter !== "all" || search;
+  const hasFilters = statusFilter !== "all" || categoryFilter !== "all" || search || destinationFilter !== "all";
 
   const clearFilters = () => {
     setStatusFilter("all");
     setCategoryFilter("all");
     setSearch("");
+    setDestinationFilter("all");
   };
 
   return (
@@ -125,7 +161,7 @@ export default function LibraryPage() {
         </div>
         {!loading && (
           <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
-            <span className="font-medium text-gray-700">{items.length}</span> pieces of approved content
+            <span className="font-medium text-gray-700">{allItems.length}</span> pieces of approved content
           </div>
         )}
       </div>
@@ -180,7 +216,7 @@ export default function LibraryPage() {
           ))}
         </div>
 
-        {/* Category + clear */}
+        {/* Category + sort + clear */}
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={categoryFilter}
@@ -192,6 +228,33 @@ export default function LibraryPage() {
               <option key={c.key} value={c.key}>{c.label}</option>
             ))}
           </select>
+
+          <div className="flex items-center gap-1 rounded-lg border border-gray-300 px-2 py-1.5 bg-white">
+            <Globe className="h-3 w-3 text-gray-400" />
+            <select
+              value={destinationFilter}
+              onChange={(e) => setDestinationFilter(e.target.value)}
+              className="text-xs text-gray-600 focus:outline-none bg-transparent"
+            >
+              <option value="all">All Destinations</option>
+              {DESTINATIONS.map((d) => (
+                <option key={d.key} value={d.key}>{d.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1 rounded-lg border border-gray-300 px-2 py-1.5 bg-white">
+            <ArrowUpDown className="h-3 w-3 text-gray-400" />
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as "newest" | "oldest")}
+              className="text-xs text-gray-600 focus:outline-none bg-transparent"
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
 
           {hasFilters && (
             <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-brand-600 hover:underline">
@@ -250,10 +313,11 @@ export default function LibraryPage() {
               onDelete={handleDelete}
               onChangeCategory={handleChangeCategory}
               onScheduled={(id, date) => {
-                setItems((prev) =>
+                setAllItems((prev) =>
                   prev.map((i) => i.id === id ? { ...i, scheduledAt: date } : i)
                 );
               }}
+              onDestinationsChanged={handleDestinationsChanged}
             />
           ))}
         </div>

@@ -71,9 +71,18 @@ export async function POST(req: NextRequest) {
       if (!newCat) {
         return NextResponse.json({ error: `Unknown category: ${data.newCategory}` }, { status: 400 });
       }
-      // Copy to new table, soft-delete from old
-      const { id: _id, category: _cat, categoryLabel: _label, user: _user, ...rest } = content as Record<string, unknown>;
-      await createContent(data.newCategory, { ...rest, companyId: content.companyId });
+      // Copy only base fields to new table (category-specific fields differ per table)
+      await createContent(data.newCategory, {
+        companyId:     content.companyId,
+        userId:        content.userId ?? null,
+        prompt:        content.prompt,
+        output:        content.output,
+        status:        content.status,
+        feedback:      content.feedback ?? null,
+        revisionOf:    content.revisionOf ?? null,
+        revisionNumber: content.revisionNumber ?? 0,
+        isEdited:      (content as Record<string, unknown>).isEdited ?? false,
+      });
       await updateContent(category, data.contentId, { deletedAt: new Date().toISOString() });
       await logActivity(authUser.id, authUser.email || "", "content.change-category", `Moved ${categoryLabel} → ${newCat.label}`);
       return NextResponse.json({ success: true, action: "category-changed", newCategory: data.newCategory });

@@ -170,6 +170,7 @@ model Newsletter {
   revisionNumber Int           @default(0)
   isEdited       Boolean       @default(false)
   deletedAt      DateTime?
+  destinations   String[]      @default([])
   // Newsletter-specific
   subject        String?
   preheader      String?
@@ -198,6 +199,7 @@ model Offer {
   revisionNumber Int           @default(0)
   isEdited       Boolean       @default(false)
   deletedAt      DateTime?
+  destinations   String[]      @default([])
   // Offer-specific
   offerType      String?       // discount, bundle, free-trial, etc.
   discount       String?
@@ -227,6 +229,7 @@ model Webinar {
   revisionNumber Int           @default(0)
   isEdited       Boolean       @default(false)
   deletedAt      DateTime?
+  destinations   String[]      @default([])
   // Webinar-specific
   title          String?
   description    String?
@@ -257,6 +260,7 @@ model SocialMedia {
   revisionNumber Int           @default(0)
   isEdited       Boolean       @default(false)
   deletedAt      DateTime?
+  destinations   String[]      @default([])
   // Social-specific
   platform       String?       // linkedin, facebook, instagram, twitter, tiktok
   hashtags       String[]      @default([])
@@ -285,6 +289,7 @@ model Announcement {
   revisionNumber Int           @default(0)
   isEdited       Boolean       @default(false)
   deletedAt      DateTime?
+  destinations   String[]      @default([])
   // Announcement-specific
   title          String?
   urgency        String?       // low, medium, high, critical
@@ -313,6 +318,7 @@ model BlogPost {
   revisionNumber   Int           @default(0)
   isEdited         Boolean       @default(false)
   deletedAt        DateTime?
+  destinations     String[]      @default([])
   // Blog-specific
   title            String?
   metaDescription  String?
@@ -342,6 +348,7 @@ model CourseContent {
   revisionNumber   Int           @default(0)
   isEdited         Boolean       @default(false)
   deletedAt        DateTime?
+  destinations     String[]      @default([])
   // Course-specific
   moduleTitle      String?
   lessonTitle      String?
@@ -371,6 +378,7 @@ model SalesPage {
   revisionNumber Int           @default(0)
   isEdited       Boolean       @default(false)
   deletedAt      DateTime?
+  destinations   String[]      @default([])
   // Sales-specific
   headline       String?
   subheadline    String?
@@ -400,6 +408,7 @@ model ColdEmail {
   revisionNumber Int           @default(0)
   isEdited       Boolean       @default(false)
   deletedAt      DateTime?
+  destinations   String[]      @default([])
   // Cold email-specific
   subject        String?
   recipientType  String?       // ceo, marketing, hr, general
