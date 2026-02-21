@@ -30,6 +30,7 @@ import {
   Mail,
   KanbanSquare,
   GalleryHorizontal,
+  Library,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasRole } from "@/lib/auth";
@@ -47,6 +48,7 @@ const contentNav = [
   { href: "/voices",    label: "Voices",           icon: Mic2 },
   { href: "/translations", label: "Translations",  icon: Languages },
   { href: "/history",   label: "History",          icon: History },
+  { href: "/library",   label: "Content Library",  icon: Library },
   { href: "/calendar",  label: "Calendar",         icon: CalendarDays },
   { href: "/mailchimp", label: "Mailchimp",        icon: Mail },
 ];

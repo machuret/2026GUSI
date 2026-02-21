@@ -122,6 +122,83 @@ export async function getAllHistory(
   return { items: all.slice(start, start + limit), total };
 }
 
+export interface LibraryOptions {
+  page?: number;
+  limit?: number;
+  category?: string;   // filter to one category key
+  status?: string;     // "APPROVED" | "PUBLISHED" | "all" (default: both)
+  search?: string;
+}
+
+/**
+ * Fetch library items — only APPROVED and PUBLISHED, not soft-deleted.
+ * Supports category, status, search, and pagination.
+ */
+export async function getLibrary(
+  companyId: string,
+  { page = 1, limit = 50, category, status, search }: LibraryOptions = {}
+): Promise<{ items: ContentWithMeta[]; total: number }> {
+  const fetchLimit = page * limit;
+
+  const targetCategories = category
+    ? CATEGORIES.filter((c) => c.key === category)
+    : CATEGORIES;
+
+  const statuses = !status || status === "all"
+    ? ["APPROVED", "PUBLISHED"]
+    : [status];
+
+  const [results, countResults] = await Promise.all([
+    Promise.all(
+      targetCategories.map(async (cat) => {
+        let q = db
+          .from(cat.table)
+          .select("*, user:User(name, email)")
+          .eq("companyId", companyId)
+          .in("status", statuses)
+          .is("deletedAt", null)
+          .order("createdAt", { ascending: false })
+          .limit(fetchLimit);
+
+        if (search) {
+          q = q.ilike("output", `%${search}%`);
+        }
+
+        const { data: items } = await q;
+        return (items ?? []).map((item) => ({
+          ...(item as ContentRecord),
+          category: cat.key,
+          categoryLabel: cat.label,
+        }));
+      })
+    ),
+    Promise.all(
+      targetCategories.map(async (cat) => {
+        let q = db
+          .from(cat.table)
+          .select("id", { count: "exact", head: true })
+          .eq("companyId", companyId)
+          .in("status", statuses)
+          .is("deletedAt", null);
+
+        if (search) {
+          q = q.ilike("output", `%${search}%`);
+        }
+
+        const { count } = await q;
+        return count ?? 0;
+      })
+    ),
+  ]);
+
+  const total = countResults.reduce((sum, c) => sum + c, 0);
+  const all = results.flat().sort((a, b) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  const start = (page - 1) * limit;
+  return { items: all.slice(start, start + limit), total };
+}
+
 /**
  * Find a content record by id.
  * If categoryHint is provided, queries only that table (1 query).
