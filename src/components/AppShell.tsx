@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
+import { Topbar } from "@/components/Topbar";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -12,11 +13,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-[#f1f3f8]">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto">
-        <div className="container mx-auto p-8">{children}</div>
-      </main>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <Topbar />
+        <main className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-screen-xl px-8 py-7">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }

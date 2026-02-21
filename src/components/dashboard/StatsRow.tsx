@@ -25,17 +25,21 @@ export function StatsRow({ stats, loading }: Props) {
         const isUrgent = s.urgentKey && (stats?.[s.urgentKey] ?? 0) > 0;
 
         const card = (
-          <div className={`rounded-xl border p-4 shadow-sm ${isUrgent ? "border-amber-300 bg-amber-50" : "border-gray-300 bg-white"}`}>
-            <div className={`mb-2 inline-flex rounded-lg p-2 ${s.bg}`}>
-              <s.icon className={`h-4 w-4 ${s.color}`} />
+          <div className={`rounded-xl border p-5 shadow-[0_1px_4px_rgba(0,0,0,0.07)] transition-shadow hover:shadow-[0_3px_10px_rgba(0,0,0,0.1)] ${
+            isUrgent ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-white"
+          }`}>
+            <div className="mb-3 flex items-center justify-between">
+              <div className={`inline-flex rounded-lg p-2 ${s.bg}`}>
+                <s.icon className={`h-4 w-4 ${s.color}`} />
+              </div>
+              {isUrgent && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">Action</span>
+              )}
             </div>
-            <p className="text-xs font-medium text-gray-600">{s.label}</p>
-            <p className={`mt-0.5 text-2xl font-bold ${isUrgent ? "text-amber-600" : "text-gray-900"}`}>
-              {loading || value === null ? "—" : value}
+            <p className={`text-3xl font-black tracking-tight ${isUrgent ? "text-amber-600" : "text-gray-950"}`}>
+              {loading || value === null ? <span className="text-gray-300">—</span> : value}
             </p>
-            {isUrgent && (
-              <p className="mt-1 text-xs font-semibold text-amber-600">Needs attention →</p>
-            )}
+            <p className="mt-1 text-xs font-medium text-gray-500">{s.label}</p>
           </div>
         );
 

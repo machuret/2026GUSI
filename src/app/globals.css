@@ -4,11 +4,19 @@
 
 @layer base {
   body {
-    @apply bg-gray-100 text-gray-900 antialiased;
+    @apply bg-[#f1f3f8] text-gray-900 antialiased;
   }
 
-  h1, h2, h3, h4 {
+  h1 {
+    @apply text-gray-950 font-bold tracking-tight;
+  }
+
+  h2, h3, h4 {
     @apply text-gray-900;
+  }
+
+  p {
+    @apply text-gray-700;
   }
 
   input, textarea, select {
@@ -16,20 +24,20 @@
   }
 
   label {
-    @apply text-gray-700;
+    @apply text-gray-700 font-medium;
   }
 }
 
 @layer components {
-  /* Stronger card style */
+  /* Card with real depth */
   .card {
-    @apply rounded-xl border border-gray-300 bg-white shadow-sm;
+    @apply rounded-xl border border-gray-200 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.07)];
   }
 
   /* Consistent input style */
   .input {
-    @apply w-full rounded-lg border border-gray-400 px-3 py-2 text-sm text-gray-900 placeholder-gray-400
-           focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200;
+    @apply w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400
+           focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100;
   }
 
   /* Muted helper text — still readable */
@@ -40,5 +48,15 @@
   /* Section label */
   .section-label {
     @apply text-xs font-semibold uppercase tracking-wider text-gray-500;
+  }
+
+  /* Page title */
+  .page-title {
+    @apply text-2xl font-bold text-gray-950 tracking-tight;
+  }
+
+  /* Page subtitle */
+  .page-subtitle {
+    @apply text-sm text-gray-500 mt-0.5;
   }
 }

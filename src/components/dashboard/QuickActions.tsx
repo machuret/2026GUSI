@@ -46,30 +46,28 @@ export function QuickActions({ stats }: Props) {
 
   return (
     <div>
-      <h2 className="mb-4 font-semibold text-gray-800">Quick Actions</h2>
+      <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-gray-500">Quick Actions</h2>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {actions.map((action) => (
           <Link
             key={action.href}
             href={action.href}
-            className={`group flex items-center justify-between rounded-xl border p-5 transition-all hover:shadow-md ${
+            className={`group flex items-center justify-between rounded-xl border p-5 transition-all hover:shadow-[0_4px_14px_rgba(0,0,0,0.1)] ${
               action.primary
-                ? "border-brand-300 bg-brand-50 hover:bg-brand-100 shadow-sm"
-                : "border-gray-300 bg-white hover:bg-gray-50 shadow-sm"
+                ? "border-brand-200 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.07)]"
+                : "border-gray-200 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.07)]"
             }`}
           >
             <div className="flex items-center gap-4">
-              <div className={`rounded-lg p-2.5 ${action.color}`}>
+              <div className={`rounded-xl p-3 ${action.color} shadow-sm`}>
                 <action.icon className="h-5 w-5 text-white" />
               </div>
               <div>
-                <p className={`font-semibold ${action.primary ? "text-brand-800" : "text-gray-800"}`}>
-                  {action.title}
-                </p>
-                <p className="text-sm text-gray-600">{action.desc}</p>
+                <p className="font-bold text-gray-900">{action.title}</p>
+                <p className="mt-0.5 text-xs text-gray-500">{action.desc}</p>
               </div>
             </div>
-            <ArrowRight className="h-4 w-4 text-gray-500 transition-transform group-hover:translate-x-1" />
+            <ArrowRight className="h-4 w-4 text-gray-300 transition-all group-hover:translate-x-1 group-hover:text-brand-500" />
           </Link>
         ))}
       </div>

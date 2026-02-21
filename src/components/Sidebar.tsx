@@ -102,72 +102,64 @@ export function Sidebar() {
   };
 
   const navLink = (item: { href: string; label: string; icon: any }) => {
-    const isActive = pathname === item.href;
+    const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href + "/"));
     return (
       <Link
         key={item.href}
         href={item.href}
-        className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+        className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
           isActive
-            ? "bg-brand-600 text-white shadow-sm"
-            : "text-gray-300 hover:bg-gray-800 hover:text-white"
+            ? "bg-brand-600 text-white shadow-md shadow-brand-900/30"
+            : "text-gray-400 hover:bg-gray-800 hover:text-white"
         }`}
       >
-        <item.icon className="h-5 w-5" />
-        {item.label}
+        <item.icon className={`h-4 w-4 shrink-0 transition-colors ${
+          isActive ? "text-white" : "text-gray-500 group-hover:text-gray-300"
+        }`} />
+        <span className="truncate">{item.label}</span>
+        {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-white/60" />}
       </Link>
     );
   };
 
-  return (
-    <aside className="flex w-64 flex-col border-r border-gray-300 bg-gray-900 px-4 py-6">
-      <div className="mb-6 px-2">
-        <h1 className="text-2xl font-bold text-white">GUSI</h1>
-        <p className="text-xs text-gray-400">AI Content Generator</p>
-      </div>
+  const sectionLabel = (label: string) => (
+    <p className="mb-1 mt-1 px-3 text-[10px] font-bold uppercase tracking-widest text-gray-600">
+      {label}
+    </p>
+  );
 
-      {/* User badge + sign out */}
-      <div className="mb-4 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5">
-        <p className="truncate text-xs text-gray-300">{userEmail ?? "..."}</p>
-        <div className="mt-1 flex items-center justify-between">
-          <span className="text-xs font-semibold text-gray-500">{userRole ?? ""}</span>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-red-400 hover:bg-red-900/40 hover:text-red-300"
-          >
-            <LogOut className="h-3 w-3" />
-            Sign out
-          </button>
+  return (
+    <aside className="flex w-64 flex-col bg-gray-950 px-3 py-5">
+      {/* Logo */}
+      <div className="mb-5 flex items-center gap-3 px-2">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 shadow-lg shadow-brand-900/40">
+          <span className="text-sm font-black text-white">G</span>
+        </div>
+        <div>
+          <h1 className="text-base font-bold leading-none text-white">GUSI</h1>
+          <p className="text-[10px] text-gray-500 leading-tight">AI Content Platform</p>
         </div>
       </div>
 
-      <nav className="flex-1 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto pb-4">
         {mainNav.map(navLink)}
 
-        <div className="my-3 border-t border-gray-700" />
-        <p className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Content
-        </p>
+        <div className="my-3 border-t border-gray-800" />
+        {sectionLabel("Content")}
         {contentNav.map(navLink)}
 
-        <div className="my-3 border-t border-gray-700" />
-        <p className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Grants
-        </p>
+        <div className="my-3 border-t border-gray-800" />
+        {sectionLabel("Grants")}
         {grantsNav.map(navLink)}
 
-        <div className="my-3 border-t border-gray-700" />
-        <p className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
-          Leads
-        </p>
+        <div className="my-3 border-t border-gray-800" />
+        {sectionLabel("Leads")}
         {leadsNav.map(navLink)}
 
         {(canAccessSettings || userRole === null) && (
           <>
-            <div className="my-3 border-t border-gray-700" />
-            <p className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
-              Settings
-            </p>
+            <div className="my-3 border-t border-gray-800" />
+            {sectionLabel("Settings")}
             {settingsNav.filter((item) =>
               item.href === "/admin" ? canAccessAdmin : true
             ).map(navLink)}
@@ -175,6 +167,25 @@ export function Sidebar() {
         )}
       </nav>
 
+      {/* User footer */}
+      <div className="mt-auto border-t border-gray-800 pt-3">
+        <div className="flex items-center gap-2.5 rounded-lg px-2 py-2">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-700 text-xs font-bold text-white">
+            {userEmail ? userEmail[0].toUpperCase() : "?"}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium text-gray-300">{userEmail ?? "..."}</p>
+            <p className="text-[10px] capitalize text-gray-600">{userRole ?? ""}</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            title="Sign out"
+            className="shrink-0 rounded p-1 text-gray-600 hover:bg-gray-800 hover:text-red-400 transition-colors"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
     </aside>
   );
 }
