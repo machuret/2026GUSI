@@ -12,7 +12,7 @@ export async function GET() {
 
     const { data: appUser } = await db
       .from("User")
-      .select("id, name, email, role, active")
+      .select("id, name, email, role, active, permissions")
       .eq("authId", user.id)
       .maybeSingle();
 

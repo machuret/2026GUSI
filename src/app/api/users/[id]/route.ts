@@ -27,12 +27,13 @@ export async function PATCH(
     }
     if (typeof body.active === "boolean") patch.active = body.active;
     if (body.name) patch.name = body.name;
+    if (Array.isArray(body.permissions)) patch.permissions = body.permissions;
 
     const { data: updated } = await db
       .from("User")
       .update(patch)
       .eq("id", params.id)
-      .select("id, email, name, role, active")
+      .select("id, email, name, role, active, permissions")
       .single();
 
     return NextResponse.json({ success: true, user: updated });

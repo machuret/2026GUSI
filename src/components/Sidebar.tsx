@@ -31,6 +31,7 @@ import {
   KanbanSquare,
   GalleryHorizontal,
   Library,
+  Key,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasRole } from "@/lib/auth";
@@ -66,36 +67,54 @@ const leadsNav = [
 ];
 
 const settingsNav = [
-  { href: "/company", label: "Company Info", icon: Building2 },
-  { href: "/vault", label: "Content Vault", icon: Vault },
-  { href: "/templates", label: "Templates", icon: LayoutTemplate },
-  { href: "/prompts", label: "Prompt Management", icon: FileText },
-  { href: "/lessons", label: "Lessons", icon: BookOpen },
-  { href: "/chatbots", label: "Chatbots", icon: BotMessageSquare },
-  { href: "/activity", label: "Activity Log", icon: Activity },
-  { href: "/admin", label: "User Management", icon: Shield },
+  { href: "/company",          label: "Company Info",    icon: Building2 },
+  { href: "/vault",            label: "Content Vault",   icon: Vault },
+  { href: "/templates",        label: "Templates",       icon: LayoutTemplate },
+  { href: "/prompts",          label: "Prompt Management", icon: FileText },
+  { href: "/lessons",          label: "Lessons",         icon: BookOpen },
+  { href: "/chatbots",         label: "Chatbots",        icon: BotMessageSquare },
+  { href: "/activity",         label: "Activity Log",    icon: Activity },
+  { href: "/settings/api-keys",label: "API Keys",        icon: Key },
+  { href: "/admin",            label: "User Management", icon: Shield },
 ];
+
+// Default section permissions per role (mirrors admin page)
+const ROLE_DEFAULT_SECTIONS: Record<string, string[]> = {
+  USER:        ["content", "grants", "leads", "train_ai", "ideas", "mailchimp"],
+  EDITOR:      ["content", "grants", "leads", "train_ai", "ideas", "mailchimp"],
+  ADMIN:       ["content", "grants", "leads", "train_ai", "ideas", "mailchimp", "settings"],
+  SUPER_ADMIN: ["content", "grants", "leads", "train_ai", "ideas", "mailchimp", "settings"],
+};
 
 export function Sidebar() {
   const pathname = usePathname();
   const supabase = createClient();
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [roleLoaded, setRoleLoaded] = useState(false);
+  const [userRole, setUserRole]         = useState<string | null>(null);
+  const [userEmail, setUserEmail]       = useState<string | null>(null);
+  const [userPerms, setUserPerms]       = useState<string[] | null>(null);
+  const [roleLoaded, setRoleLoaded]     = useState(false);
 
   useEffect(() => {
     fetch("/api/users/me")
       .then((r) => r.json())
       .then((d) => {
-        if (d.user?.role)  setUserRole(d.user.role);
-        if (d.user?.email) setUserEmail(d.user.email);
+        if (d.user?.role)        setUserRole(d.user.role);
+        if (d.user?.email)       setUserEmail(d.user.email);
+        if (d.user?.permissions) setUserPerms(d.user.permissions);
         setRoleLoaded(true);
       })
       .catch(() => { setRoleLoaded(true); });
   }, []);
 
+  // Effective section permissions: custom overrides take priority, else role defaults
+  const effectivePerms: string[] = userPerms && userPerms.length > 0
+    ? userPerms
+    : ROLE_DEFAULT_SECTIONS[userRole ?? ""] ?? ROLE_DEFAULT_SECTIONS.USER;
+
+  const canSection = (key: string) => !roleLoaded || effectivePerms.includes(key);
+
   // Show settings while loading (optimistic) — hide only once loaded and confirmed non-admin
-  const canAccessSettings = !roleLoaded || (userRole ? hasRole(userRole, "ADMIN") : false);
+  const canAccessSettings = canSection("settings");
   const canAccessAdmin    = userRole ? hasRole(userRole, "SUPER_ADMIN") : false;
 
   const handleLogout = async () => {
@@ -146,19 +165,33 @@ export function Sidebar() {
       <nav className="flex-1 space-y-0.5 overflow-y-auto pb-4">
         {mainNav.map(navLink)}
 
-        <div className="my-3 border-t border-gray-800" />
-        {sectionLabel("Content")}
-        {contentNav.map(navLink)}
+        {canSection("content") && (
+          <>
+            <div className="my-3 border-t border-gray-800" />
+            {sectionLabel("Content")}
+            {contentNav
+              .filter((item) => item.href !== "/mailchimp" || canSection("mailchimp"))
+              .map(navLink)}
+          </>
+        )}
 
-        <div className="my-3 border-t border-gray-800" />
-        {sectionLabel("Grants")}
-        {grantsNav.map(navLink)}
+        {canSection("grants") && (
+          <>
+            <div className="my-3 border-t border-gray-800" />
+            {sectionLabel("Grants")}
+            {grantsNav.map(navLink)}
+          </>
+        )}
 
-        <div className="my-3 border-t border-gray-800" />
-        {sectionLabel("Leads")}
-        {leadsNav.map(navLink)}
+        {canSection("leads") && (
+          <>
+            <div className="my-3 border-t border-gray-800" />
+            {sectionLabel("Leads")}
+            {leadsNav.map(navLink)}
+          </>
+        )}
 
-        {(canAccessSettings || userRole === null) && (
+        {canAccessSettings && (
           <>
             <div className="my-3 border-t border-gray-800" />
             {sectionLabel("Settings")}

@@ -19,7 +19,7 @@ export async function GET() {
 
     const { data: users } = await db
       .from("User")
-      .select("id, authId, email, name, role, active, createdAt")
+      .select("id, authId, email, name, role, active, permissions, createdAt")
       .order("createdAt", { ascending: false });
 
     return NextResponse.json({ users: users ?? [] });
