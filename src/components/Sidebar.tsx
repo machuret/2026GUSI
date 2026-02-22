@@ -33,6 +33,7 @@ import {
   Library,
   Key,
   Send,
+  ShieldCheck,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasRole } from "@/lib/auth";
@@ -79,6 +80,7 @@ const settingsNav = [
   { href: "/chatbots",         label: "Chatbots",        icon: BotMessageSquare },
   { href: "/activity",         label: "Activity Log",    icon: Activity },
   { href: "/settings/api-keys",label: "API Keys",        icon: Key },
+  { href: "/safety-audit",    label: "Safety Audit",    icon: ShieldCheck },
   { href: "/admin",            label: "User Management", icon: Shield },
 ];
 

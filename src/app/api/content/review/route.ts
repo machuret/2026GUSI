@@ -44,6 +44,26 @@ export async function POST(req: NextRequest) {
         severity: "low",
       });
 
+      // Auto-run compliance scan (fire-and-forget — does not block the approve response)
+      const { data: activeRules } = await db
+        .from("ComplianceRule")
+        .select("id", { count: "exact", head: true })
+        .eq("companyId", content.companyId)
+        .eq("active", true);
+      if ((activeRules as unknown as number | null) !== 0) {
+        fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/compliance/scan`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contentId:       data.contentId,
+            contentCategory: category,
+            contentText:     content.output,
+            companyId:       content.companyId,
+            saveResult:      true,
+          }),
+        }).catch(() => {});
+      }
+
       await logActivity(authUser.id, authUser.email || "", "content.approve", `Approved ${categoryLabel} content`);
       return NextResponse.json({ success: true, status: "APPROVED" });
     }
