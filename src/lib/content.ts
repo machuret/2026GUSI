@@ -156,7 +156,6 @@ export async function getLibrary(
           .select("*, user:User(name, email)")
           .eq("companyId", companyId)
           .in("status", statuses)
-          .is("deletedAt", null)
           .order("createdAt", { ascending: false })
           .limit(fetchLimit);
 
@@ -164,8 +163,14 @@ export async function getLibrary(
           q = q.ilike("output", `%${search}%`);
         }
 
-        const { data: items } = await q;
-        return (items ?? []).map((item) => ({
+        const { data: items, error } = await q;
+        if (error) {
+          console.error(`getLibrary(${cat.table}):`, error.message);
+          return [];
+        }
+        // Filter soft-deleted rows client-side (handles case where deletedAt column may not exist yet)
+        const filtered = (items ?? []).filter((item: Record<string, unknown>) => !item.deletedAt);
+        return filtered.map((item) => ({
           ...(item as ContentRecord),
           category: cat.key,
           categoryLabel: cat.label,
@@ -178,14 +183,14 @@ export async function getLibrary(
           .from(cat.table)
           .select("id", { count: "exact", head: true })
           .eq("companyId", companyId)
-          .in("status", statuses)
-          .is("deletedAt", null);
+          .in("status", statuses);
 
         if (search) {
           q = q.ilike("output", `%${search}%`);
         }
 
-        const { count } = await q;
+        const { count, error } = await q;
+        if (error) return 0;
         return count ?? 0;
       })
     ),

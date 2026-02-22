@@ -6,6 +6,7 @@ import { CATEGORIES } from "./CategoryPicker";
 
 export interface BriefFields {
   topic: string;
+  title: string;
   audience: string;
   goal: string;
   cta: string;
@@ -27,6 +28,7 @@ const LENGTH_LABELS = ["Very Short", "Short", "Medium", "Long", "Very Long"];
 
 const defaultBrief = (): BriefFields => ({
   topic: "",
+  title: "",
   audience: "",
   goal: "",
   cta: "",
@@ -47,6 +49,7 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const selectedCat = CATEGORIES.find((c) => c.key === category);
   const isSocial = category === "social_media";
+  const hasTitle = category === "blog_post" || category === "newsletter";
 
   const set = (field: keyof BriefFields, value: string | number) =>
     setBrief((prev) => ({ ...prev, [field]: value }));
@@ -84,6 +87,21 @@ export function ContentBrief({ category, loading, onGenerate }: Props) {
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Title — for blog posts and newsletters */}
+      {hasTitle && (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-700">
+            Title <span className="text-red-500">*</span>
+          </label>
+          <input
+            value={brief.title}
+            onChange={(e) => set("title", e.target.value)}
+            placeholder={category === "newsletter" ? "e.g. The Weekly AI Digest — Issue #12" : "e.g. 10 Ways AI Is Transforming Small Business"}
+            className={inputCls}
+          />
         </div>
       )}
 
