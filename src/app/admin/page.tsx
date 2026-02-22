@@ -10,7 +10,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { ROLES } from "@/lib/auth";
 
 // ── Section permissions ──────────────────────────────────────────────────────
-export const SECTIONS = [
+const SECTIONS = [
   { key: "content",   label: "Content",        description: "Generate, Bulk, Carousel, Voices, Translations, History, Library, Calendar" },
   { key: "grants",    label: "Grants",         description: "Grants, CRM, Builder, Profile, Crawler" },
   { key: "leads",     label: "Leads",          description: "Leads management and enrichment" },
@@ -20,7 +20,7 @@ export const SECTIONS = [
   { key: "settings",  label: "Settings",       description: "Company info, Vault, Templates, Prompts, Lessons, Chatbots" },
 ] as const;
 
-export type SectionKey = (typeof SECTIONS)[number]["key"];
+type SectionKey = (typeof SECTIONS)[number]["key"];
 
 // Default permissions per role
 const ROLE_DEFAULT_PERMISSIONS: Record<string, SectionKey[]> = {
