@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import {
   Users, Search, Loader2, X, Zap, RefreshCw, Download, AlertCircle,
-  CheckSquare, Trash2, Sparkles,
+  CheckSquare, Trash2, Sparkles, Star,
 } from "lucide-react";
 import { useLeads, LEAD_STATUSES, STATUS_STYLES, type Lead } from "@/hooks/useLeads";
 import { exportToCsv } from "@/lib/exportCsv";
@@ -25,9 +25,10 @@ export default function LeadsPage() {
 
   // ── Selection state ──────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkEnriching, setBulkEnriching] = useState(false);
-  const [bulkDeleting, setBulkDeleting]   = useState(false);
-  const [bulkMsg, setBulkMsg]             = useState<string | null>(null);
+  const [bulkEnriching, setBulkEnriching]   = useState(false);
+  const [bulkDeleting, setBulkDeleting]     = useState(false);
+  const [bulkQualifying, setBulkQualifying] = useState(false);
+  const [bulkMsg, setBulkMsg]               = useState<string | null>(null);
 
   const allSelected = leads.length > 0 && leads.every((l) => selectedIds.has(l.id));
   const someSelected = selectedIds.size > 0;
@@ -89,6 +90,31 @@ export default function LeadsPage() {
     }
   };
 
+  // ── Bulk qualify ─────────────────────────────────────────────────────────
+  const handleBulkQualify = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkQualifying(true);
+    setBulkMsg(null);
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map((id) =>
+          authFetch(`/api/leads/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "qualified" }),
+          })
+        )
+      );
+      await fetchLeads();
+      setBulkMsg(`✓ ${selectedIds.size} lead${selectedIds.size !== 1 ? "s" : ""} moved to Qualified`);
+      setSelectedIds(new Set());
+    } catch {
+      setBulkMsg("⚠ Some updates failed");
+    } finally {
+      setBulkQualifying(false);
+    }
+  };
+
   // ── Bulk delete ──────────────────────────────────────────────────────────
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
@@ -147,7 +173,7 @@ export default function LeadsPage() {
       {/* Header */}
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Leads</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Scrape Leads</h1>
           <p className="mt-1 text-gray-500">Scrape, import, and manage your lead pipeline</p>
         </div>
         <div className="flex items-center gap-2">
@@ -174,6 +200,14 @@ export default function LeadsPage() {
           <CheckSquare className="h-4 w-4 text-brand-600" />
           <span className="text-sm font-medium text-brand-800">{selectedIds.size} lead{selectedIds.size !== 1 ? "s" : ""} selected</span>
           <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={handleBulkQualify}
+              disabled={bulkQualifying}
+              className="flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
+            >
+              {bulkQualifying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Star className="h-3.5 w-3.5" />}
+              Move to Qualified
+            </button>
             <button
               onClick={handleBulkEnrich}
               disabled={bulkEnriching}

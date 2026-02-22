@@ -34,6 +34,7 @@ import {
   Key,
   Send,
   ShieldCheck,
+  Star,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasRole } from "@/lib/auth";
@@ -68,7 +69,8 @@ const grantsNav = [
 ];
 
 const leadsNav = [
-  { href: "/leads", label: "Leads", icon: Users },
+  { href: "/leads",     label: "Scrape Leads", icon: Users },
+  { href: "/qualified", label: "Qualified",     icon: Star },
 ];
 
 const settingsNav = [
@@ -198,7 +200,7 @@ export function Sidebar() {
         {canSection("leads") && (
           <>
             <div className="my-3 border-t border-gray-800" />
-            {sectionLabel("Leads")}
+            {sectionLabel("Leads & Pipeline")}
             {leadsNav.map(navLink)}
           </>
         )}
