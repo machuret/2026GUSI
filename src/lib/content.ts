@@ -144,55 +144,60 @@ export async function getLibrary(
     ? CATEGORIES.filter((c) => c.key === category)
     : CATEGORIES;
 
-  const statuses = !status || status === "all"
+  // ContentStatus enum: PENDING, APPROVED, REJECTED, REVISED (PUBLISHED may not exist yet)
+  // Use .eq per status instead of .in to avoid Postgres enum errors for missing values
+  const wantedStatuses = !status || status === "all"
     ? ["APPROVED", "PUBLISHED"]
     : [status];
 
   const [results, countResults] = await Promise.all([
     Promise.all(
-      targetCategories.map(async (cat) => {
-        let q = db
-          .from(cat.table)
-          .select("*, user:User(name, email)")
-          .eq("companyId", companyId)
-          .in("status", statuses)
-          .order("createdAt", { ascending: false })
-          .limit(fetchLimit);
+      targetCategories.flatMap((cat) =>
+        wantedStatuses.map(async (s) => {
+          let q = db
+            .from(cat.table)
+            .select("*, user:User(name, email)")
+            .eq("companyId", companyId)
+            .eq("status", s)
+            .order("createdAt", { ascending: false })
+            .limit(fetchLimit);
 
-        if (search) {
-          q = q.ilike("output", `%${search}%`);
-        }
+          if (search) {
+            q = q.ilike("output", `%${search}%`);
+          }
 
-        const { data: items, error } = await q;
-        if (error) {
-          console.error(`getLibrary(${cat.table}):`, error.message);
-          return [];
-        }
-        // Filter soft-deleted rows client-side (handles case where deletedAt column may not exist yet)
-        const filtered = (items ?? []).filter((item: Record<string, unknown>) => !item.deletedAt);
-        return filtered.map((item) => ({
-          ...(item as ContentRecord),
-          category: cat.key,
-          categoryLabel: cat.label,
-        }));
-      })
+          const { data: items, error } = await q;
+          if (error) {
+            // Silently skip — status value may not exist in enum yet
+            return [];
+          }
+          const filtered = (items ?? []).filter((item: Record<string, unknown>) => !item.deletedAt);
+          return filtered.map((item) => ({
+            ...(item as ContentRecord),
+            category: cat.key,
+            categoryLabel: cat.label,
+          }));
+        })
+      )
     ),
     Promise.all(
-      targetCategories.map(async (cat) => {
-        let q = db
-          .from(cat.table)
-          .select("id", { count: "exact", head: true })
-          .eq("companyId", companyId)
-          .in("status", statuses);
+      targetCategories.flatMap((cat) =>
+        wantedStatuses.map(async (s) => {
+          let q = db
+            .from(cat.table)
+            .select("id", { count: "exact", head: true })
+            .eq("companyId", companyId)
+            .eq("status", s);
 
-        if (search) {
-          q = q.ilike("output", `%${search}%`);
-        }
+          if (search) {
+            q = q.ilike("output", `%${search}%`);
+          }
 
-        const { count, error } = await q;
-        if (error) return 0;
-        return count ?? 0;
-      })
+          const { count, error } = await q;
+          if (error) return 0;
+          return count ?? 0;
+        })
+      )
     ),
   ]);
 
