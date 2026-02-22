@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Shield, ToggleLeft, ToggleRight, ExternalLink,
+  Shield, ToggleLeft, ToggleRight,
   ChevronDown, ChevronUp, Users, Check,
+  Plus, Trash2, Loader2, X, Eye, EyeOff,
 } from "lucide-react";
 import { fetchJSON } from "@/lib/fetchJSON";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -54,9 +55,10 @@ function getEffectivePermissions(user: AppUser): SectionKey[] {
   return ROLE_DEFAULT_PERMISSIONS[user.role] ?? ROLE_DEFAULT_PERMISSIONS.USER;
 }
 
-function UserRow({ user, onUpdate }: { user: AppUser; onUpdate: (updated: AppUser) => void }) {
+function UserRow({ user, onUpdate, onDelete }: { user: AppUser; onUpdate: (updated: AppUser) => void; onDelete: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [saving, setSaving]     = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError]       = useState<string | null>(null);
 
   const perms = getEffectivePermissions(user);
@@ -90,6 +92,19 @@ function UserRow({ user, onUpdate }: { user: AppUser; onUpdate: (updated: AppUse
 
   const resetToRole = () => {
     patch({ permissions: ROLE_DEFAULT_PERMISSIONS[user.role] ?? [] });
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(`Permanently delete "${user.name}" (${user.email})? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await fetchJSON(`/api/users/${user.id}`, { method: "DELETE" });
+      onDelete(user.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -133,13 +148,23 @@ function UserRow({ user, onUpdate }: { user: AppUser; onUpdate: (updated: AppUse
           {new Date(user.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
         </td>
         <td className="px-4 py-4 text-right">
-          <button
-            onClick={() => setExpanded((v) => !v)}
-            className="flex items-center gap-1 ml-auto rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100"
-          >
-            <Shield className="h-3 w-3" /> Permissions
-            {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-          </button>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100"
+            >
+              <Shield className="h-3 w-3" /> Permissions
+              {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              title="Delete user"
+              className="flex items-center justify-center rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-500 hover:bg-red-100 disabled:opacity-40"
+            >
+              {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            </button>
+          </div>
         </td>
       </tr>
 
@@ -193,11 +218,100 @@ function UserRow({ user, onUpdate }: { user: AppUser; onUpdate: (updated: AppUse
   );
 }
 
+// ── Create User Modal ────────────────────────────────────────────────────────
+function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: (user: AppUser) => void }) {
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "USER" });
+  const [showPw, setShowPw] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState<string | null>(null);
+  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+
+  const handleCreate = async () => {
+    if (!form.name || !form.email || !form.password) { setError("All fields are required"); return; }
+    if (form.password.length < 8) { setError("Password must be at least 8 characters"); return; }
+    setSaving(true); setError(null);
+    try {
+      const data = await fetchJSON<{ success: boolean; user: AppUser; error?: string }>("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      onCreated(data.user);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create user");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
+  const labelCls = "mb-1 block text-xs font-medium text-gray-700";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">Create New User</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+        </div>
+
+        {error && <p className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+        <div className="space-y-3">
+          <div>
+            <label className={labelCls}>Full Name</label>
+            <input className={inputCls} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Jane Smith" />
+          </div>
+          <div>
+            <label className={labelCls}>Email Address</label>
+            <input type="email" className={inputCls} value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="jane@example.com" />
+          </div>
+          <div>
+            <label className={labelCls}>Password</label>
+            <div className="relative">
+              <input
+                type={showPw ? "text" : "password"}
+                className={inputCls}
+                value={form.password}
+                onChange={(e) => set("password", e.target.value)}
+                placeholder="Min. 8 characters"
+              />
+              <button type="button" onClick={() => setShowPw(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Role</label>
+            <select className={inputCls} value={form.role} onChange={(e) => set("role", e.target.value)}>
+              {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-5 flex gap-2">
+          <button
+            onClick={handleCreate}
+            disabled={saving}
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {saving ? "Creating…" : "Create User"}
+          </button>
+          <button onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const [users, setUsers]         = useState<AppUser[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
-  const [showInstructions, setShowInstructions] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -217,9 +331,20 @@ export default function AdminPage() {
     setUsers((prev) => prev.map((u) => u.id === updated.id ? updated : u));
   }, []);
 
+  const deleteUser = useCallback((id: string) => {
+    setUsers((prev) => prev.filter((u) => u.id !== id));
+  }, []);
+
   return (
     <div className="mx-auto max-w-5xl">
       {error && <ErrorBanner message={error} onRetry={fetchUsers} onDismiss={() => setError(null)} className="mb-4" />}
+
+      {showCreate && (
+        <CreateUserModal
+          onClose={() => setShowCreate(false)}
+          onCreated={(user) => setUsers((prev) => [user, ...prev])}
+        />
+      )}
 
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -227,28 +352,15 @@ export default function AdminPage() {
             <Users className="h-6 w-6 text-brand-600" />
             <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
           </div>
-          <p className="text-gray-500">Manage roles, access, and section permissions per user</p>
+          <p className="text-gray-500">Create, edit, and manage user accounts and permissions</p>
         </div>
         <button
-          onClick={() => setShowInstructions(!showInstructions)}
+          onClick={() => setShowCreate(true)}
           className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700"
         >
-          <ExternalLink className="h-4 w-4" /> Invite User
+          <Plus className="h-4 w-4" /> Create User
         </button>
       </div>
-
-      {showInstructions && (
-        <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-5">
-          <h3 className="mb-2 font-semibold text-blue-900">How to invite a new user</h3>
-          <ol className="list-decimal list-inside space-y-1 text-sm text-blue-800">
-            <li>Go to your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="underline">Supabase dashboard <ExternalLink className="inline h-3 w-3" /></a></li>
-            <li>Navigate to <strong>Authentication → Users</strong></li>
-            <li>Click <strong>Invite user</strong> and enter their email</li>
-            <li>They receive a magic link to set their password</li>
-            <li>Their account appears here automatically on first login — set their role and permissions below</li>
-          </ol>
-        </div>
-      )}
 
       {/* Role legend */}
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -276,7 +388,7 @@ export default function AdminPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {users.map((u) => (
-                <UserRow key={u.id} user={u} onUpdate={updateUser} />
+                <UserRow key={u.id} user={u} onUpdate={updateUser} onDelete={deleteUser} />
               ))}
             </tbody>
           </table>
