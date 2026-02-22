@@ -14,6 +14,8 @@ export const DESTINATIONS = [
   { key: "website",    label: "Website",    color: "bg-green-100 text-green-700" },
   { key: "blog",       label: "Blog",       color: "bg-orange-100 text-orange-700" },
   { key: "newsletter", label: "Newsletter", color: "bg-indigo-100 text-indigo-700" },
+  { key: "webinar",    label: "Webinar",    color: "bg-teal-100 text-teal-700" },
+  { key: "course",     label: "Course",     color: "bg-violet-100 text-violet-700" },
 ] as const;
 
 export type DestinationKey = (typeof DESTINATIONS)[number]["key"];

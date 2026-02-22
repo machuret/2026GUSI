@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Library, Search, X, BookOpen, ArrowUpDown, Globe } from "lucide-react";
+import { Library, Search, X, BookOpen, ArrowUpDown, Globe, User } from "lucide-react";
 import { LibraryCard } from "@/components/library/LibraryCard";
 import { CATEGORIES, type ContentWithMeta } from "@/lib/content";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
@@ -31,6 +31,7 @@ export default function LibraryPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [sort, setSort]             = useState<"newest" | "oldest">("newest");
   const [destinationFilter, setDestinationFilter] = useState<string>("all");
+  const [authorFilter, setAuthorFilter] = useState<string>("all");
 
   // Debounce search
   useEffect(() => {
@@ -73,10 +74,26 @@ export default function LibraryPage() {
         return Array.isArray(d) && d.includes(destinationFilter);
       });
     }
+    if (authorFilter !== "all") {
+      filtered = filtered.filter((i) => {
+        const name = (i as any).user?.name || (i as any).user?.email || "";
+        return name === authorFilter;
+      });
+    }
     return sort === "oldest"
       ? [...filtered].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
       : filtered;
-  }, [allItems, statusFilter, categoryFilter, debouncedSearch, sort, destinationFilter]);
+  }, [allItems, statusFilter, categoryFilter, debouncedSearch, sort, destinationFilter, authorFilter]);
+
+  // Unique authors from all items
+  const authors = useMemo(() => {
+    const set = new Set<string>();
+    allItems.forEach((i) => {
+      const name = (i as any).user?.name || (i as any).user?.email;
+      if (name) set.add(name);
+    });
+    return Array.from(set).sort();
+  }, [allItems]);
 
   const handlePublish = useCallback(async (id: string, category: string) => {
     setActionError(null);
@@ -137,13 +154,14 @@ export default function LibraryPage() {
     PUBLISHED: allItems.filter((i) => i.status === "PUBLISHED").length,
   }), [allItems]);
 
-  const hasFilters = statusFilter !== "all" || categoryFilter !== "all" || search || destinationFilter !== "all";
+  const hasFilters = statusFilter !== "all" || categoryFilter !== "all" || search || destinationFilter !== "all" || authorFilter !== "all";
 
   const clearFilters = () => {
     setStatusFilter("all");
     setCategoryFilter("all");
     setSearch("");
     setDestinationFilter("all");
+    setAuthorFilter("all");
   };
 
   return (
@@ -239,6 +257,20 @@ export default function LibraryPage() {
               <option value="all">All Destinations</option>
               {DESTINATIONS.map((d) => (
                 <option key={d.key} value={d.key}>{d.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1 rounded-lg border border-gray-300 px-2 py-1.5 bg-white">
+            <User className="h-3 w-3 text-gray-400" />
+            <select
+              value={authorFilter}
+              onChange={(e) => setAuthorFilter(e.target.value)}
+              className="text-xs text-gray-600 focus:outline-none bg-transparent"
+            >
+              <option value="all">All Authors</option>
+              {authors.map((a) => (
+                <option key={a} value={a}>{a}</option>
               ))}
             </select>
           </div>

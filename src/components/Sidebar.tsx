@@ -32,6 +32,7 @@ import {
   GalleryHorizontal,
   Library,
   Key,
+  Send,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasRole } from "@/lib/auth";
@@ -51,7 +52,10 @@ const contentNav = [
   { href: "/history",   label: "History",          icon: History },
   { href: "/library",   label: "Content Library",  icon: Library },
   { href: "/calendar",  label: "Calendar",         icon: CalendarDays },
-  { href: "/mailchimp", label: "Mailchimp",        icon: Mail },
+];
+
+const newsletterNav = [
+  { href: "/mailchimp", label: "Mailchimp",  icon: Mail },
 ];
 
 const grantsNav = [
@@ -113,9 +117,9 @@ export function Sidebar() {
 
   const canSection = (key: string) => !roleLoaded || effectivePerms.includes(key);
 
-  // Show settings while loading (optimistic) — hide only once loaded and confirmed non-admin
-  const canAccessSettings = canSection("settings");
-  const canAccessAdmin    = userRole ? hasRole(userRole, "SUPER_ADMIN") : false;
+  // Show settings for ADMIN+ or if permissions include "settings"
+  const canAccessSettings = !roleLoaded || canSection("settings") || (userRole ? hasRole(userRole, "ADMIN") : false);
+  const canAccessAdmin    = !roleLoaded || (userRole ? hasRole(userRole, "ADMIN") : false);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -169,9 +173,15 @@ export function Sidebar() {
           <>
             <div className="my-3 border-t border-gray-800" />
             {sectionLabel("Content")}
-            {contentNav
-              .filter((item) => item.href !== "/mailchimp" || canSection("mailchimp"))
-              .map(navLink)}
+            {contentNav.map(navLink)}
+          </>
+        )}
+
+        {canSection("mailchimp") && (
+          <>
+            <div className="my-3 border-t border-gray-800" />
+            {sectionLabel("Newsletter")}
+            {newsletterNav.map(navLink)}
           </>
         )}
 
