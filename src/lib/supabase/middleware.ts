@@ -33,11 +33,13 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // If not logged in and not on login page, redirect to login
+  // If not logged in and not on a public path, redirect to login
+  // Public: /login, /api/*, and /chatbots/*/preview (embedded widget iframe)
   if (
     !user &&
     !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/api")
+    !request.nextUrl.pathname.startsWith("/api") &&
+    !request.nextUrl.pathname.endsWith("/preview")
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

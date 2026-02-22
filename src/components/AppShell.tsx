@@ -6,9 +6,10 @@ import { Topbar } from "@/components/Topbar";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isLogin = pathname === "/login";
+  const isLogin   = pathname === "/login";
+  const isPreview = pathname.endsWith("/preview");
 
-  if (isLogin) {
+  if (isLogin || isPreview) {
     return <>{children}</>;
   }
 
