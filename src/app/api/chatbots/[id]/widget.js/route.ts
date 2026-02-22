@@ -244,12 +244,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         sessionId = data.sessionId;
         messageCount = data.messageCount || 0;
 
-        if (data.isNew) {
-          addMessage("bot", WELCOME);
-        } else {
-          (data.messages || []).forEach(function(m) {
+        var priorMessages = data.messages || [];
+        if (priorMessages.length > 0) {
+          priorMessages.forEach(function(m) {
             addMessage(m.role === "user" ? "user" : "bot", m.content);
           });
+        } else {
+          // New session OR resumed session with no messages — always show welcome
+          addMessage("bot", WELCOME);
         }
       } catch(e) {
         addMessage("bot", T.errorSession);
