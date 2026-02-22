@@ -19,6 +19,7 @@ export interface ContentWithMeta extends ContentRecord {
   category: string;
   categoryLabel: string;
   user?: { name: string; email: string } | null;
+  auditPassed?: boolean | null;
 }
 
 /**

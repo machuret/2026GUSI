@@ -3,7 +3,7 @@
 import { memo, useState } from "react";
 import {
   Copy, Check, Pencil, Send, Trash2, Tag,
-  X, ChevronDown, ChevronUp, User, Calendar,
+  X, ChevronDown, ChevronUp, User, Calendar, ShieldCheck,
 } from "lucide-react";
 import { SchedulePicker } from "@/components/content/SchedulePicker";
 import { DestinationPicker } from "@/components/library/DestinationPicker";
@@ -88,6 +88,16 @@ function LibraryCardInner({
           <span className="rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-medium text-brand-700">
             {item.categoryLabel}
           </span>
+          {item.auditPassed === true && (
+            <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
+              <ShieldCheck className="h-3 w-3" /> SAFE
+            </span>
+          )}
+          {item.auditPassed === false && (
+            <span className="flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700 border border-red-200">
+              ⚠ VIOLATIONS
+            </span>
+          )}
           {item.isEdited && (
             <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 border border-amber-200">
               Edited
