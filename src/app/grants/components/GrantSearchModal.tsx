@@ -15,6 +15,7 @@ import {
   CONFIDENCE_STYLES, inputCls, labelCls,
 } from "./grantTypes";
 import { EffortBadge } from "./GrantBadges";
+import { fuzzyMatchesExisting } from "@/lib/fuzzyMatch";
 
 interface Props {
   onClose: () => void;
@@ -71,7 +72,7 @@ export function GrantSearchModal({ onClose, onAdded, companyDNA, existingNames }
       if (data.success) {
         const fresh = (data.results ?? []) as SearchResult[];
         setResults(fresh);
-        setNewCount(fresh.filter((r) => !existingNames.has(r.name.toLowerCase())).length);
+        setNewCount(fresh.filter((r) => !fuzzyMatchesExisting(r.name, existingNames)).length);
       } else setError(data.error || "Search failed");
     } catch (err) { setError(err instanceof Error ? err.message : "Network error"); }
     finally { setSearching(false); setSearchPhase(""); }
@@ -195,7 +196,8 @@ export function GrantSearchModal({ onClose, onAdded, companyDNA, existingNames }
                 {newCount > 0 && <span className="ml-1 text-green-600">· <strong>{newCount} new</strong></span>}
               </p>
               {results.map((r, idx) => {
-                const alreadyInList = existingNames.has(r.name.toLowerCase());
+                const fuzzyMatch = fuzzyMatchesExisting(r.name, existingNames);
+                const alreadyInList = !!fuzzyMatch;
                 const isAdded = added[idx] || alreadyInList;
                 const confidenceCls = CONFIDENCE_STYLES[r.confidence ?? "Low"] ?? CONFIDENCE_STYLES.Low;
                 return (
@@ -217,6 +219,11 @@ export function GrantSearchModal({ onClose, onAdded, companyDNA, existingNames }
                         </div>
                         {r.fitReason && <p className="mt-2 text-xs text-brand-700 bg-brand-50 rounded-lg px-2.5 py-1.5 border border-brand-100">✦ {r.fitReason}</p>}
                         {r.eligibility && <p className="mt-1.5 text-xs text-gray-500 line-clamp-2">{r.eligibility}</p>}
+                        {alreadyInList && fuzzyMatch && fuzzyMatch.toLowerCase() !== r.name.toLowerCase() && (
+                          <p className="mt-1.5 text-xs text-amber-600 bg-amber-50 rounded-lg px-2 py-1 border border-amber-200">
+                            Similar to: <span className="font-medium">{fuzzyMatch}</span>
+                          </p>
+                        )}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-2">
                         {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-brand-500 hover:text-brand-700"><ExternalLink className="h-4 w-4" /></a>}

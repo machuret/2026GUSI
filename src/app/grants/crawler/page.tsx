@@ -13,6 +13,7 @@ import {
 } from "@/lib/grantSites";
 import { authFetch } from "@/lib/authFetch";
 import { CrawlResultCard, type CrawledGrant } from "./components/CrawlResultCard";
+import { fuzzyMatchesExisting } from "@/lib/fuzzyMatch";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Business: "bg-blue-50 text-blue-700 border-blue-200",
@@ -102,12 +103,12 @@ export default function GrantCrawlerPage() {
   };
 
   const handleAddAll = async () => {
-    const toAdd = results.map((g, i) => ({ g, i })).filter(({ g, i }) => !added[i] && !existingNames.has(g.name.toLowerCase()));
+    const toAdd = results.map((g, i) => ({ g, i })).filter(({ g, i }) => !added[i] && !fuzzyMatchesExisting(g.name, existingNames));
     for (const { g, i } of toAdd) await handleAdd(g, i);
   };
 
   const isCrawling = crawling !== null;
-  const newCount = results.filter((g, i) => !added[i] && !existingNames.has(g.name.toLowerCase())).length;
+  const newCount = results.filter((g, i) => !added[i] && !fuzzyMatchesExisting(g.name, existingNames)).length;
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -296,7 +297,7 @@ export default function GrantCrawlerPage() {
                     key={idx}
                     grant={grant}
                     idx={idx}
-                    isAdded={added[idx] || existingNames.has(grant.name.toLowerCase())}
+                    isAdded={added[idx] || !!fuzzyMatchesExisting(grant.name, existingNames)}
                     adding={adding[idx] ?? false}
                     onAdd={handleAdd}
                   />
