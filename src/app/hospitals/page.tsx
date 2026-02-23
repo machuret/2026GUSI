@@ -4,9 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Building2, Search, Loader2, Save, Trash2, ExternalLink,
   MapPin, Phone, Globe, Sparkles, Plus, Pencil, X, Check,
-  ChevronDown, ChevronUp, Hospital, RefreshCw, UserSearch, Mail,
+  ChevronDown, ChevronUp, Hospital, RefreshCw, UserSearch, Mail, UserPlus,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
+import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { US_STATES, US_STATE_CITIES } from "@/lib/usCities";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -279,6 +280,46 @@ export default function HospitalsPage() {
     showToast(`Director search complete: ${found}/${ids.length} hospitals updated`);
     setSelectedIds(new Set());
     setBulkFinding(false);
+  };
+
+  // ── Convert hospital director to Lead ───────────────────────────────────
+
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+
+  const convertToLead = async (h: HospitalLead) => {
+    if (!h.directorName) { showToast("No director info — find director first"); return; }
+    setConvertingId(h.id);
+    try {
+      const res = await authFetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId: DEMO_COMPANY_ID,
+          source: "hospital",
+          fullName: h.directorName,
+          email: h.directorEmail || null,
+          phone: h.directorPhone || null,
+          jobTitle: h.directorTitle || "Residency Program Director",
+          company: h.name,
+          city: h.city || null,
+          state: h.state,
+          country: h.country,
+          website: h.url || null,
+          notes: `Converted from Hospital DB. Hospital: ${h.name}, ${h.city ?? ""} ${h.state}`,
+          status: "new",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`✓ ${h.directorName} added to Leads`);
+      } else {
+        showToast(data.error || "Failed to convert");
+      }
+    } catch {
+      showToast("Failed to convert to lead");
+    } finally {
+      setConvertingId(null);
+    }
   };
 
   // ── Selection helpers ────────────────────────────────────────────────────
@@ -743,6 +784,12 @@ export default function HospitalsPage() {
                                 className="rounded p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors" title="Enrich with AI">
                                 {enrichingId === h.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                               </button>
+                              {h.directorName && (
+                                <button onClick={() => convertToLead(h)} disabled={convertingId === h.id}
+                                  className="rounded p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors" title="Convert director to Lead">
+                                  {convertingId === h.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                                </button>
+                              )}
                               <button onClick={() => startEdit(h)}
                                 className="rounded p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors" title="Edit">
                                 <Pencil className="h-4 w-4" />

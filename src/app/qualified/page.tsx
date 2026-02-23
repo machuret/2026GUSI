@@ -8,6 +8,7 @@ import {
 import Link from "next/link";
 import { useLeads, STATUS_STYLES, type Lead } from "@/hooks/useLeads";
 import { exportToCsv } from "@/lib/exportCsv";
+import { leadToCsvRow } from "@/lib/leadExport";
 import { LeadRow } from "@/app/leads/components/LeadRow";
 import { authFetch } from "@/lib/authFetch";
 
@@ -97,17 +98,7 @@ export default function QualifiedPage() {
   // ── Export ────────────────────────────────────────────────────────────────
   const handleExport = () => {
     const toExport = someSelected ? leads.filter((l) => selectedIds.has(l.id)) : leads;
-    const rows = toExport.map((l: Lead) => ({
-      "Full Name": l.fullName ?? "", "First Name": l.firstName ?? "", "Last Name": l.lastName ?? "",
-      "Job Title": l.jobTitle ?? "", Company: l.company ?? "", Email: l.email ?? "",
-      Phone: l.phone ?? "", City: l.city ?? "", State: l.state ?? "", Country: l.country ?? "",
-      Location: l.location ?? "", Source: l.source ?? "", Status: l.status ?? "",
-      LinkedIn: l.linkedinUrl ?? "", "Profile URL": l.profileUrl ?? "", Website: l.website ?? "",
-      Specialties: Array.isArray(l.specialties) ? l.specialties.join("; ") : "",
-      Rating: l.rating ?? "", Notes: l.notes ?? "",
-      Added: l.createdAt ? new Date(l.createdAt).toLocaleString() : "",
-    }));
-    exportToCsv(`qualified-leads-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    exportToCsv(`qualified-leads-${new Date().toISOString().slice(0, 10)}.csv`, toExport.map(leadToCsvRow));
   };
 
   return (
