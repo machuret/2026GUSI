@@ -56,6 +56,9 @@ const contentNav = [
   { href: "/history",   label: "History",          icon: History },
   { href: "/library",   label: "Content Library",  icon: Library },
   { href: "/calendar",  label: "Calendar",         icon: CalendarDays },
+  { href: "/vault",     label: "Content Vault",    icon: Vault },
+  { href: "/lessons",   label: "Lessons",          icon: BookOpen },
+  { href: "/safety-audit", label: "Safety Audit",  icon: ShieldCheck },
 ];
 
 const newsletterNav = [
@@ -77,14 +80,11 @@ const leadsNav = [
 
 const settingsNav = [
   { href: "/company",          label: "Company Info",    icon: Building2 },
-  { href: "/vault",            label: "Content Vault",   icon: Vault },
   { href: "/templates",        label: "Templates",       icon: LayoutTemplate },
   { href: "/prompts",          label: "Prompt Management", icon: FileText },
-  { href: "/lessons",          label: "Lessons",         icon: BookOpen },
   { href: "/chatbots",         label: "Chatbots",        icon: BotMessageSquare },
   { href: "/activity",         label: "Activity Log",    icon: Activity },
   { href: "/settings/api-keys",label: "API Keys",        icon: Key },
-  { href: "/safety-audit",    label: "Safety Audit",    icon: ShieldCheck },
   { href: "/admin",            label: "User Management", icon: Shield },
 ];
 
