@@ -200,9 +200,53 @@ Existing notes: ${hospital.notes || "none"}`;
         .single();
 
       if (error) throw new Error(error.message);
+
+      // ── Auto-create a lead so multiple directors per hospital are preserved ──
+      let leadCreated = false;
+      if (directorInfo.directorName) {
+        const dirName = String(directorInfo.directorName);
+        const dirTitle = titleParts.join(" — ") || "Residency Program Director";
+        // Dedup: check if this exact director already exists as a lead
+        const { data: existing } = await db
+          .from("Lead")
+          .select("id")
+          .eq("companyId", DEMO_COMPANY_ID)
+          .eq("source", "residency_director")
+          .ilike("fullName", dirName)
+          .eq("company", hospital.name)
+          .limit(1);
+
+        if (!existing || existing.length === 0) {
+          await db.from("Lead").insert({
+            companyId: DEMO_COMPANY_ID,
+            source: "residency_director",
+            fullName: dirName,
+            email: directorInfo.directorEmail ? String(directorInfo.directorEmail) : null,
+            phone: directorInfo.directorPhone ? String(directorInfo.directorPhone) : null,
+            jobTitle: dirTitle,
+            company: hospital.name,
+            city: hospital.city || null,
+            state: hospital.state,
+            country: hospital.country,
+            website: hospital.url || null,
+            specialties: categoryLabel ? [categoryLabel] : [],
+            notes: [
+              `Category: ${categoryLabel || "General/DIO"}`,
+              directorInfo.reasoning ? `Found via: ${directorInfo.reasoning}` : "",
+              `Confidence: ${directorInfo.confidence ?? "unknown"}`,
+              `Hospital: ${hospital.name}, ${hospital.city ?? ""} ${hospital.state}`,
+            ].filter(Boolean).join("\n"),
+            status: "new",
+            updatedAt: new Date().toISOString(),
+          });
+          leadCreated = true;
+        }
+      }
+
       return NextResponse.json({
         hospital: data,
         fieldsUpdated,
+        leadCreated,
         confidence: directorInfo.confidence ?? "unknown",
         source: directorInfo.source ?? "",
         residencyCategory: directorInfo.residencyCategory ?? categoryLabel,

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   UserCheck, Search, Loader2, X, RefreshCw, Download, AlertCircle,
   CheckSquare, Trash2, Sparkles, Star, ArrowLeft, Building2,
@@ -13,12 +14,19 @@ import { LeadRow } from "@/app/leads/components/LeadRow";
 import { authFetch } from "@/lib/authFetch";
 
 export default function DirectorsPage() {
+  const searchParams = useSearchParams();
   const {
     leads, loading, error, total, page, setPage,
     search, setSearch,
     statusFilter, setStatusFilter,
     updateLead, deleteLead, addLeads, fetchLeads,
   } = useLeads({ source: "residency_director" });
+
+  // Pre-fill search from URL ?search= (e.g. from hospital "View all directors" link)
+  useEffect(() => {
+    const q = searchParams.get("search");
+    if (q) setSearch(q);
+  }, [searchParams, setSearch]);
 
   const [dismissedError, setDismissedError] = useState<string | null>(null);
 

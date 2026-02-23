@@ -224,7 +224,8 @@ export function useHospitals() {
       setHospitals((prev) => prev.map((h) => (h.id === id ? data.hospital : h)));
       const fields = (data.fieldsUpdated as string[]) ?? [];
       const conf = data.confidence ?? "";
-      showToast(fields.length > 0 ? `Found director (${conf}): ${fields.join(", ")}` : "No director info found");
+      const leadNote = data.leadCreated ? " → added to Directors" : fields.length > 0 ? " (already in Directors)" : "";
+      showToast(fields.length > 0 ? `Found director (${conf}): ${fields.join(", ")}${leadNote}` : "No director info found");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Find Director failed");
     } finally {

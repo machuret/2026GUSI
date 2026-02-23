@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2, Sparkles, UserSearch, UserPlus, Pencil, Trash2, ExternalLink, Phone, Mail } from "lucide-react";
+import Link from "next/link";
 import { type HospitalLead, STATUS_STYLES } from "@/hooks/useHospitals";
 
 interface Props {
@@ -47,13 +48,16 @@ export function HospitalRow({
         {h.directorName ? (
           <div>
             <p className="text-xs font-medium text-gray-900">{h.directorName}</p>
-            {h.directorTitle && <p className="text-[10px] text-gray-500">{h.directorTitle}</p>}
+            {h.directorTitle && <p className="text-[10px] text-gray-500 leading-snug">{h.directorTitle}</p>}
             {h.directorEmail && (
               <a href={`mailto:${h.directorEmail}`} className="text-xs text-brand-600 hover:underline flex items-center gap-1 mt-0.5">
                 <Mail className="h-3 w-3" />{h.directorEmail}
               </a>
             )}
             {h.directorPhone && <p className="text-[10px] text-gray-400 mt-0.5"><Phone className="h-2.5 w-2.5 inline mr-0.5" />{h.directorPhone}</p>}
+            <Link href={`/directors?search=${encodeURIComponent(h.name)}`} className="text-[10px] text-purple-600 hover:underline mt-1 inline-block">
+              View all directors →
+            </Link>
           </div>
         ) : (
           <span className="text-xs text-gray-400">—</span>
