@@ -7,6 +7,7 @@ import { logAiUsage } from "@/lib/aiUsage";
 import { findContentById, updateContent, createContent } from "@/lib/content";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { loadAIContext } from "@/lib/aiContext";
+import { stripMarkdown } from "@/lib/htmlUtils";
 import { z } from "zod";
 
 const reviseSchema = z.object({
@@ -87,7 +88,7 @@ IMPORTANT:
       temperature: 0.6,
       jsonMode: false,
     });
-    const output = aiResult.content.trim();
+    const output = stripMarkdown(aiResult.content);
 
     if (!output) {
       return NextResponse.json({ error: "AI returned empty content — please try again" }, { status: 500 });

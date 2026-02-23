@@ -7,6 +7,7 @@ import { logAiUsage } from "@/lib/aiUsage";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { loadAIContext } from "@/lib/aiContext";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { stripMarkdown } from "@/lib/htmlUtils";
 import { z } from "zod";
 
 const generateSchema = z.object({
@@ -80,7 +81,7 @@ GENERATION RULES:
       jsonMode: false,
     });
 
-    const output = aiResult.content.trim();
+    const output = stripMarkdown(aiResult.content);
     const wordCount = output.split(/\s+/).filter(Boolean).length;
 
     logAiUsage({ model: MODEL_CONFIG.voiceGenerate, feature: "voice_generate", promptTokens: aiResult.promptTokens, completionTokens: aiResult.completionTokens });

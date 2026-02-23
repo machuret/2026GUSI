@@ -8,6 +8,7 @@ import { createContent, CATEGORIES } from "@/lib/content";
 import { buildGenerationPrompt } from "@/lib/contentContext";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
+import { stripMarkdown } from "@/lib/htmlUtils";
 import { z } from "zod";
 
 const categoryKeys = CATEGORIES.map((c) => c.key) as [string, ...string[]];
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
       temperature: 0.65,
       jsonMode: false,
     });
-    const output = aiResult.content.trim();
+    const output = stripMarkdown(aiResult.content);
 
     // Get or create app user for tracking
     const appUser = await logActivity(

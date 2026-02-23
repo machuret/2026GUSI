@@ -8,6 +8,7 @@ import { createContent, CATEGORIES } from "@/lib/content";
 import { buildGenerationPrompt } from "@/lib/contentContext";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
+import { stripMarkdown } from "@/lib/htmlUtils";
 import { z } from "zod";
 
 const categoryKeys = CATEGORIES.map((c) => c.key) as [string, ...string[]];
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
         });
 
         const aiResult = await Promise.race([generatePromise, timeoutPromise]);
-        const output = aiResult.content.trim();
+        const output = stripMarkdown(aiResult.content);
 
         const saved = await createContent(data.category, {
           companyId: data.companyId,

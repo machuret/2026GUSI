@@ -1,3 +1,25 @@
+// Strips markdown formatting from AI-generated content.
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*\*(.+?)\*\*\*/g, "$1")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/_(.+?)_/g, "$1")
+    .replace(/~~(.+?)~~/g, "$1")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/^\s*\d+\.\s+/gm, "")
+    .replace(/^\s*>\s?/gm, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/---+/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /**
  * Shared HTML stripping utility for edge functions.
  * Removes scripts, styles, nav, footer, header, comments and all tags.
