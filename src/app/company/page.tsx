@@ -140,7 +140,7 @@ export default function CompanyPage() {
       if (!res.ok) { setResearchError(data.error || "Research failed"); return; }
 
       // Ask AI to extract structured company info from the crawled content
-      const aiRes = await fetch("/api/company/research", {
+      const aiRes = await authFetch("/api/company/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url, content: data.content }),

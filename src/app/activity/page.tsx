@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Activity, User } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 
 interface LogEntry {
   id: string;
@@ -38,7 +39,7 @@ export default function ActivityPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/activity");
+        const res = await authFetch("/api/activity");
         if (!res.ok) throw new Error(`Failed to load activity (${res.status})`);
         const data = await res.json();
         setLogs(data.logs || []);

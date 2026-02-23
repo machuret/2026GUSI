@@ -42,7 +42,7 @@ export function UrlTab({ onSaved, onError }: Props) {
     if (!preview) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/vault", {
+      const res = await authFetch("/api/vault", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filename: preview.title, content: preview.content, fileType: `url:${category}` }),

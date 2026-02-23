@@ -1,374 +1,61 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import {
-  Building2, Search, Loader2, Save, Trash2, ExternalLink,
-  MapPin, Phone, Globe, Sparkles, Plus, Pencil, X, Check,
-  ChevronDown, ChevronUp, Hospital, RefreshCw, UserSearch, Mail, UserPlus,
+  Building2, Search, Loader2, Save, Trash2,
+  MapPin, Globe, Sparkles, Plus, Pencil, X, Check,
+  ChevronDown, ChevronUp, Hospital, UserSearch,
 } from "lucide-react";
-import { authFetch } from "@/lib/authFetch";
-import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { useHospitals, STATUS_STYLES, type HospitalLead } from "@/hooks/useHospitals";
+import { HospitalRow } from "./components/HospitalRow";
 import { US_STATES, US_STATE_CITIES } from "@/lib/usCities";
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
-interface HospitalLead {
-  id: string;
-  name: string;
-  address?: string | null;
-  city?: string | null;
-  state: string;
-  country: string;
-  url?: string | null;
-  phone?: string | null;
-  type?: string | null;
-  beds?: number | null;
-  notes?: string | null;
-  status: string;
-  enriched: boolean;
-  directorName?: string | null;
-  directorEmail?: string | null;
-  directorPhone?: string | null;
-  directorTitle?: string | null;
-  createdAt: string;
-}
-
-interface SearchResult {
-  name: string;
-  address?: string | null;
-  city?: string | null;
-  state: string;
-  country: string;
-  url?: string | null;
-  phone?: string | null;
-  type?: string | null;
-  beds?: number | null;
-}
-
-// ── Constants ────────────────────────────────────────────────────────────────
-
-const STATUS_STYLES: Record<string, string> = {
-  new:       "bg-blue-100 text-blue-700 border-blue-200",
-  contacted: "bg-purple-100 text-purple-700 border-purple-200",
-  scraped:   "bg-amber-100 text-amber-700 border-amber-200",
-  active:    "bg-green-100 text-green-700 border-green-200",
-  archived:  "bg-gray-100 text-gray-500 border-gray-200",
-};
-
-// ── Main Page ────────────────────────────────────────────────────────────────
-
 export default function HospitalsPage() {
-  // Search state
-  const [searchState, setSearchState]   = useState(US_STATES[0]);
-  const [searchCity, setSearchCity]     = useState("");
-  const [searchCount, setSearchCount]   = useState(10);
-  const [searching, setSearching]       = useState(false);
-  const [searchError, setSearchError]   = useState<string | null>(null);
-  const [results, setResults]           = useState<SearchResult[]>([]);
-  const [saving, setSaving]             = useState(false);
+  const h = useHospitals();
 
-  // Library state
-  const [hospitals, setHospitals]       = useState<HospitalLead[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [stateFilter, setStateFilter]   = useState("");
-  const [cityFilter, setCityFilter]     = useState("");
-  const [textSearch, setTextSearch]     = useState("");
+  // Local UI state
   const [showLibrary, setShowLibrary]   = useState(true);
-
-  // Edit state
-  const [editingId, setEditingId]       = useState<string | null>(null);
-  const [editForm, setEditForm]         = useState<Partial<HospitalLead>>({});
-
-  // Add manual state
   const [showAdd, setShowAdd]           = useState(false);
   const [addForm, setAddForm]           = useState({ name: "", address: "", city: "", state: US_STATES[0], url: "", phone: "", type: "Public" });
-
-  // Enriching & Director search
-  const [enrichingId, setEnrichingId]   = useState<string | null>(null);
-  const [findingDirectorId, setFindingDirectorId] = useState<string | null>(null);
+  const [editingId, setEditingId]       = useState<string | null>(null);
+  const [editForm, setEditForm]         = useState<Partial<HospitalLead>>({});
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
   const [bulkFinding, setBulkFinding]   = useState(false);
-  const [toast, setToast]               = useState<string | null>(null);
 
-  // ── Fetch library ──────────────────────────────────────────────────────────
-
-  const fetchHospitals = useCallback(async () => {
-    try {
-      const params = new URLSearchParams();
-      if (stateFilter) params.set("state", stateFilter);
-      if (cityFilter)  params.set("city", cityFilter);
-      if (textSearch)  params.set("search", textSearch);
-      const res = await authFetch(`/api/hospitals?${params}`);
-      if (!res.ok) throw new Error(`Failed (${res.status})`);
-      const data = await res.json();
-      setHospitals(data.hospitals ?? []);
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, [stateFilter, cityFilter, textSearch]);
-
-  useEffect(() => { fetchHospitals(); }, [fetchHospitals]);
-
-  // ── Search via AI ──────────────────────────────────────────────────────────
-
-  const handleSearch = async () => {
-    setSearching(true);
-    setSearchError(null);
-    setResults([]);
-    try {
-      const res = await authFetch("/api/hospitals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state: searchState, city: searchCity || undefined, count: searchCount }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Failed (${res.status})`);
-      }
-      const data = await res.json();
-      setResults(data.hospitals ?? []);
-    } catch (err) {
-      setSearchError(err instanceof Error ? err.message : "Search failed");
-    } finally {
-      setSearching(false);
-    }
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  };
+  const toggleSelectAll = () => {
+    setSelectedIds(selectedIds.size === h.hospitals.length ? new Set() : new Set(h.hospitals.map((x) => x.id)));
   };
 
-  // ── Save all search results ────────────────────────────────────────────────
-
-  const handleSaveAll = async () => {
-    if (results.length === 0) return;
-    setSaving(true);
-    try {
-      const res = await authFetch("/api/hospitals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hospitals: results }),
-      });
-      if (!res.ok) throw new Error("Save failed");
-      const data = await res.json();
-      setResults([]);
-      setSearchError(null);
-      if (data.skipped > 0) {
-        setSearchError(`Saved ${data.saved}, skipped ${data.skipped} duplicates`);
-      }
-      fetchHospitals();
-    } catch (err) {
-      setSearchError(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // ── Remove from preview ────────────────────────────────────────────────────
-
-  const removeFromResults = (idx: number) => {
-    setResults((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  // ── Edit hospital ──────────────────────────────────────────────────────────
-
-  const startEdit = (h: HospitalLead) => {
-    setEditingId(h.id);
-    setEditForm({ name: h.name, address: h.address, city: h.city, state: h.state, url: h.url, phone: h.phone, type: h.type, notes: h.notes, status: h.status });
+  const startEdit = (hospital: HospitalLead) => {
+    setEditingId(hospital.id);
+    setEditForm({ name: hospital.name, address: hospital.address, city: hospital.city, state: hospital.state, url: hospital.url, phone: hospital.phone, type: hospital.type, notes: hospital.notes, status: hospital.status });
   };
 
   const saveEdit = async () => {
     if (!editingId) return;
-    try {
-      const res = await authFetch(`/api/hospitals/${editingId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editForm),
-      });
-      if (!res.ok) throw new Error("Update failed");
-      const data = await res.json();
-      setHospitals((prev) => prev.map((h) => (h.id === editingId ? data.hospital : h)));
-      setEditingId(null);
-    } catch (err) {
-      console.error(err);
-    }
+    await h.updateHospital(editingId, editForm);
+    setEditingId(null);
   };
-
-  // ── Delete hospital ────────────────────────────────────────────────────────
-
-  const deleteHospital = async (id: string) => {
-    if (!confirm("Delete this hospital?")) return;
-    try {
-      await authFetch(`/api/hospitals/${id}`, { method: "DELETE" });
-      setHospitals((prev) => prev.filter((h) => h.id !== id));
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // ── Toast helper ──────────────────────────────────────────────────────────
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 5000);
-  };
-
-  // ── Enrich hospital ────────────────────────────────────────────────────────
-
-  const enrichHospital = async (id: string) => {
-    setEnrichingId(id);
-    try {
-      const res = await authFetch(`/api/hospitals/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enrich: true }),
-      });
-      if (!res.ok) throw new Error("Enrich failed");
-      const data = await res.json();
-      setHospitals((prev) => prev.map((h) => (h.id === id ? data.hospital : h)));
-      const fields = (data.fieldsUpdated as string[]) ?? [];
-      showToast(fields.length > 0 ? `Enriched: ${fields.join(", ")}` : "No new fields to enrich");
-    } catch (err) {
-      console.error(err);
-      showToast("Enrich failed");
-    } finally {
-      setEnrichingId(null);
-    }
-  };
-
-  // ── Find Director ────────────────────────────────────────────────────────
-
-  const findDirector = async (id: string) => {
-    setFindingDirectorId(id);
-    try {
-      const res = await authFetch(`/api/hospitals/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ findDirector: true }),
-      });
-      if (!res.ok) throw new Error("Find Director failed");
-      const data = await res.json();
-      setHospitals((prev) => prev.map((h) => (h.id === id ? data.hospital : h)));
-      const fields = (data.fieldsUpdated as string[]) ?? [];
-      const conf = data.confidence ?? "";
-      showToast(fields.length > 0 ? `Found director (${conf}): ${fields.join(", ")}` : "No director info found");
-    } catch (err) {
-      console.error(err);
-      showToast("Find Director failed");
-    } finally {
-      setFindingDirectorId(null);
-    }
-  };
-
-  const bulkFindDirectors = async () => {
-    if (selectedIds.size === 0) return;
-    setBulkFinding(true);
-    const ids = Array.from(selectedIds);
-    let found = 0;
-    for (const id of ids) {
-      try {
-        const res = await authFetch(`/api/hospitals/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ findDirector: true }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setHospitals((prev) => prev.map((h) => (h.id === id ? data.hospital : h)));
-          if ((data.fieldsUpdated as string[])?.length > 0) found++;
-        }
-      } catch { /* continue */ }
-    }
-    showToast(`Director search complete: ${found}/${ids.length} hospitals updated`);
-    setSelectedIds(new Set());
-    setBulkFinding(false);
-  };
-
-  // ── Convert hospital director to Lead ───────────────────────────────────
-
-  const [convertingId, setConvertingId] = useState<string | null>(null);
-
-  const convertToLead = async (h: HospitalLead) => {
-    if (!h.directorName) { showToast("No director info — find director first"); return; }
-    setConvertingId(h.id);
-    try {
-      const res = await authFetch("/api/leads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyId: DEMO_COMPANY_ID,
-          source: "hospital",
-          fullName: h.directorName,
-          email: h.directorEmail || null,
-          phone: h.directorPhone || null,
-          jobTitle: h.directorTitle || "Residency Program Director",
-          company: h.name,
-          city: h.city || null,
-          state: h.state,
-          country: h.country,
-          website: h.url || null,
-          notes: `Converted from Hospital DB. Hospital: ${h.name}, ${h.city ?? ""} ${h.state}`,
-          status: "new",
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(`✓ ${h.directorName} added to Leads`);
-      } else {
-        showToast(data.error || "Failed to convert");
-      }
-    } catch {
-      showToast("Failed to convert to lead");
-    } finally {
-      setConvertingId(null);
-    }
-  };
-
-  // ── Selection helpers ────────────────────────────────────────────────────
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === hospitals.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(hospitals.map((h) => h.id)));
-    }
-  };
-
-  // ── Add manual hospital ────────────────────────────────────────────────────
 
   const handleAdd = async () => {
     if (!addForm.name.trim()) return;
-    try {
-      const res = await authFetch("/api/hospitals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(addForm),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (data.duplicate) { alert("Hospital already exists"); return; }
-        throw new Error("Add failed");
-      }
+    const ok = await h.addHospital(addForm);
+    if (ok) {
       setShowAdd(false);
       setAddForm({ name: "", address: "", city: "", state: US_STATES[0], url: "", phone: "", type: "Public" });
-      fetchHospitals();
-    } catch (err) {
-      console.error(err);
     }
   };
 
-  // ── Stats ──────────────────────────────────────────────────────────────────
-
-  const stateGroups = hospitals.reduce<Record<string, number>>((acc, h) => {
-    acc[h.state] = (acc[h.state] ?? 0) + 1;
-    return acc;
-  }, {});
+  const handleBulkFind = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkFinding(true);
+    await h.bulkFindDirectors(Array.from(selectedIds));
+    setSelectedIds(new Set());
+    setBulkFinding(false);
+  };
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -378,28 +65,29 @@ export default function HospitalsPage() {
           <Hospital className="h-8 w-8 text-brand-600" />
           Hospital Scraper
         </h1>
-        <p className="mt-1 text-gray-500">
-          Search and store hospitals across US states for lead generation
-        </p>
+        <p className="mt-1 text-gray-500">Search and store hospitals across US states for lead generation</p>
       </div>
 
+      {/* Error banner */}
+      {h.error && (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span className="flex-1">{h.error}</span>
+          <button onClick={() => h.fetchHospitals()} className="text-xs font-medium text-red-700 hover:bg-red-100 rounded px-2 py-0.5">Retry</button>
+        </div>
+      )}
+
       {/* Stats bar */}
-      {hospitals.length > 0 && (
+      {h.hospitals.length > 0 && (
         <div className="mb-6 flex flex-wrap gap-2">
           <div className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-center">
-            <p className="text-xl font-bold text-gray-700">{hospitals.length}</p>
+            <p className="text-xl font-bold text-gray-700">{h.hospitals.length}</p>
             <p className="text-[10px] text-gray-500 uppercase">Total</p>
           </div>
-          {Object.entries(stateGroups).sort((a, b) => b[1] - a[1]).map(([state, count]) => (
-            <button
-              key={state}
-              onClick={() => setStateFilter(stateFilter === state ? "" : state)}
-              className={`rounded-lg border px-4 py-2 text-center transition-colors ${
-                stateFilter === state ? "border-brand-500 bg-brand-50" : "border-gray-200 bg-white hover:bg-gray-50"
-              }`}
-            >
+          {Object.entries(h.stateGroups).sort((a, b) => b[1] - a[1]).map(([state, count]) => (
+            <button key={state} onClick={() => h.setStateFilter(h.stateFilter === state ? "" : state)}
+              className={`rounded-lg border px-4 py-2 text-center transition-colors ${h.stateFilter === state ? "border-brand-500 bg-brand-50" : "border-gray-200 bg-white hover:bg-gray-50"}`}>
               <p className="text-xl font-bold text-gray-700">{count}</p>
-              <p className="text-[10px] text-gray-500 uppercase truncate max-w-[80px]">{state.replace(/ /g, " ")}</p>
+              <p className="text-[10px] text-gray-500 uppercase truncate max-w-[80px]">{state}</p>
             </button>
           ))}
         </div>
@@ -411,151 +99,87 @@ export default function HospitalsPage() {
           <Search className="h-5 w-5 text-brand-600" />
           Search Hospitals by State &amp; City
         </h2>
-
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              <MapPin className="inline h-4 w-4 mr-1" /> State
-            </label>
-            <select
-              value={searchState}
-              onChange={(e) => { setSearchState(e.target.value); setSearchCity(""); }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-            >
-              {US_STATES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
+            <label className="block text-sm font-medium text-gray-700 mb-1"><MapPin className="inline h-4 w-4 mr-1" /> State</label>
+            <select value={h.searchState} onChange={(e) => { h.setSearchState(e.target.value); h.setSearchCity(""); }}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+              {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              <Building2 className="inline h-4 w-4 mr-1" /> City
-            </label>
-            <select
-              value={searchCity}
-              onChange={(e) => setSearchCity(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-            >
+            <label className="block text-sm font-medium text-gray-700 mb-1"><Building2 className="inline h-4 w-4 mr-1" /> City</label>
+            <select value={h.searchCity} onChange={(e) => h.setSearchCity(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
               <option value="">All cities (statewide)</option>
-              {(US_STATE_CITIES[searchState] ?? []).map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
+              {(US_STATE_CITIES[h.searchState] ?? []).map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Results</label>
-            <select
-              value={searchCount}
-              onChange={(e) => setSearchCount(Number(e.target.value))}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-            >
-              {[5, 10, 15, 20, 30].map((n) => (
-                <option key={n} value={n}>{n} hospitals</option>
-              ))}
+            <select value={h.searchCount} onChange={(e) => h.setSearchCount(Number(e.target.value))}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500">
+              {[5, 10, 15, 20, 30].map((n) => <option key={n} value={n}>{n} hospitals</option>)}
             </select>
           </div>
           <div className="flex items-end">
-            <button
-              onClick={handleSearch}
-              disabled={searching}
-              className="w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {searching ? (
-                <><Loader2 className="inline h-4 w-4 mr-1 animate-spin" /> Searching...</>
-              ) : (
-                <><Search className="inline h-4 w-4 mr-1" /> Search</>
-              )}
+            <button onClick={h.handleSearch} disabled={h.searching}
+              className="w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+              {h.searching ? <><Loader2 className="inline h-4 w-4 mr-1 animate-spin" /> Searching...</> : <><Search className="inline h-4 w-4 mr-1" /> Search</>}
             </button>
           </div>
         </div>
 
         {/* Quick city chips */}
-        {(US_STATE_CITIES[searchState] ?? []).length > 0 && (
+        {(US_STATE_CITIES[h.searchState] ?? []).length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-4">
             <span className="text-xs text-gray-500 mr-1 self-center">Quick:</span>
-            {(US_STATE_CITIES[searchState] ?? []).slice(0, 15).map((c) => (
-              <button
-                key={c}
-                onClick={() => setSearchCity(searchCity === c ? "" : c)}
-                className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                  searchCity === c
-                    ? "bg-brand-600 text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
+            {(US_STATE_CITIES[h.searchState] ?? []).slice(0, 15).map((c) => (
+              <button key={c} onClick={() => h.setSearchCity(h.searchCity === c ? "" : c)}
+                className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${h.searchCity === c ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
                 {c}
               </button>
             ))}
           </div>
         )}
 
-        {searchCity && (
+        {h.searchCity && (
           <p className="mb-3 text-sm text-brand-700 bg-brand-50 rounded-lg px-3 py-2">
-            Searching hospitals in <strong>{searchCity}, {searchState}</strong>
+            Searching hospitals in <strong>{h.searchCity}, {h.searchState}</strong>
           </p>
         )}
-
-        {searchError && (
-          <p className={`mt-3 text-sm rounded-lg p-3 ${searchError.includes("Saved") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
-            {searchError}
+        {h.searchError && (
+          <p className={`mt-3 text-sm rounded-lg p-3 ${h.searchError.includes("Saved") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+            {h.searchError}
           </p>
         )}
       </div>
 
       {/* Search Results Preview */}
-      {results.length > 0 && (
+      {h.results.length > 0 && (
         <div className="mb-6 rounded-xl border-2 border-brand-200 bg-brand-50/30 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Found {results.length} Hospitals — Review & Save
-            </h2>
-            <button
-              onClick={handleSaveAll}
-              disabled={saving}
-              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
-            >
-              {saving ? (
-                <><Loader2 className="inline h-4 w-4 mr-1 animate-spin" />Saving...</>
-              ) : (
-                <><Save className="inline h-4 w-4 mr-1" />Save All</>
-              )}
+            <h2 className="text-lg font-semibold text-gray-900">Found {h.results.length} Hospitals — Review & Save</h2>
+            <button onClick={h.handleSaveAll} disabled={h.saving}
+              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors">
+              {h.saving ? <><Loader2 className="inline h-4 w-4 mr-1 animate-spin" />Saving...</> : <><Save className="inline h-4 w-4 mr-1" />Save All</>}
             </button>
           </div>
-
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-xs font-medium text-gray-500 uppercase">
-                  <th className="pb-2 pr-3">Hospital</th>
-                  <th className="pb-2 pr-3">City</th>
-                  <th className="pb-2 pr-3">Type</th>
-                  <th className="pb-2 pr-3">URL</th>
-                  <th className="pb-2 w-8"></th>
+                  <th className="pb-2 pr-3">Hospital</th><th className="pb-2 pr-3">City</th><th className="pb-2 pr-3">Type</th><th className="pb-2 pr-3">URL</th><th className="pb-2 w-8"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {results.map((r, idx) => (
+                {h.results.map((r, idx) => (
                   <tr key={idx} className="hover:bg-white">
-                    <td className="py-2 pr-3">
-                      <p className="font-medium text-gray-900">{r.name}</p>
-                      {r.address && <p className="text-xs text-gray-500">{r.address}</p>}
-                    </td>
+                    <td className="py-2 pr-3"><p className="font-medium text-gray-900">{r.name}</p>{r.address && <p className="text-xs text-gray-500">{r.address}</p>}</td>
                     <td className="py-2 pr-3 text-gray-600">{r.city ?? "—"}</td>
-                    <td className="py-2 pr-3">
-                      {r.type && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{r.type}</span>}
-                    </td>
-                    <td className="py-2 pr-3">
-                      {r.url ? (
-                        <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline text-xs flex items-center gap-1">
-                          <Globe className="h-3 w-3" /> Visit
-                        </a>
-                      ) : "—"}
-                    </td>
-                    <td className="py-2">
-                      <button onClick={() => removeFromResults(idx)} className="rounded p-1 text-gray-400 hover:text-red-500 hover:bg-red-50">
-                        <X className="h-4 w-4" />
-                      </button>
-                    </td>
+                    <td className="py-2 pr-3">{r.type && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{r.type}</span>}</td>
+                    <td className="py-2 pr-3">{r.url ? <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline text-xs flex items-center gap-1"><Globe className="h-3 w-3" /> Visit</a> : "—"}</td>
+                    <td className="py-2"><button onClick={() => h.removeFromResults(idx)} className="rounded p-1 text-gray-400 hover:text-red-500 hover:bg-red-50"><X className="h-4 w-4" /></button></td>
                   </tr>
                 ))}
               </tbody>
@@ -565,40 +189,33 @@ export default function HospitalsPage() {
       )}
 
       {/* Toast */}
-      {toast && (
+      {h.toast && (
         <div className="fixed bottom-6 right-6 z-50 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-lg text-sm text-gray-800 max-w-sm animate-in fade-in slide-in-from-bottom-4">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-amber-500 shrink-0" />
-            <span>{toast}</span>
-            <button onClick={() => setToast(null)} className="ml-2 text-gray-400 hover:text-gray-600"><X className="h-3.5 w-3.5" /></button>
+            <span>{h.toast}</span>
+            <button onClick={() => h.setToast(null)} className="ml-2 text-gray-400 hover:text-gray-600"><X className="h-3.5 w-3.5" /></button>
           </div>
         </div>
       )}
 
       {/* Library */}
       <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-        <button
-          onClick={() => setShowLibrary(!showLibrary)}
-          className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-gray-50 transition-colors"
-        >
+        <button onClick={() => setShowLibrary(!showLibrary)}
+          className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-gray-50 transition-colors">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-brand-600" />
-            Hospital Database
-            <span className="text-sm font-normal text-gray-500">({hospitals.length})</span>
+            <Building2 className="h-5 w-5 text-brand-600" /> Hospital Database
+            <span className="text-sm font-normal text-gray-500">({h.hospitals.length})</span>
           </h2>
           <div className="flex items-center gap-2">
-            <button
-              onClick={(e) => { e.stopPropagation(); bulkFindDirectors(); }}
+            <button onClick={(e) => { e.stopPropagation(); handleBulkFind(); }}
               disabled={selectedIds.size === 0 || bulkFinding}
-              className="rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-40 flex items-center gap-1"
-            >
+              className="rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-40 flex items-center gap-1">
               {bulkFinding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserSearch className="h-3.5 w-3.5" />}
               {bulkFinding ? "Finding..." : `Find Directors${selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}`}
             </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowAdd(!showAdd); }}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 flex items-center gap-1"
-            >
+            <button onClick={(e) => { e.stopPropagation(); setShowAdd(!showAdd); }}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 flex items-center gap-1">
               <Plus className="h-3.5 w-3.5" /> Add Manual
             </button>
             {showLibrary ? <ChevronUp className="h-5 w-5 text-gray-400" /> : <ChevronDown className="h-5 w-5 text-gray-400" />}
@@ -609,26 +226,18 @@ export default function HospitalsPage() {
         {showAdd && (
           <div className="border-t border-gray-200 bg-gray-50 px-6 py-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-              <input placeholder="Hospital name *" value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <input placeholder="Address" value={addForm.address} onChange={(e) => setAddForm({ ...addForm, address: e.target.value })}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <input placeholder="City" value={addForm.city} onChange={(e) => setAddForm({ ...addForm, city: e.target.value })}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <select value={addForm.state} onChange={(e) => setAddForm({ ...addForm, state: e.target.value })}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+              <input placeholder="Hospital name *" value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input placeholder="Address" value={addForm.address} onChange={(e) => setAddForm({ ...addForm, address: e.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input placeholder="City" value={addForm.city} onChange={(e) => setAddForm({ ...addForm, city: e.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <select value={addForm.state} onChange={(e) => setAddForm({ ...addForm, state: e.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
                 {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
-              <input placeholder="Website URL" value={addForm.url} onChange={(e) => setAddForm({ ...addForm, url: e.target.value })}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <input placeholder="Phone" value={addForm.phone} onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <select value={addForm.type} onChange={(e) => setAddForm({ ...addForm, type: e.target.value })}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+              <input placeholder="Website URL" value={addForm.url} onChange={(e) => setAddForm({ ...addForm, url: e.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input placeholder="Phone" value={addForm.phone} onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <select value={addForm.type} onChange={(e) => setAddForm({ ...addForm, type: e.target.value })} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
                 <option>Academic Medical Center</option><option>Teaching Hospital</option><option>Community Hospital</option><option>VA Hospital</option><option>Private</option>
               </select>
-              <button onClick={handleAdd} disabled={!addForm.name.trim()}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+              <button onClick={handleAdd} disabled={!addForm.name.trim()} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
                 <Plus className="inline h-4 w-4 mr-1" /> Add Hospital
               </button>
             </div>
@@ -641,41 +250,28 @@ export default function HospitalsPage() {
             <div className="flex flex-wrap items-center gap-2 px-6 py-3 bg-gray-50 border-b border-gray-200">
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search hospitals..."
-                  value={textSearch}
-                  onChange={(e) => setTextSearch(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 py-1.5 pl-9 pr-3 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                />
+                <input type="text" placeholder="Search hospitals..." value={h.textSearch} onChange={(e) => h.setTextSearch(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 py-1.5 pl-9 pr-3 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500" />
               </div>
-              <select
-                value={stateFilter}
-                onChange={(e) => { setStateFilter(e.target.value); setCityFilter(""); }}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-              >
+              <select value={h.stateFilter} onChange={(e) => { h.setStateFilter(e.target.value); h.setCityFilter(""); }}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm">
                 <option value="">All States</option>
                 {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
-              {stateFilter && (
-                <select
-                  value={cityFilter}
-                  onChange={(e) => setCityFilter(e.target.value)}
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-                >
+              {h.stateFilter && (
+                <select value={h.cityFilter} onChange={(e) => h.setCityFilter(e.target.value)}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm">
                   <option value="">All Cities</option>
-                  {(US_STATE_CITIES[stateFilter] ?? []).map((c) => <option key={c} value={c}>{c}</option>)}
+                  {(US_STATE_CITIES[h.stateFilter] ?? []).map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               )}
             </div>
 
             {/* Table */}
             <div className="overflow-x-auto">
-              {loading ? (
-                <div className="py-12 text-center text-gray-400">
-                  <Loader2 className="mx-auto h-6 w-6 animate-spin" />
-                </div>
-              ) : hospitals.length === 0 ? (
+              {h.loading ? (
+                <div className="py-12 text-center text-gray-400"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></div>
+              ) : h.hospitals.length === 0 ? (
                 <div className="py-12 text-center">
                   <Hospital className="mx-auto h-10 w-10 text-gray-300" />
                   <p className="mt-3 font-medium text-gray-500">No hospitals yet</p>
@@ -686,44 +282,31 @@ export default function HospitalsPage() {
                   <thead>
                     <tr className="border-b border-gray-200 text-left text-xs font-medium text-gray-500 uppercase bg-gray-50">
                       <th className="pl-4 py-3 w-8">
-                        <input type="checkbox" checked={selectedIds.size === hospitals.length && hospitals.length > 0}
-                          onChange={toggleSelectAll} className="rounded border-gray-300" />
+                        <input type="checkbox" checked={selectedIds.size === h.hospitals.length && h.hospitals.length > 0} onChange={toggleSelectAll} className="rounded border-gray-300" />
                       </th>
-                      <th className="px-3 py-3">Hospital</th>
-                      <th className="px-3 py-3">City</th>
-                      <th className="px-3 py-3">State</th>
-                      <th className="px-3 py-3">Type</th>
-                      <th className="px-3 py-3">Director / Contact</th>
-                      <th className="px-3 py-3">Status</th>
-                      <th className="px-3 py-3 text-right">Actions</th>
+                      <th className="px-3 py-3">Hospital</th><th className="px-3 py-3">City</th><th className="px-3 py-3">State</th>
+                      <th className="px-3 py-3">Type</th><th className="px-3 py-3">Director / Contact</th><th className="px-3 py-3">Status</th><th className="px-3 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {hospitals.map((h) =>
-                      editingId === h.id ? (
-                        <tr key={h.id} className="bg-brand-50/30">
+                    {h.hospitals.map((hospital) =>
+                      editingId === hospital.id ? (
+                        <tr key={hospital.id} className="bg-brand-50/30">
                           <td className="pl-4 py-2"></td>
                           <td className="px-3 py-2">
-                            <input value={editForm.name ?? ""} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                              className="w-full rounded border border-gray-300 px-2 py-1 text-sm" />
-                            <input value={editForm.address ?? ""} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
-                              placeholder="Address" className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-xs" />
+                            <input value={editForm.name ?? ""} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full rounded border border-gray-300 px-2 py-1 text-sm" />
+                            <input value={editForm.address ?? ""} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} placeholder="Address" className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-xs" />
                           </td>
+                          <td className="px-3 py-2"><input value={editForm.city ?? ""} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} className="w-full rounded border border-gray-300 px-2 py-1 text-sm" /></td>
+                          <td className="px-3 py-2 text-xs text-gray-600">{hospital.state}</td>
                           <td className="px-3 py-2">
-                            <input value={editForm.city ?? ""} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
-                              className="w-full rounded border border-gray-300 px-2 py-1 text-sm" />
-                          </td>
-                          <td className="px-3 py-2 text-xs text-gray-600">{h.state}</td>
-                          <td className="px-3 py-2">
-                            <select value={editForm.type ?? ""} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
-                              className="rounded border border-gray-300 px-2 py-1 text-xs">
+                            <select value={editForm.type ?? ""} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })} className="rounded border border-gray-300 px-2 py-1 text-xs">
                               <option>Academic Medical Center</option><option>Teaching Hospital</option><option>Community Hospital</option><option>VA Hospital</option><option>Private</option>
                             </select>
                           </td>
                           <td className="px-3 py-2 text-xs text-gray-500">—</td>
                           <td className="px-3 py-2">
-                            <select value={editForm.status ?? "new"} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                              className="rounded border border-gray-300 px-2 py-1 text-xs">
+                            <select value={editForm.status ?? "new"} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="rounded border border-gray-300 px-2 py-1 text-xs">
                               {Object.keys(STATUS_STYLES).map((s) => <option key={s} value={s}>{s}</option>)}
                             </select>
                           </td>
@@ -733,74 +316,20 @@ export default function HospitalsPage() {
                           </td>
                         </tr>
                       ) : (
-                        <tr key={h.id} className={`hover:bg-gray-50 transition-colors ${selectedIds.has(h.id) ? "bg-purple-50/40" : ""}`}>
-                          <td className="pl-4 py-3">
-                            <input type="checkbox" checked={selectedIds.has(h.id)} onChange={() => toggleSelect(h.id)} className="rounded border-gray-300" />
-                          </td>
-                          <td className="px-3 py-3">
-                            <p className="font-medium text-gray-900">{h.name}</p>
-                            {h.address && <p className="text-xs text-gray-500 mt-0.5">{h.address}</p>}
-                            {h.phone && <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5"><Phone className="h-3 w-3" />{h.phone}</p>}
-                            {h.url && (
-                              <a href={h.url} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline text-xs flex items-center gap-1 mt-0.5">
-                                <ExternalLink className="h-3 w-3" /> {(() => { try { return new URL(h.url!).hostname.replace("www.", ""); } catch { return "Visit"; } })()}
-                              </a>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 text-gray-600">{h.city ?? "—"}</td>
-                          <td className="px-3 py-3 text-xs text-gray-500">{h.state}</td>
-                          <td className="px-3 py-3">
-                            {h.type && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{h.type}</span>}
-                          </td>
-                          <td className="px-3 py-3">
-                            {h.directorName ? (
-                              <div>
-                                <p className="text-xs font-medium text-gray-900">{h.directorName}</p>
-                                {h.directorTitle && <p className="text-[10px] text-gray-500">{h.directorTitle}</p>}
-                                {h.directorEmail && (
-                                  <a href={`mailto:${h.directorEmail}`} className="text-xs text-brand-600 hover:underline flex items-center gap-1 mt-0.5">
-                                    <Mail className="h-3 w-3" />{h.directorEmail}
-                                  </a>
-                                )}
-                                {h.directorPhone && <p className="text-[10px] text-gray-400 mt-0.5"><Phone className="h-2.5 w-2.5 inline mr-0.5" />{h.directorPhone}</p>}
-                              </div>
-                            ) : (
-                              <span className="text-xs text-gray-400">—</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-3">
-                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[h.status] ?? STATUS_STYLES.new}`}>
-                              {h.status}
-                            </span>
-                            {h.enriched && <span className="ml-1 text-[10px] text-green-600">enriched</span>}
-                          </td>
-                          <td className="px-3 py-3">
-                            <div className="flex items-center justify-end gap-1">
-                              <button onClick={() => findDirector(h.id)} disabled={findingDirectorId === h.id}
-                                className="rounded p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 transition-colors" title="Find Residency Program Director">
-                                {findingDirectorId === h.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserSearch className="h-4 w-4" />}
-                              </button>
-                              <button onClick={() => enrichHospital(h.id)} disabled={enrichingId === h.id}
-                                className="rounded p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors" title="Enrich with AI">
-                                {enrichingId === h.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                              </button>
-                              {h.directorName && (
-                                <button onClick={() => convertToLead(h)} disabled={convertingId === h.id}
-                                  className="rounded p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors" title="Convert director to Lead">
-                                  {convertingId === h.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-                                </button>
-                              )}
-                              <button onClick={() => startEdit(h)}
-                                className="rounded p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors" title="Edit">
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              <button onClick={() => deleteHospital(h.id)}
-                                className="rounded p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete">
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                        <HospitalRow
+                          key={hospital.id}
+                          hospital={hospital}
+                          selected={selectedIds.has(hospital.id)}
+                          onSelect={toggleSelect}
+                          onEdit={startEdit}
+                          onDelete={h.deleteHospital}
+                          onEnrich={h.enrichHospital}
+                          enrichingId={h.enrichingId}
+                          onFindDirector={h.findDirector}
+                          findingDirectorId={h.findingDirectorId}
+                          onConvertToLead={h.convertToLead}
+                          convertingId={h.convertingId}
+                        />
                       )
                     )}
                   </tbody>

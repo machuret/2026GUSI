@@ -6,6 +6,7 @@ import { RulesTab, type ComplianceRule } from "./components/RulesTab";
 import { AuditTab } from "./components/AuditTab";
 import { ResultsTab } from "./components/ResultsTab";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { authFetch } from "@/lib/authFetch";
 
 type Tab = "legal" | "medical" | "ethical" | "scanner" | "history";
 
@@ -25,7 +26,7 @@ export default function SafetyAuditPage() {
 
   // Check if current user is admin
   useEffect(() => {
-    fetch("/api/users/me")
+    authFetch("/api/users/me")
       .then((r) => r.json())
       .then((d) => {
         const role = d.user?.role ?? "";
@@ -37,7 +38,7 @@ export default function SafetyAuditPage() {
   const fetchRules = useCallback(async () => {
     setLoadingRules(true);
     try {
-      const res = await fetch(`/api/compliance/rules?companyId=${DEMO_COMPANY_ID}`);
+      const res = await authFetch(`/api/compliance/rules?companyId=${DEMO_COMPANY_ID}`);
       const data = await res.json();
       setRules(data.rules ?? []);
     } finally {

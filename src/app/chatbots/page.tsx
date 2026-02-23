@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, MessageSquare, Users, Copy, Check, Settings, BookOpen, Loader2, Bot, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { authFetch } from "@/lib/authFetch";
 
 interface ChatBot {
   id: string;
@@ -41,7 +42,7 @@ export default function ChatbotsPage() {
   const fetchBots = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/chatbots");
+      const res = await authFetch("/api/chatbots");
       const data = await res.json();
       setBots(data.bots ?? []);
     } finally {
@@ -54,7 +55,7 @@ export default function ChatbotsPage() {
   const handleCreate = async () => {
     setCreating(true);
     try {
-      const res = await fetch("/api/chatbots", {
+      const res = await authFetch("/api/chatbots", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -73,7 +74,7 @@ export default function ChatbotsPage() {
     if (!confirm(`Delete "${bot.name}" permanently? This cannot be undone.`)) return;
     setBots((prev) => prev.filter((b) => b.id !== bot.id));
     try {
-      const res = await fetch(`/api/chatbots/${bot.id}`, { method: "DELETE" });
+      const res = await authFetch(`/api/chatbots/${bot.id}`, { method: "DELETE" });
       if (!res.ok) fetchBots(); // revert on failure
     } catch {
       fetchBots();
@@ -81,7 +82,7 @@ export default function ChatbotsPage() {
   };
 
   const toggleActive = async (bot: ChatBot) => {
-    await fetch(`/api/chatbots/${bot.id}`, {
+    await authFetch(`/api/chatbots/${bot.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ active: !bot.active }),
