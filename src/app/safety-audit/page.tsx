@@ -22,6 +22,7 @@ export default function SafetyAuditPage() {
   const [tab, setTab] = useState<Tab>("legal");
   const [rules, setRules] = useState<ComplianceRule[]>([]);
   const [loadingRules, setLoadingRules] = useState(true);
+  const [rulesError, setRulesError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
   // Check if current user is admin
@@ -39,8 +40,12 @@ export default function SafetyAuditPage() {
     setLoadingRules(true);
     try {
       const res = await authFetch(`/api/compliance/rules?companyId=${DEMO_COMPANY_ID}`);
+      if (!res.ok) throw new Error(`Failed to load rules (${res.status})`);
       const data = await res.json();
       setRules(data.rules ?? []);
+      setRulesError(null);
+    } catch (err) {
+      setRulesError(err instanceof Error ? err.message : "Failed to load rules");
     } finally {
       setLoadingRules(false);
     }
@@ -81,6 +86,14 @@ export default function SafetyAuditPage() {
           </div>
         </div>
       </div>
+
+      {/* Error banner */}
+      {rulesError && (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span className="flex-1">{rulesError}</span>
+          <button onClick={() => fetchRules()} className="text-xs font-medium text-red-700 hover:bg-red-100 rounded px-2 py-0.5">Retry</button>
+        </div>
+      )}
 
       {/* Stats bar */}
       {!loadingRules && (

@@ -27,6 +27,8 @@ Always be concise, friendly, and helpful. If you cannot answer something, offer 
 export default function ChatbotsPage() {
   const [bots, setBots] = useState<ChatBot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
@@ -43,8 +45,12 @@ export default function ChatbotsPage() {
     setLoading(true);
     try {
       const res = await authFetch("/api/chatbots");
+      if (!res.ok) throw new Error(`Failed to load chatbots (${res.status})`);
       const data = await res.json();
       setBots(data.bots ?? []);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load chatbots");
     } finally {
       setLoading(false);
     }
@@ -54,6 +60,7 @@ export default function ChatbotsPage() {
 
   const handleCreate = async () => {
     setCreating(true);
+    setActionError(null);
     try {
       const res = await authFetch("/api/chatbots", {
         method: "POST",
@@ -61,10 +68,13 @@ export default function ChatbotsPage() {
         body: JSON.stringify(form),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Create failed");
       if (data.success) {
         setBots((prev) => [data.bot, ...prev]);
         setShowCreate(false);
       }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to create chatbot");
     } finally {
       setCreating(false);
     }
@@ -82,12 +92,18 @@ export default function ChatbotsPage() {
   };
 
   const toggleActive = async (bot: ChatBot) => {
-    await authFetch(`/api/chatbots/${bot.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ active: !bot.active }),
-    });
     setBots((prev) => prev.map((b) => b.id === bot.id ? { ...b, active: !b.active } : b));
+    try {
+      const res = await authFetch(`/api/chatbots/${bot.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: !bot.active }),
+      });
+      if (!res.ok) { fetchBots(); setActionError("Toggle failed"); }
+    } catch {
+      fetchBots();
+      setActionError("Toggle failed");
+    }
   };
 
   const copySnippet = (bot: ChatBot) => {
@@ -114,6 +130,20 @@ export default function ChatbotsPage() {
           <Plus className="h-4 w-4" /> New Chatbot
         </button>
       </div>
+
+      {/* Error banners */}
+      {error && (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span className="flex-1">{error}</span>
+          <button onClick={() => fetchBots()} className="text-xs font-medium text-red-700 hover:bg-red-100 rounded px-2 py-0.5">Retry</button>
+        </div>
+      )}
+      {actionError && (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span className="flex-1">{actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-600 text-xs">✕</button>
+        </div>
+      )}
 
       {/* Create modal */}
       {showCreate && (
