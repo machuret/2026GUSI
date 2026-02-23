@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { X, Zap, Loader2, Globe, AlertCircle, Plus } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { SCRAPE_SOURCES, type ScrapeSrc } from "@/lib/leadSources";
+import { authFetch } from "@/lib/authFetch";
 import type { Lead } from "@/hooks/useLeads";
 import { TagInput } from "./TagInput";
 
@@ -61,7 +62,7 @@ export function ScraperModal({ onClose, onImported }: Props) {
       await new Promise((r) => setTimeout(r, 3000));
       attempts++;
       try {
-        const pollRes = await fetch(
+        const pollRes = await authFetch(
           `/api/leads/scrape?runId=${runId}&datasetId=${datasetId}&sourceId=${encodeURIComponent(sourceId)}`
         );
         const pollData = await pollRes.json();
@@ -84,7 +85,7 @@ export function ScraperModal({ onClose, onImported }: Props) {
     setRunPhase("starting"); setElapsed(0); setPartialCount(0);
     const timer = setInterval(() => setElapsed((e) => e + 1), 1000);
     try {
-      const startRes = await fetch("/api/leads/scrape", {
+      const startRes = await authFetch("/api/leads/scrape", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sourceId: selectedSource.id, inputFields: fields }),
@@ -123,7 +124,7 @@ export function ScraperModal({ onClose, onImported }: Props) {
     setImporting(true);
     try {
       const leads = results.map((r) => ({ ...r, companyId: DEMO_COMPANY_ID, status: "new" }));
-      const res = await fetch("/api/leads", {
+      const res = await authFetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ leads }),

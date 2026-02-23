@@ -75,6 +75,9 @@ export default function ReasonsPage() {
   const [freshReasons, setFreshReasons]   = useState<GeneratedReason[]>([]);
   const [saving, setSaving]               = useState(false);
 
+  // Company name (dynamic)
+  const [companyName, setCompanyName]     = useState("GUSI");
+
   // Library state
   const [reasons, setReasons]             = useState<Reason[]>([]);
   const [loading, setLoading]             = useState(true);
@@ -104,6 +107,13 @@ export default function ReasonsPage() {
   }, [statusFilter, audienceFilter]);
 
   useEffect(() => { fetchReasons(); }, [fetchReasons]);
+
+  // Fetch company name on mount
+  useEffect(() => {
+    authFetch("/api/company").then((r) => r.json()).then((d) => {
+      if (d.company?.companyName) setCompanyName(d.company.companyName);
+    }).catch(() => {});
+  }, []);
 
   // ── Generate ───────────────────────────────────────────────────────────────
 
@@ -188,7 +198,7 @@ export default function ReasonsPage() {
   };
 
   const copyReason = (reason: Reason) => {
-    const text = `Reason #${reason.reasonNumber} why ${reason.audience} Love GUSI\n\n${reason.output}`;
+    const text = `Reason #${reason.reasonNumber} why ${reason.audience} Love ${companyName}\n\n${reason.output}`;
     navigator.clipboard.writeText(text);
     setCopiedId(reason.id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -216,7 +226,7 @@ export default function ReasonsPage() {
           Reasons Generator
         </h1>
         <p className="mt-1 text-gray-500">
-          Generate &ldquo;Reasons why [Audience] Love GUSI&rdquo; for social media posts
+          Generate &ldquo;Reasons why [Audience] Love {companyName}&rdquo; for social media posts
         </p>
       </div>
 
@@ -309,7 +319,7 @@ export default function ReasonsPage() {
             <span className="font-semibold text-gray-900">Preview format:</span>{" "}
             Reason #{reasons.length > 0 ? reasons[0].reasonNumber + 1 : 1} why{" "}
             <span className="font-semibold text-brand-700">{effectiveAudience || "..."}</span>{" "}
-            Love GUSI
+            Love {companyName}
           </p>
         </div>
 
@@ -358,7 +368,7 @@ export default function ReasonsPage() {
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-gray-500 mb-0.5">
-                    Reason #{reason.reasonNumber} why {reason.audience} Love GUSI
+                    Reason #{reason.reasonNumber} why {reason.audience} Love {companyName}
                   </p>
                   <p className="text-sm text-gray-900">{reason.output}</p>
                 </div>
@@ -456,7 +466,7 @@ export default function ReasonsPage() {
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-gray-500 mb-0.5">
-                        Reason #{reason.reasonNumber} why {reason.audience} Love GUSI
+                        Reason #{reason.reasonNumber} why {reason.audience} Love {companyName}
                       </p>
                       <p className="text-sm text-gray-900">{reason.output}</p>
                     </div>

@@ -60,20 +60,18 @@ export default function QualifiedPage() {
     setBulkRemoving(true);
     setBulkMsg(null);
     try {
-      await Promise.all(
-        Array.from(selectedIds).map((id) =>
-          authFetch(`/api/leads/${id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "new" }),
-          })
-        )
-      );
+      const res = await authFetch("/api/leads/bulk-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds: Array.from(selectedIds), updates: { status: "new" } }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Bulk update failed");
       await fetchLeads();
-      setBulkMsg(`✓ ${selectedIds.size} lead${selectedIds.size !== 1 ? "s" : ""} moved back to Scrape Leads`);
+      setBulkMsg(`✓ ${data.updatedCount} lead${data.updatedCount !== 1 ? "s" : ""} moved back to Scrape Leads`);
       setSelectedIds(new Set());
-    } catch {
-      setBulkMsg("⚠ Some updates failed");
+    } catch (err) {
+      setBulkMsg(`⚠ ${err instanceof Error ? err.message : "Some updates failed"}`);
     } finally {
       setBulkRemoving(false);
     }

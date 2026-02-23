@@ -98,24 +98,26 @@ export async function POST(req: NextRequest) {
     // Generate reasons via AI
     const parsed = generateSchema.parse(body);
 
-    const { fullBlock } = await loadAIContext({ companyId: DEMO_COMPANY_ID, includeFAQ: false });
+    const [{ fullBlock, company }, { data: maxRow }] = await Promise.all([
+      loadAIContext({ companyId: DEMO_COMPANY_ID, includeFAQ: false }),
+      db
+        .from("Reason")
+        .select("reasonNumber")
+        .eq("companyId", DEMO_COMPANY_ID)
+        .order("reasonNumber", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
-    // Get current max reason number for numbering
-    const { data: maxRow } = await db
-      .from("Reason")
-      .select("reasonNumber")
-      .eq("companyId", DEMO_COMPANY_ID)
-      .order("reasonNumber", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const companyName = company?.companyName || "our company";
 
     const startNumber = (maxRow?.reasonNumber ?? 0) + 1;
 
-    const systemPrompt = `You are a creative content strategist for GUSI. Your job is to generate compelling, concise "reasons" for a social media series called "Reasons why ${parsed.audience} Love GUSI".
+    const systemPrompt = `You are a creative content strategist for ${companyName}. Your job is to generate compelling, concise "reasons" for a social media series called "Reasons why ${parsed.audience} Love ${companyName}".
 
 Each reason should be:
 - Short (1-2 sentences max, under 150 characters ideal)
-- Specific and grounded in GUSI's actual products, features, and value propositions
+- Specific and grounded in ${companyName}'s actual products, features, and value propositions
 - Easy to turn into a social media post
 - Varied in angle: some about saving time, some about patient outcomes, some about ease of use, some about community impact, some about technology, etc.
 - Written in a warm, confident tone — not salesy or hyperbolic
@@ -128,7 +130,7 @@ Example output format:
 
 ${fullBlock}`;
 
-    const userPrompt = `Generate ${parsed.count} unique reasons why ${parsed.audience} love GUSI. Make each one distinct — cover different benefits, features, and angles. Return {"reasons": [...]}.`;
+    const userPrompt = `Generate ${parsed.count} unique reasons why ${parsed.audience} love ${companyName}. Make each one distinct — cover different benefits, features, and angles. Return {"reasons": [...]}.`;
 
     const aiResult = await callOpenAIWithUsage({
       systemPrompt,

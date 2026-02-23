@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { authFetch } from "@/lib/authFetch";
 
 export interface Lead {
   id: string;
@@ -84,7 +85,7 @@ export function useLeads(initialFilters?: { status?: string; source?: string }) 
       if (statusFilter) params.set("status", statusFilter);
       if (sourceFilter) params.set("source", sourceFilter);
 
-      const res = await fetch(`/api/leads?${params}`);
+      const res = await authFetch(`/api/leads?${params}`);
       if (!res.ok) throw new Error(`Failed to load leads (${res.status})`);
       const data = await res.json();
       setLeads(data.leads ?? []);
@@ -100,7 +101,7 @@ export function useLeads(initialFilters?: { status?: string; source?: string }) 
 
   const updateLead = useCallback(async (id: string, data: Partial<Lead>) => {
     try {
-      const res = await fetch(`/api/leads/${id}`, {
+      const res = await authFetch(`/api/leads/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -119,7 +120,7 @@ export function useLeads(initialFilters?: { status?: string; source?: string }) 
 
   const deleteLead = useCallback(async (id: string) => {
     try {
-      const res = await fetch(`/api/leads/${id}`, { method: "DELETE" });
+      const res = await authFetch(`/api/leads/${id}`, { method: "DELETE" });
       const result = await res.json();
       if (result.success) {
         setLeads((prev) => prev.filter((l) => l.id !== id));

@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { logActivity } from "@/lib/activity";
 import { z } from "zod";
 
 const leadSchema = z.object({
@@ -70,7 +71,7 @@ export async function GET(req: NextRequest) {
 // POST /api/leads — create one or many leads
 export async function POST(req: NextRequest) {
   try {
-    const { response: authError } = await requireAuth();
+    const { user: authUser, response: authError } = await requireAuth();
     if (authError) return authError;
 
     const body = await req.json();
@@ -78,10 +79,34 @@ export async function POST(req: NextRequest) {
     // Support bulk insert: { leads: [...] } or single: { ...lead }
     if (Array.isArray(body.leads)) {
       const validated = body.leads.map((l: unknown) => leadSchema.parse(l));
-      const rows = validated.map((d: z.infer<typeof leadSchema>) => ({ ...d, updatedAt: new Date().toISOString() }));
+
+      // Dedup: fetch existing leads for this company (name+source)
+      const companyId = validated[0]?.companyId;
+      const { data: existing } = companyId
+        ? await db.from("Lead").select("fullName, source").eq("companyId", companyId)
+        : { data: [] };
+      const existingSet = new Set(
+        (existing ?? []).map((l: { fullName: string | null; source: string }) =>
+          `${(l.fullName ?? "").toLowerCase().trim()}|||${l.source}`
+        )
+      );
+
+      const unique = validated.filter((d: z.infer<typeof leadSchema>) => {
+        const key = `${(d.fullName ?? "").toLowerCase().trim()}|||${d.source}`;
+        if (existingSet.has(key)) return false;
+        existingSet.add(key); // also dedup within the batch
+        return true;
+      });
+
+      if (unique.length === 0) {
+        return NextResponse.json({ success: true, leads: [], inserted: 0, skipped: validated.length });
+      }
+
+      const rows = unique.map((d: z.infer<typeof leadSchema>) => ({ ...d, updatedAt: new Date().toISOString() }));
       const { data, error } = await db.from("Lead").insert(rows).select();
       if (error) throw error;
-      return NextResponse.json({ success: true, leads: data, inserted: data?.length ?? 0 });
+      await logActivity(authUser.id, authUser.email || "", "leads.import", `Imported ${data?.length ?? 0} leads (${validated.length - unique.length} skipped as duplicates)`);
+      return NextResponse.json({ success: true, leads: data, inserted: data?.length ?? 0, skipped: validated.length - unique.length });
     }
 
     const data = leadSchema.parse(body);
@@ -91,6 +116,7 @@ export async function POST(req: NextRequest) {
       .select()
       .single();
     if (error) throw error;
+    await logActivity(authUser.id, authUser.email || "", "leads.create", `Created lead: ${data.fullName ?? "unnamed"}`);
     return NextResponse.json({ success: true, lead });
   } catch (error) {
     return handleApiError(error, "Create Lead");
