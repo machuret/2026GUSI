@@ -9,8 +9,8 @@ import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { loadAIContext } from "@/lib/aiContext";
 import { z } from "zod";
 
-const CONTENT_TYPES = ["newsletter", "social_media", "blog_post"] as const;
-const IDEA_CATEGORIES = ["Education", "Touching Base", "Company Win", "Company Blog Post"] as const;
+const CONTENT_TYPES = ["newsletter", "social_media", "blog_post", "carousel"] as const;
+const IDEA_CATEGORIES = ["Education", "Touching Base", "Company Win", "Company Blog Post", "Carousel Topic"] as const;
 
 const generateSchema = z.object({
   contentTypes: z.array(z.enum(CONTENT_TYPES)).min(1),
@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
       newsletter:   "Newsletter",
       social_media: "Social Media Post",
       blog_post:    "Blog Post",
+      carousel:     "Carousel Post",
     };
 
     const { fullBlock } = await loadAIContext({ companyId: DEMO_COMPANY_ID, includeFAQ: false });

@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import {
   Lightbulb, Sparkles, Loader2, BookOpen, Mail, Share2,
   Check, Archive, Trash2, RefreshCw, ChevronDown, ChevronUp,
-  GraduationCap, Bell, Trophy, FileText, ThumbsUp, ThumbsDown, CheckCircle2,
+  GraduationCap, Bell, Trophy, FileText, ThumbsUp, ThumbsDown, CheckCircle2, Layers,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type ContentType = "newsletter" | "social_media" | "blog_post";
-type IdeaCategory = "Education" | "Touching Base" | "Company Win" | "Company Blog Post";
+type ContentType = "newsletter" | "social_media" | "blog_post" | "carousel";
+type IdeaCategory = "Education" | "Touching Base" | "Company Win" | "Company Blog Post" | "Carousel Topic";
 type IdeaStatus = "saved" | "approved" | "archived" | "done";
 type IdeaRating = "up" | "down" | null;
 
@@ -36,6 +36,7 @@ const CONTENT_TYPES: { key: ContentType; label: string; icon: React.ElementType;
   { key: "newsletter",   label: "Newsletter",        icon: Mail,    color: "bg-blue-100 text-blue-700 border-blue-200" },
   { key: "social_media", label: "Social Media",      icon: Share2,  color: "bg-pink-100 text-pink-700 border-pink-200" },
   { key: "blog_post",    label: "Blog Post",         icon: BookOpen, color: "bg-green-100 text-green-700 border-green-200" },
+  { key: "carousel",     label: "Carousel",          icon: Layers,  color: "bg-orange-100 text-orange-700 border-orange-200" },
 ];
 
 const IDEA_CATEGORIES: { key: IdeaCategory; label: string; icon: React.ElementType; color: string }[] = [
@@ -43,12 +44,14 @@ const IDEA_CATEGORIES: { key: IdeaCategory; label: string; icon: React.ElementTy
   { key: "Touching Base",       label: "Touching Base",       icon: Bell,          color: "bg-amber-100 text-amber-700 border-amber-200" },
   { key: "Company Win",         label: "Company Win",         icon: Trophy,        color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
   { key: "Company Blog Post",   label: "Company Blog Post",   icon: FileText,      color: "bg-sky-100 text-sky-700 border-sky-200" },
+  { key: "Carousel Topic",      label: "Carousel Topic",      icon: Layers,        color: "bg-orange-100 text-orange-700 border-orange-200" },
 ];
 
 const CONTENT_TYPE_TO_CATEGORY: Record<ContentType, string> = {
   newsletter:   "newsletter",
   social_media: "social_media",
   blog_post:    "blog_post",
+  carousel:     "carousel",
 };
 
 // ── Small helpers ────────────────────────────────────────────────────────────
@@ -81,8 +84,8 @@ export default function IdeasPage() {
   const router = useRouter();
 
   // Generator state
-  const [selectedTypes, setSelectedTypes]       = useState<ContentType[]>(["newsletter", "social_media", "blog_post"]);
-  const [selectedCategories, setSelectedCategories] = useState<IdeaCategory[]>(["Education", "Touching Base", "Company Win", "Company Blog Post"]);
+  const [selectedTypes, setSelectedTypes]       = useState<ContentType[]>(["newsletter", "social_media", "blog_post", "carousel"]);
+  const [selectedCategories, setSelectedCategories] = useState<IdeaCategory[]>(["Education", "Touching Base", "Company Win", "Company Blog Post", "Carousel Topic"]);
   const [count, setCount]                       = useState(6);
   const [generating, setGenerating]             = useState(false);
   const [genError, setGenError]                 = useState<string | null>(null);
@@ -185,9 +188,13 @@ export default function IdeasPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Approve failed");
       setSavedIdeas((prev) => prev.map((i) => (i.id === idea.id ? data.idea : i)));
-      // Navigate to generate page with the category pre-selected
-      const category = CONTENT_TYPE_TO_CATEGORY[idea.contentType as ContentType] ?? "blog_post";
-      router.push(`/generate?category=${category}&ideaId=${data.contentId}&ideaTitle=${encodeURIComponent(idea.title)}`);
+      // Navigate to the appropriate page
+      if (idea.contentType === "carousel" || idea.category === "Carousel Topic") {
+        router.push(`/carousel?topic=${encodeURIComponent(idea.title)}`);
+      } else {
+        const category = CONTENT_TYPE_TO_CATEGORY[idea.contentType as ContentType] ?? "blog_post";
+        router.push(`/generate?category=${category}&ideaId=${data.contentId}&ideaTitle=${encodeURIComponent(idea.title)}`);
+      }
     } catch {
       // silently ignore
     } finally {

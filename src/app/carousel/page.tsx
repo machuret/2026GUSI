@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Layers, Loader2, Sparkles, Copy, Check, ChevronDown, ChevronUp,
   RefreshCw, Download, Palette, BookOpen, List, Brain, MessageSquare,
+  Save, Trash2, Lightbulb, FolderOpen,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 
@@ -22,6 +24,24 @@ interface CarouselResult {
   slides: CarouselSlide[];
   hashtags?: string[];
   canvaNote?: string;
+}
+
+interface SavedCarousel {
+  id: string;
+  title: string;
+  topic: string;
+  carouselType: string;
+  slides: CarouselSlide[];
+  hashtags?: string[];
+  canvaNote?: string;
+  createdAt: string;
+}
+
+interface CarouselIdea {
+  id: string;
+  title: string;
+  summary: string;
+  category: string;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -117,7 +137,9 @@ function SlideCard({ slide, index }: { slide: CarouselSlide; index: number }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function CarouselCreatorPage() {
-  const [topic,        setTopic]        = useState("");
+  const searchParams = useSearchParams();
+
+  const [topic,        setTopic]        = useState(searchParams.get("topic") ?? "");
   const [audience,     setAudience]     = useState("");
   const [goal,         setGoal]         = useState("");
   const [cta,          setCta]          = useState("");
@@ -130,6 +152,101 @@ export default function CarouselCreatorPage() {
   const [error,    setError]    = useState<string | null>(null);
   const [result,   setResult]   = useState<CarouselResult | null>(null);
   const [allDesignNotes, setAllDesignNotes] = useState(false);
+
+  // Save state
+  const [saving, setSaving]               = useState(false);
+  const [savedMsg, setSavedMsg]           = useState<string | null>(null);
+
+  // Saved carousels library
+  const [savedCarousels, setSavedCarousels] = useState<SavedCarousel[]>([]);
+  const [loadingSaved, setLoadingSaved]     = useState(true);
+  const [showSaved, setShowSaved]           = useState(false);
+
+  // Carousel ideas from Ideas page
+  const [carouselIdeas, setCarouselIdeas]   = useState<CarouselIdea[]>([]);
+  const [showIdeas, setShowIdeas]           = useState(false);
+
+  // ── Load saved carousels & carousel ideas ────────────────────────────────
+
+  const fetchSaved = useCallback(async () => {
+    try {
+      const res = await authFetch("/api/carousel/saved");
+      if (res.ok) {
+        const data = await res.json();
+        setSavedCarousels(data.carousels ?? []);
+      }
+    } catch { /* silent */ } finally {
+      setLoadingSaved(false);
+    }
+  }, []);
+
+  const fetchCarouselIdeas = useCallback(async () => {
+    try {
+      const res = await authFetch("/api/ideas?contentType=carousel&category=Carousel+Topic");
+      if (res.ok) {
+        const data = await res.json();
+        setCarouselIdeas((data.ideas ?? []).filter((i: CarouselIdea) => i.title));
+      }
+    } catch { /* silent */ }
+  }, []);
+
+  useEffect(() => { fetchSaved(); fetchCarouselIdeas(); }, [fetchSaved, fetchCarouselIdeas]);
+
+  // ── Save carousel ────────────────────────────────────────────────────────
+
+  const handleSave = async () => {
+    if (!result) return;
+    setSaving(true);
+    setSavedMsg(null);
+    try {
+      const res = await authFetch("/api/carousel/saved", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: result.title,
+          topic,
+          carouselType,
+          slides: result.slides,
+          hashtags: result.hashtags,
+          canvaNote: result.canvaNote,
+        }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setSavedMsg("Carousel saved!");
+      fetchSaved();
+      setTimeout(() => setSavedMsg(null), 3000);
+    } catch {
+      setSavedMsg("Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Delete saved carousel ────────────────────────────────────────────────
+
+  const handleDeleteSaved = async (id: string) => {
+    if (!confirm("Delete this saved carousel?")) return;
+    try {
+      await authFetch(`/api/carousel/saved/${id}`, { method: "DELETE" });
+      setSavedCarousels((prev) => prev.filter((c) => c.id !== id));
+    } catch { /* silent */ }
+  };
+
+  // ── Load a saved carousel into the viewer ────────────────────────────────
+
+  const loadSaved = (c: SavedCarousel) => {
+    setResult({ title: c.title, slides: c.slides, hashtags: c.hashtags, canvaNote: c.canvaNote });
+    setTopic(c.topic);
+    setCarouselType((c.carouselType as CarouselType) || "educational");
+    setShowSaved(false);
+  };
+
+  // ── Use an idea as topic ─────────────────────────────────────────────────
+
+  const useIdea = (idea: CarouselIdea) => {
+    setTopic(idea.title);
+    setShowIdeas(false);
+  };
 
   const generate = async () => {
     if (!topic.trim()) return;
@@ -293,6 +410,71 @@ export default function CarouselCreatorPage() {
           {error && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
           )}
+
+          {/* Carousel Ideas from Ideas page */}
+          {carouselIdeas.length > 0 && (
+            <div className="rounded-xl border border-orange-200 bg-orange-50/30 p-4">
+              <button
+                onClick={() => setShowIdeas(v => !v)}
+                className="w-full flex items-center justify-between text-left"
+              >
+                <span className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                  <Lightbulb className="h-4 w-4 text-orange-500" />
+                  Carousel Ideas ({carouselIdeas.length})
+                </span>
+                {showIdeas ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+              </button>
+              {showIdeas && (
+                <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
+                  {carouselIdeas.map((idea) => (
+                    <button
+                      key={idea.id}
+                      onClick={() => useIdea(idea)}
+                      className="w-full text-left rounded-lg border border-orange-200 bg-white px-3 py-2 hover:bg-orange-50 transition-colors"
+                    >
+                      <p className="text-xs font-semibold text-gray-800 line-clamp-2">{idea.title}</p>
+                      {idea.summary && <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">{idea.summary}</p>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Saved Carousels */}
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <button
+              onClick={() => setShowSaved(v => !v)}
+              className="w-full flex items-center justify-between text-left"
+            >
+              <span className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-brand-600" />
+                Saved Carousels {!loadingSaved && `(${savedCarousels.length})`}
+              </span>
+              {showSaved ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+            </button>
+            {showSaved && (
+              <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
+                {loadingSaved ? (
+                  <div className="py-4 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-300" /></div>
+                ) : savedCarousels.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-3">No saved carousels yet</p>
+                ) : (
+                  savedCarousels.map((c) => (
+                    <div key={c.id} className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 hover:bg-gray-50 transition-colors">
+                      <button onClick={() => loadSaved(c)} className="flex-1 text-left min-w-0">
+                        <p className="text-xs font-semibold text-gray-800 truncate">{c.title}</p>
+                        <p className="text-[10px] text-gray-400">{c.slides?.length ?? 0} slides · {new Date(c.createdAt).toLocaleDateString()}</p>
+                      </button>
+                      <button onClick={() => handleDeleteSaved(c.id)} className="rounded p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 shrink-0">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── Right: Output ── */}
@@ -322,6 +504,19 @@ export default function CarouselCreatorPage() {
                   <p className="text-xs text-gray-400 mt-0.5">{result.slides?.length ?? 0} slides · {CAROUSEL_TYPES.find(t => t.key === carouselType)?.label}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {savedMsg && (
+                    <span className={`text-xs font-medium ${savedMsg.includes("saved") ? "text-green-600" : "text-red-500"}`}>
+                      {savedMsg}
+                    </span>
+                  )}
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100 disabled:opacity-50"
+                  >
+                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                    Save
+                  </button>
                   <button
                     onClick={() => setAllDesignNotes(v => !v)}
                     className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
