@@ -56,9 +56,21 @@ export default function GrantProfilePage() {
 
   useEffect(() => {
     authFetch("/api/grant-profile")
-      .then((r) => r.json())
-      .then((d) => { if (d.profile) setProfile({ ...EMPTY, ...d.profile }); })
-      .catch(() => {})
+      .then((r) => {
+        if (!r.ok) throw new Error(`API ${r.status}`);
+        return r.json();
+      })
+      .then((d) => {
+        if (d.profile && typeof d.profile === "object") {
+          // Ensure focusAreas is always an array
+          const p = { ...d.profile };
+          if (p.focusAreas && !Array.isArray(p.focusAreas)) {
+            try { p.focusAreas = JSON.parse(p.focusAreas); } catch { p.focusAreas = []; }
+          }
+          setProfile({ ...EMPTY, ...p });
+        }
+      })
+      .catch((err) => { console.error("Grant profile load error:", err); })
       .finally(() => setLoading(false));
   }, []);
 
