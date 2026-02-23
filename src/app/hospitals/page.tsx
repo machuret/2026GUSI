@@ -7,6 +7,7 @@ import {
   ChevronDown, ChevronUp, Hospital, RefreshCw,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
+import { US_STATES, US_STATE_CITIES } from "@/lib/usCities";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,20 +42,6 @@ interface SearchResult {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const US_STATES = [
-  "Alabama", "Alaska", "Arizona", "Arkansas", "California",
-  "Colorado", "Connecticut", "Delaware", "Florida", "Georgia",
-  "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa",
-  "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland",
-  "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri",
-  "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey",
-  "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio",
-  "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina",
-  "South Dakota", "Tennessee", "Texas", "Utah", "Vermont",
-  "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming",
-  "District of Columbia",
-];
-
 const STATUS_STYLES: Record<string, string> = {
   new:       "bg-blue-100 text-blue-700 border-blue-200",
   contacted: "bg-purple-100 text-purple-700 border-purple-200",
@@ -68,6 +55,7 @@ const STATUS_STYLES: Record<string, string> = {
 export default function HospitalsPage() {
   // Search state
   const [searchState, setSearchState]   = useState(US_STATES[0]);
+  const [searchCity, setSearchCity]     = useState("");
   const [searchCount, setSearchCount]   = useState(10);
   const [searching, setSearching]       = useState(false);
   const [searchError, setSearchError]   = useState<string | null>(null);
@@ -78,6 +66,7 @@ export default function HospitalsPage() {
   const [hospitals, setHospitals]       = useState<HospitalLead[]>([]);
   const [loading, setLoading]           = useState(true);
   const [stateFilter, setStateFilter]   = useState("");
+  const [cityFilter, setCityFilter]     = useState("");
   const [textSearch, setTextSearch]     = useState("");
   const [showLibrary, setShowLibrary]   = useState(true);
 
@@ -98,6 +87,7 @@ export default function HospitalsPage() {
     try {
       const params = new URLSearchParams();
       if (stateFilter) params.set("state", stateFilter);
+      if (cityFilter)  params.set("city", cityFilter);
       if (textSearch)  params.set("search", textSearch);
       const res = await authFetch(`/api/hospitals?${params}`);
       if (!res.ok) throw new Error(`Failed (${res.status})`);
@@ -108,7 +98,7 @@ export default function HospitalsPage() {
     } finally {
       setLoading(false);
     }
-  }, [stateFilter, textSearch]);
+  }, [stateFilter, cityFilter, textSearch]);
 
   useEffect(() => { fetchHospitals(); }, [fetchHospitals]);
 
@@ -122,7 +112,7 @@ export default function HospitalsPage() {
       const res = await authFetch("/api/hospitals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state: searchState, count: searchCount }),
+        body: JSON.stringify({ state: searchState, city: searchCity || undefined, count: searchCount }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -294,21 +284,36 @@ export default function HospitalsPage() {
       <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <Search className="h-5 w-5 text-brand-600" />
-          Search Hospitals by State
+          Search Hospitals by State &amp; City
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div className="md:col-span-2">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               <MapPin className="inline h-4 w-4 mr-1" /> State
             </label>
             <select
               value={searchState}
-              onChange={(e) => setSearchState(e.target.value)}
+              onChange={(e) => { setSearchState(e.target.value); setSearchCity(""); }}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
             >
               {US_STATES.map((s) => (
                 <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              <Building2 className="inline h-4 w-4 mr-1" /> City
+            </label>
+            <select
+              value={searchCity}
+              onChange={(e) => setSearchCity(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            >
+              <option value="">All cities (statewide)</option>
+              {(US_STATE_CITIES[searchState] ?? []).map((c) => (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
@@ -324,19 +329,46 @@ export default function HospitalsPage() {
               ))}
             </select>
           </div>
+          <div className="flex items-end">
+            <button
+              onClick={handleSearch}
+              disabled={searching}
+              className="w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {searching ? (
+                <><Loader2 className="inline h-4 w-4 mr-1 animate-spin" /> Searching...</>
+              ) : (
+                <><Search className="inline h-4 w-4 mr-1" /> Search</>
+              )}
+            </button>
+          </div>
         </div>
 
-        <button
-          onClick={handleSearch}
-          disabled={searching}
-          className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {searching ? (
-            <><Loader2 className="inline h-4 w-4 mr-2 animate-spin" />Searching hospitals in {searchState}...</>
-          ) : (
-            <><Search className="inline h-4 w-4 mr-2" />Search {searchCount} Hospitals in {searchState}</>
-          )}
-        </button>
+        {/* Quick city chips */}
+        {(US_STATE_CITIES[searchState] ?? []).length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            <span className="text-xs text-gray-500 mr-1 self-center">Quick:</span>
+            {(US_STATE_CITIES[searchState] ?? []).slice(0, 15).map((c) => (
+              <button
+                key={c}
+                onClick={() => setSearchCity(searchCity === c ? "" : c)}
+                className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                  searchCity === c
+                    ? "bg-brand-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {searchCity && (
+          <p className="mb-3 text-sm text-brand-700 bg-brand-50 rounded-lg px-3 py-2">
+            Searching hospitals in <strong>{searchCity}, {searchState}</strong>
+          </p>
+        )}
 
         {searchError && (
           <p className={`mt-3 text-sm rounded-lg p-3 ${searchError.includes("Saved") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
@@ -475,12 +507,22 @@ export default function HospitalsPage() {
               </div>
               <select
                 value={stateFilter}
-                onChange={(e) => setStateFilter(e.target.value)}
+                onChange={(e) => { setStateFilter(e.target.value); setCityFilter(""); }}
                 className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
               >
                 <option value="">All States</option>
                 {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
+              {stateFilter && (
+                <select
+                  value={cityFilter}
+                  onChange={(e) => setCityFilter(e.target.value)}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                >
+                  <option value="">All Cities</option>
+                  {(US_STATE_CITIES[stateFilter] ?? []).map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              )}
             </div>
 
             {/* Table */}

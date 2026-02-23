@@ -6,23 +6,11 @@ import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { logAiUsage } from "@/lib/aiUsage";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
-
-const US_STATES = [
-  "Alabama", "Alaska", "Arizona", "Arkansas", "California",
-  "Colorado", "Connecticut", "Delaware", "Florida", "Georgia",
-  "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa",
-  "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland",
-  "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri",
-  "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey",
-  "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio",
-  "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina",
-  "South Dakota", "Tennessee", "Texas", "Utah", "Vermont",
-  "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming",
-  "District of Columbia",
-] as const;
+import { US_STATES, US_STATE_CITIES } from "@/lib/usCities";
 
 const searchSchema = z.object({
   state: z.string().min(1),
+  city: z.string().optional(),
   count: z.number().int().min(1).max(30).default(10),
 });
 
@@ -48,6 +36,7 @@ export async function GET(req: NextRequest) {
 
     const p = req.nextUrl.searchParams;
     const state  = p.get("state") ?? "";
+    const city   = p.get("city") ?? "";
     const status = p.get("status") ?? "";
     const search = p.get("search") ?? "";
 
@@ -60,13 +49,14 @@ export async function GET(req: NextRequest) {
       .order("name", { ascending: true });
 
     if (state)  query = query.eq("state", state);
+    if (city)   query = query.ilike("city", city);
     if (status) query = query.eq("status", status);
     if (search) query = query.or(`name.ilike.%${search}%,city.ilike.%${search}%,address.ilike.%${search}%`);
 
     const { data, error, count } = await query;
     if (error) throw new Error(error.message);
 
-    return NextResponse.json({ hospitals: data ?? [], total: count ?? 0, states: US_STATES });
+    return NextResponse.json({ hospitals: data ?? [], total: count ?? 0, states: US_STATES, citiesByState: US_STATE_CITIES });
   } catch (err) {
     return handleApiError(err, "Hospitals GET");
   }
@@ -146,15 +136,15 @@ export async function POST(req: NextRequest) {
     }
 
     // ── AI Search ────────────────────────────────────────────────────────────
-    const parsed = searchSchema.parse({ state: body.state, count: body.count });
+    const parsed = searchSchema.parse({ state: body.state, city: body.city, count: body.count });
+    const cityLabel = parsed.city ? `${parsed.city}, ${parsed.state}` : parsed.state;
 
     const systemPrompt = `You are a US healthcare data researcher. Your task is to provide accurate, real information about hospitals in the United States.
 
-For the given state, return the top hospitals — one per major city where possible. Focus on:
-- Major medical centers and teaching hospitals (academic medical centers first)
-- Top-ranked hospitals (US News ranked if applicable)
-- Key regional medical centers in the largest cities of that state
-- Community hospitals in important smaller cities
+${parsed.city
+  ? `For the given city, return the top hospitals in and around ${parsed.city}, ${parsed.state}. Include:\n- The main hospital systems and medical centers\n- Teaching/academic hospitals\n- Community hospitals\n- Specialty hospitals if notable`
+  : `For the given state, return the top hospitals — one per major city where possible. Focus on:\n- Major medical centers and teaching hospitals (academic medical centers first)\n- Top-ranked hospitals (US News ranked if applicable)\n- Key regional medical centers in the largest cities of that state\n- Community hospitals in important smaller cities`
+}
 
 For each hospital, provide:
 - name: Official hospital name
@@ -167,9 +157,11 @@ For each hospital, provide:
 - beds: Approximate bed count if known (number or null)
 
 Return ONLY valid JSON: {"hospitals": [...]}
-Be accurate — only include real hospitals you are confident about. Do not fabricate URLs or details. Prioritize one hospital per major city.`;
+Be accurate — only include real hospitals you are confident about. Do not fabricate URLs or details.`;
 
-    const userPrompt = `List the top ${parsed.count} hospitals in ${parsed.state}, United States. Cover the biggest cities in the state — one major hospital per city. Include the top academic medical centers and key regional hospitals. Return {"hospitals": [...]}.`;
+    const userPrompt = parsed.city
+      ? `List the top ${parsed.count} hospitals in and around ${parsed.city}, ${parsed.state}. Include major hospitals, medical centers, and community hospitals in the area. Return {"hospitals": [...]}.`
+      : `List the top ${parsed.count} hospitals in ${parsed.state}, United States. Cover the biggest cities in the state — one major hospital per city. Include the top academic medical centers and key regional hospitals. Return {"hospitals": [...]}.`;
 
     const aiResult = await callOpenAIWithUsage({
       systemPrompt,
