@@ -41,15 +41,18 @@ interface SearchResult {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const AU_STATES = [
-  "New South Wales",
-  "Victoria",
-  "Queensland",
-  "Western Australia",
-  "South Australia",
-  "Tasmania",
-  "Northern Territory",
-  "Australian Capital Territory",
+const US_STATES = [
+  "Alabama", "Alaska", "Arizona", "Arkansas", "California",
+  "Colorado", "Connecticut", "Delaware", "Florida", "Georgia",
+  "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa",
+  "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland",
+  "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri",
+  "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey",
+  "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio",
+  "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina",
+  "South Dakota", "Tennessee", "Texas", "Utah", "Vermont",
+  "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming",
+  "District of Columbia",
 ];
 
 const STATUS_STYLES: Record<string, string> = {
@@ -64,7 +67,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 export default function HospitalsPage() {
   // Search state
-  const [searchState, setSearchState]   = useState(AU_STATES[0]);
+  const [searchState, setSearchState]   = useState(US_STATES[0]);
   const [searchCount, setSearchCount]   = useState(10);
   const [searching, setSearching]       = useState(false);
   const [searchError, setSearchError]   = useState<string | null>(null);
@@ -84,7 +87,7 @@ export default function HospitalsPage() {
 
   // Add manual state
   const [showAdd, setShowAdd]           = useState(false);
-  const [addForm, setAddForm]           = useState({ name: "", address: "", city: "", state: AU_STATES[0], url: "", phone: "", type: "Public" });
+  const [addForm, setAddForm]           = useState({ name: "", address: "", city: "", state: US_STATES[0], url: "", phone: "", type: "Public" });
 
   // Enriching
   const [enrichingId, setEnrichingId]   = useState<string | null>(null);
@@ -238,7 +241,7 @@ export default function HospitalsPage() {
         throw new Error("Add failed");
       }
       setShowAdd(false);
-      setAddForm({ name: "", address: "", city: "", state: AU_STATES[0], url: "", phone: "", type: "Public" });
+      setAddForm({ name: "", address: "", city: "", state: US_STATES[0], url: "", phone: "", type: "Public" });
       fetchHospitals();
     } catch (err) {
       console.error(err);
@@ -261,7 +264,7 @@ export default function HospitalsPage() {
           Hospital Scraper
         </h1>
         <p className="mt-1 text-gray-500">
-          Search and store hospitals across Australian states for lead generation
+          Search and store hospitals across US states for lead generation
         </p>
       </div>
 
@@ -304,7 +307,7 @@ export default function HospitalsPage() {
               onChange={(e) => setSearchState(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
             >
-              {AU_STATES.map((s) => (
+              {US_STATES.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
@@ -438,7 +441,7 @@ export default function HospitalsPage() {
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
               <select value={addForm.state} onChange={(e) => setAddForm({ ...addForm, state: e.target.value })}
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                {AU_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
               <input placeholder="Website URL" value={addForm.url} onChange={(e) => setAddForm({ ...addForm, url: e.target.value })}
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
@@ -446,7 +449,7 @@ export default function HospitalsPage() {
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
               <select value={addForm.type} onChange={(e) => setAddForm({ ...addForm, type: e.target.value })}
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                <option>Public</option><option>Private</option><option>Public/Teaching</option>
+                <option>Academic Medical Center</option><option>Teaching Hospital</option><option>Community Hospital</option><option>VA Hospital</option><option>Private</option>
               </select>
               <button onClick={handleAdd} disabled={!addForm.name.trim()}
                 className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
@@ -476,7 +479,7 @@ export default function HospitalsPage() {
                 className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
               >
                 <option value="">All States</option>
-                {AU_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
 
@@ -523,7 +526,7 @@ export default function HospitalsPage() {
                           <td className="px-3 py-2">
                             <select value={editForm.type ?? ""} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
                               className="rounded border border-gray-300 px-2 py-1 text-xs">
-                              <option>Public</option><option>Private</option><option>Public/Teaching</option>
+                              <option>Academic Medical Center</option><option>Teaching Hospital</option><option>Community Hospital</option><option>VA Hospital</option><option>Private</option>
                             </select>
                           </td>
                           <td className="px-3 py-2">

@@ -27,17 +27,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
       const { user: authUser } = await requireAuth();
 
-      const systemPrompt = `You are an Australian healthcare data researcher. Given a hospital name, state, and any existing data, provide enriched information.
+      const systemPrompt = `You are a US healthcare data researcher. Given a hospital name, state, and any existing data, provide enriched information.
 
 Return ONLY valid JSON with these fields (only include fields you are confident about):
 {
   "address": "full street address",
-  "city": "city/suburb",
-  "url": "official website URL",
+  "city": "city name",
+  "url": "official hospital website URL",
   "phone": "main phone number",
-  "type": "Public" | "Private" | "Public/Teaching",
+  "type": "Academic Medical Center" | "Teaching Hospital" | "Community Hospital" | "VA Hospital" | "Private",
   "beds": number or null,
-  "notes": "brief description: specialties, affiliated university, notable departments"
+  "notes": "brief description: specialties, affiliated university, notable departments, US News ranking if applicable"
 }
 
 Be accurate — do not fabricate information.`;

@@ -7,15 +7,18 @@ import { logAiUsage } from "@/lib/aiUsage";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
 
-const AU_STATES = [
-  "New South Wales",
-  "Victoria",
-  "Queensland",
-  "Western Australia",
-  "South Australia",
-  "Tasmania",
-  "Northern Territory",
-  "Australian Capital Territory",
+const US_STATES = [
+  "Alabama", "Alaska", "Arizona", "Arkansas", "California",
+  "Colorado", "Connecticut", "Delaware", "Florida", "Georgia",
+  "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa",
+  "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland",
+  "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri",
+  "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey",
+  "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio",
+  "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina",
+  "South Dakota", "Tennessee", "Texas", "Utah", "Vermont",
+  "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming",
+  "District of Columbia",
 ] as const;
 
 const searchSchema = z.object({
@@ -28,7 +31,7 @@ const hospitalSchema = z.object({
   address: z.string().optional().nullable(),
   city: z.string().optional().nullable(),
   state: z.string().min(1),
-  country: z.string().default("Australia"),
+  country: z.string().default("United States"),
   url: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
   type: z.string().optional().nullable(),
@@ -63,7 +66,7 @@ export async function GET(req: NextRequest) {
     const { data, error, count } = await query;
     if (error) throw new Error(error.message);
 
-    return NextResponse.json({ hospitals: data ?? [], total: count ?? 0, states: AU_STATES });
+    return NextResponse.json({ hospitals: data ?? [], total: count ?? 0, states: US_STATES });
   } catch (err) {
     return handleApiError(err, "Hospitals GET");
   }
@@ -145,27 +148,28 @@ export async function POST(req: NextRequest) {
     // ── AI Search ────────────────────────────────────────────────────────────
     const parsed = searchSchema.parse({ state: body.state, count: body.count });
 
-    const systemPrompt = `You are an Australian healthcare data researcher. Your task is to provide accurate, real information about hospitals in Australia.
+    const systemPrompt = `You are a US healthcare data researcher. Your task is to provide accurate, real information about hospitals in the United States.
 
-For the given state, return the top hospitals — one per major city/town. Focus on:
-- Major public hospitals (tertiary/teaching hospitals first)
-- Regional hospitals in key cities
-- Well-known private hospitals
+For the given state, return the top hospitals — one per major city where possible. Focus on:
+- Major medical centers and teaching hospitals (academic medical centers first)
+- Top-ranked hospitals (US News ranked if applicable)
+- Key regional medical centers in the largest cities of that state
+- Community hospitals in important smaller cities
 
 For each hospital, provide:
 - name: Official hospital name
 - address: Full street address
-- city: City/suburb name
-- state: State name (full, e.g. "New South Wales")
-- url: Official hospital website URL (must be real, not made up)
+- city: City name
+- state: Full state name (e.g. "California", "New York")
+- url: Official hospital website URL (must be real, not fabricated)
 - phone: Main phone number if known
-- type: "Public", "Private", or "Public/Teaching"
+- type: "Academic Medical Center", "Teaching Hospital", "Community Hospital", "VA Hospital", or "Private"
 - beds: Approximate bed count if known (number or null)
 
 Return ONLY valid JSON: {"hospitals": [...]}
-Be accurate — only include real hospitals you are confident about. Do not fabricate URLs or details.`;
+Be accurate — only include real hospitals you are confident about. Do not fabricate URLs or details. Prioritize one hospital per major city.`;
 
-    const userPrompt = `List the top ${parsed.count} hospitals in ${parsed.state}, Australia. One hospital per major city/town where possible. Include the biggest teaching hospitals and key regional hospitals. Return {"hospitals": [...]}.`;
+    const userPrompt = `List the top ${parsed.count} hospitals in ${parsed.state}, United States. Cover the biggest cities in the state — one major hospital per city. Include the top academic medical centers and key regional hospitals. Return {"hospitals": [...]}.`;
 
     const aiResult = await callOpenAIWithUsage({
       systemPrompt,
@@ -198,7 +202,7 @@ Be accurate — only include real hospitals you are confident about. Do not fabr
       address: h.address ? String(h.address).trim() : null,
       city: h.city ? String(h.city).trim() : null,
       state: parsed.state,
-      country: "Australia",
+      country: "United States",
       url: h.url ? String(h.url).trim() : null,
       phone: h.phone ? String(h.phone).trim() : null,
       type: h.type ? String(h.type).trim() : null,
