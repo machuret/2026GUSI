@@ -74,8 +74,9 @@ const grantsNav = [
 ];
 
 const leadsNav = [
-  { href: "/leads",     label: "Scrape Leads", icon: Users },
-  { href: "/qualified", label: "Qualified",     icon: Star },
+  { href: "/leads",     label: "Scrape Leads",     icon: Users },
+  { href: "/hospitals", label: "Hospital Scraper",  icon: Building2 },
+  { href: "/qualified", label: "Qualified",          icon: Star },
 ];
 
 const settingsNav = [
