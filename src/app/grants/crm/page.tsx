@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, PenLine, Sparkles, ExternalLink, Loader2,
@@ -9,6 +9,7 @@ import {
 import { useGrants } from "@/hooks/useGrants";
 import { authFetch } from "@/lib/authFetch";
 import type { Grant } from "@/hooks/useGrants";
+import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 
 type CrmStatus = "Researching" | "Pipeline" | "Active" | "Submitted" | "Won" | "Lost";
 
@@ -225,6 +226,15 @@ export default function GrantsCrmPage() {
 
   const getColumn = (status: CrmStatus) => filtered.filter((g) => g.crmStatus === status);
 
+  const onDragEnd = useCallback(async (result: DropResult) => {
+    const { draggableId, destination } = result;
+    if (!destination) return;
+    const newStatus = destination.droppableId as CrmStatus;
+    const grant = grants.find((g) => g.id === draggableId);
+    if (!grant || grant.crmStatus === newStatus) return;
+    await updateGrant(draggableId, { crmStatus: newStatus });
+  }, [grants, updateGrant]);
+
   const totalInCrm = crmGrants.length;
   const wonCount = crmGrants.filter((g) => g.crmStatus === "Won").length;
   const activeCount = crmGrants.filter((g) => g.crmStatus === "Active" || g.crmStatus === "Submitted").length;
@@ -294,44 +304,65 @@ export default function GrantsCrmPage() {
 
       {/* Kanban board */}
       {(loading || crmGrants.length > 0) && (
-        <div className="overflow-x-auto pb-4">
-          <div className="flex gap-4 min-w-[900px]">
-            {COLUMNS.map((col) => {
-              const cards = getColumn(col.status);
-              return (
-                <div key={col.status} className="flex-1 min-w-[220px]">
-                  {/* Column header */}
-                  <div className={`mb-3 flex items-center justify-between rounded-lg px-3 py-2 ${col.bg} border ${col.border}`}>
-                    <span className={`text-sm font-semibold ${col.color}`}>{col.label}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${col.bg} ${col.color}`}>{cards.length}</span>
-                  </div>
+        <DragDropContext onDragEnd={onDragEnd}>
+          <div className="overflow-x-auto pb-4">
+            <div className="flex gap-4 min-w-[900px]">
+              {COLUMNS.map((col) => {
+                const cards = getColumn(col.status);
+                return (
+                  <div key={col.status} className="flex-1 min-w-[220px]">
+                    {/* Column header */}
+                    <div className={`mb-3 flex items-center justify-between rounded-lg px-3 py-2 ${col.bg} border ${col.border}`}>
+                      <span className={`text-sm font-semibold ${col.color}`}>{col.label}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${col.bg} ${col.color}`}>{cards.length}</span>
+                    </div>
 
-                  {/* Cards */}
-                  <div className="space-y-3">
-                    {loading ? (
-                      <div className="rounded-xl border border-gray-200 bg-white p-4 text-center">
-                        <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-300" />
-                      </div>
-                    ) : cards.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-gray-200 py-6 text-center">
-                        <p className="text-xs text-gray-300">Empty</p>
-                      </div>
-                    ) : (
-                      cards.map((grant) => (
-                        <GrantCrmCard
-                          key={grant.id}
-                          grant={grant}
-                          onUpdate={updateGrant}
-                          companyDNA={companyDNA}
-                        />
-                      ))
-                    )}
+                    {/* Droppable column */}
+                    <Droppable droppableId={col.status}>
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                          className={`space-y-3 min-h-[80px] rounded-lg p-1 transition-colors ${snapshot.isDraggingOver ? `${col.bg} ring-2 ring-inset ${col.border.replace("border-", "ring-")}` : ""}`}
+                        >
+                          {loading ? (
+                            <div className="rounded-xl border border-gray-200 bg-white p-4 text-center">
+                              <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-300" />
+                            </div>
+                          ) : cards.length === 0 && !snapshot.isDraggingOver ? (
+                            <div className="rounded-xl border border-dashed border-gray-200 py-6 text-center">
+                              <p className="text-xs text-gray-300">Drop grants here</p>
+                            </div>
+                          ) : (
+                            cards.map((grant, index) => (
+                              <Draggable key={grant.id} draggableId={grant.id} index={index}>
+                                {(dragProvided, dragSnapshot) => (
+                                  <div
+                                    ref={dragProvided.innerRef}
+                                    {...dragProvided.draggableProps}
+                                    {...dragProvided.dragHandleProps}
+                                    className={dragSnapshot.isDragging ? "opacity-90 rotate-1 scale-[1.02]" : ""}
+                                  >
+                                    <GrantCrmCard
+                                      grant={grant}
+                                      onUpdate={updateGrant}
+                                      companyDNA={companyDNA}
+                                    />
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))
+                          )}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        </DragDropContext>
       )}
     </div>
   );

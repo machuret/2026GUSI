@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useState } from "react";
-import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock } from "lucide-react";
+import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare } from "lucide-react";
 import Link from "next/link";
 import { useGrants, type Grant } from "@/hooks/useGrants";
 import { authFetch } from "@/lib/authFetch";
@@ -23,6 +23,49 @@ export default function GrantsPage() {
   const [ranking, setRanking] = useState(false);
   const [scoring, setScoring] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const toggleSelect = (id: string) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const toggleSelectAll = () => {
+    if (selected.size === filtered.length) setSelected(new Set());
+    else setSelected(new Set(filtered.map((g) => g.id)));
+  };
+
+  const bulkSendToCRM = async (status: string) => {
+    setBulkBusy(true);
+    setActionMsg(null);
+    let ok = 0;
+    for (const id of Array.from(selected)) {
+      try {
+        const res = await updateGrantRaw(id, { crmStatus: status as Grant["crmStatus"] });
+        if (res.success) ok++;
+      } catch { /* skip */ }
+    }
+    setActionMsg(`✓ Moved ${ok} grant${ok !== 1 ? "s" : ""} to ${status}`);
+    setSelected(new Set());
+    setBulkBusy(false);
+  };
+
+  const bulkDelete = async () => {
+    if (!confirm(`Delete ${selected.size} grant${selected.size !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    setBulkBusy(true);
+    setActionMsg(null);
+    let ok = 0;
+    for (const id of Array.from(selected)) {
+      try {
+        const res = await deleteGrant(id);
+        if (res.success) ok++;
+      } catch { /* skip */ }
+    }
+    setActionMsg(`✓ Deleted ${ok} grant${ok !== 1 ? "s" : ""}`);
+    setSelected(new Set());
+    setBulkBusy(false);
+  };
 
   const toggleSort = (field: typeof sortField) => {
     if (sortField === field) setSortAsc(v => !v);
@@ -291,6 +334,10 @@ export default function GrantsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
+                <th className="px-2 py-3 w-8">
+                  <input type="checkbox" checked={filtered.length > 0 && selected.size === filtered.length}
+                    onChange={toggleSelectAll} className="h-3.5 w-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+                </th>
                 <th className="px-4 py-3 text-left"><SortBtn field="name" label="Grant" /></th>
                 <th className="px-3 py-3 text-left"><SortBtn field="deadlineDate" label="Deadline" /></th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Amount</th>
@@ -304,10 +351,43 @@ export default function GrantsPage() {
             </thead>
             <tbody>
               {filtered.map((grant) => (
-                <GrantRow key={grant.id} grant={grant} onUpdate={updateGrant} onDelete={deleteGrant} companyDNA={companyDNA} />
+                <GrantRow key={grant.id} grant={grant} onUpdate={updateGrant} onDelete={deleteGrant} companyDNA={companyDNA}
+                  selected={selected.has(grant.id)} onToggleSelect={() => toggleSelect(grant.id)} />
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 shadow-xl">
+          <span className="text-sm font-semibold text-gray-800">
+            <CheckSquare className="inline h-4 w-4 mr-1 text-brand-600" />
+            {selected.size} selected
+          </span>
+          <div className="h-5 w-px bg-gray-200" />
+          <button onClick={() => bulkSendToCRM("Researching")} disabled={bulkBusy}
+            className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50">
+            → Researching
+          </button>
+          <button onClick={() => bulkSendToCRM("Pipeline")} disabled={bulkBusy}
+            className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
+            → Pipeline
+          </button>
+          <button onClick={() => bulkSendToCRM("Active")} disabled={bulkBusy}
+            className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
+            → Active
+          </button>
+          <div className="h-5 w-px bg-gray-200" />
+          <button onClick={bulkDelete} disabled={bulkBusy}
+            className="flex items-center gap-1 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50">
+            <Trash2 className="h-3.5 w-3.5" /> Delete
+          </button>
+          <button onClick={() => setSelected(new Set())}
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100">
+            Cancel
+          </button>
         </div>
       )}
     </div>

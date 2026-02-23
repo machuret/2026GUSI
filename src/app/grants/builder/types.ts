@@ -1,15 +1,6 @@
-export interface Grant {
-  id: string;
-  name: string;
-  founder?: string | null;
-  amount?: string | null;
-  deadlineDate?: string | null;
-  matchScore?: number | null;
-  aiVerdict?: string | null;
-  url?: string | null;
-  decision?: string | null;
-  crmStatus?: string | null;
-}
+import type { Grant as FullGrant } from "@/hooks/useGrants";
+
+export type Grant = Pick<FullGrant, "id" | "name" | "founder" | "amount" | "deadlineDate" | "matchScore" | "aiVerdict" | "url" | "decision" | "crmStatus">;
 
 export interface WritingBrief {
   funderPriorities: string[];

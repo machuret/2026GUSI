@@ -19,9 +19,11 @@ interface Props {
   onUpdate: (id: string, d: Partial<Grant>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   companyDNA: string;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }
 
-export function GrantRow({ grant, onUpdate, onDelete, companyDNA }: Props) {
+export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onToggleSelect }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Grant>>({ ...grant });
@@ -91,7 +93,13 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA }: Props) {
 
   return (
     <>
-      <tr className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${expanded ? "bg-gray-50" : ""}`}>
+      <tr className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${expanded ? "bg-gray-50" : ""} ${selected ? "bg-brand-50" : ""}`}>
+        {onToggleSelect && (
+          <td className="px-2 py-3 w-8">
+            <input type="checkbox" checked={!!selected} onChange={onToggleSelect}
+              className="h-3.5 w-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+          </td>
+        )}
         <td className="px-4 py-3">
           <div className="flex items-start gap-2">
             <button onClick={() => setExpanded(v => !v)} className="mt-0.5 shrink-0 text-gray-400 hover:text-brand-600">
@@ -178,7 +186,7 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA }: Props) {
 
       {expanded && (
         <tr className="border-b border-gray-100 bg-gray-50">
-          <td colSpan={9} className="px-6 py-5">
+          <td colSpan={10} className="px-6 py-5">
             {aiError && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{aiError}</p>}
             {researchMsg && <p className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{researchMsg}</p>}
             {(analysing || researching) && (
