@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Building2, Search, Loader2, Save, Trash2, ExternalLink,
   MapPin, Phone, Globe, Sparkles, Plus, Pencil, X, Check,
-  ChevronDown, ChevronUp, Hospital, RefreshCw,
+  ChevronDown, ChevronUp, Hospital, RefreshCw, UserSearch, Mail,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { US_STATES, US_STATE_CITIES } from "@/lib/usCities";
@@ -25,6 +25,10 @@ interface HospitalLead {
   notes?: string | null;
   status: string;
   enriched: boolean;
+  directorName?: string | null;
+  directorEmail?: string | null;
+  directorPhone?: string | null;
+  directorTitle?: string | null;
   createdAt: string;
 }
 
@@ -78,8 +82,12 @@ export default function HospitalsPage() {
   const [showAdd, setShowAdd]           = useState(false);
   const [addForm, setAddForm]           = useState({ name: "", address: "", city: "", state: US_STATES[0], url: "", phone: "", type: "Public" });
 
-  // Enriching
+  // Enriching & Director search
   const [enrichingId, setEnrichingId]   = useState<string | null>(null);
+  const [findingDirectorId, setFindingDirectorId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
+  const [bulkFinding, setBulkFinding]   = useState(false);
+  const [toast, setToast]               = useState<string | null>(null);
 
   // ── Fetch library ──────────────────────────────────────────────────────────
 
@@ -195,6 +203,13 @@ export default function HospitalsPage() {
     }
   };
 
+  // ── Toast helper ──────────────────────────────────────────────────────────
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 5000);
+  };
+
   // ── Enrich hospital ────────────────────────────────────────────────────────
 
   const enrichHospital = async (id: string) => {
@@ -208,10 +223,79 @@ export default function HospitalsPage() {
       if (!res.ok) throw new Error("Enrich failed");
       const data = await res.json();
       setHospitals((prev) => prev.map((h) => (h.id === id ? data.hospital : h)));
+      const fields = (data.fieldsUpdated as string[]) ?? [];
+      showToast(fields.length > 0 ? `Enriched: ${fields.join(", ")}` : "No new fields to enrich");
     } catch (err) {
       console.error(err);
+      showToast("Enrich failed");
     } finally {
       setEnrichingId(null);
+    }
+  };
+
+  // ── Find Director ────────────────────────────────────────────────────────
+
+  const findDirector = async (id: string) => {
+    setFindingDirectorId(id);
+    try {
+      const res = await authFetch(`/api/hospitals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ findDirector: true }),
+      });
+      if (!res.ok) throw new Error("Find Director failed");
+      const data = await res.json();
+      setHospitals((prev) => prev.map((h) => (h.id === id ? data.hospital : h)));
+      const fields = (data.fieldsUpdated as string[]) ?? [];
+      const conf = data.confidence ?? "";
+      showToast(fields.length > 0 ? `Found director (${conf}): ${fields.join(", ")}` : "No director info found");
+    } catch (err) {
+      console.error(err);
+      showToast("Find Director failed");
+    } finally {
+      setFindingDirectorId(null);
+    }
+  };
+
+  const bulkFindDirectors = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkFinding(true);
+    const ids = Array.from(selectedIds);
+    let found = 0;
+    for (const id of ids) {
+      try {
+        const res = await authFetch(`/api/hospitals/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ findDirector: true }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setHospitals((prev) => prev.map((h) => (h.id === id ? data.hospital : h)));
+          if ((data.fieldsUpdated as string[])?.length > 0) found++;
+        }
+      } catch { /* continue */ }
+    }
+    showToast(`Director search complete: ${found}/${ids.length} hospitals updated`);
+    setSelectedIds(new Set());
+    setBulkFinding(false);
+  };
+
+  // ── Selection helpers ────────────────────────────────────────────────────
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === hospitals.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(hospitals.map((h) => h.id)));
     }
   };
 
@@ -439,6 +523,17 @@ export default function HospitalsPage() {
         </div>
       )}
 
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-lg text-sm text-gray-800 max-w-sm animate-in fade-in slide-in-from-bottom-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-amber-500 shrink-0" />
+            <span>{toast}</span>
+            <button onClick={() => setToast(null)} className="ml-2 text-gray-400 hover:text-gray-600"><X className="h-3.5 w-3.5" /></button>
+          </div>
+        </div>
+      )}
+
       {/* Library */}
       <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
         <button
@@ -451,6 +546,14 @@ export default function HospitalsPage() {
             <span className="text-sm font-normal text-gray-500">({hospitals.length})</span>
           </h2>
           <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); bulkFindDirectors(); }}
+              disabled={selectedIds.size === 0 || bulkFinding}
+              className="rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-40 flex items-center gap-1"
+            >
+              {bulkFinding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserSearch className="h-3.5 w-3.5" />}
+              {bulkFinding ? "Finding..." : `Find Directors${selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}`}
+            </button>
             <button
               onClick={(e) => { e.stopPropagation(); setShowAdd(!showAdd); }}
               className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 flex items-center gap-1"
@@ -541,12 +644,16 @@ export default function HospitalsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-200 text-left text-xs font-medium text-gray-500 uppercase bg-gray-50">
-                      <th className="px-6 py-3">Hospital</th>
+                      <th className="pl-4 py-3 w-8">
+                        <input type="checkbox" checked={selectedIds.size === hospitals.length && hospitals.length > 0}
+                          onChange={toggleSelectAll} className="rounded border-gray-300" />
+                      </th>
+                      <th className="px-3 py-3">Hospital</th>
                       <th className="px-3 py-3">City</th>
                       <th className="px-3 py-3">State</th>
                       <th className="px-3 py-3">Type</th>
+                      <th className="px-3 py-3">Director / Contact</th>
                       <th className="px-3 py-3">Status</th>
-                      <th className="px-3 py-3">URL</th>
                       <th className="px-3 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -554,7 +661,8 @@ export default function HospitalsPage() {
                     {hospitals.map((h) =>
                       editingId === h.id ? (
                         <tr key={h.id} className="bg-brand-50/30">
-                          <td className="px-6 py-2">
+                          <td className="pl-4 py-2"></td>
+                          <td className="px-3 py-2">
                             <input value={editForm.name ?? ""} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                               className="w-full rounded border border-gray-300 px-2 py-1 text-sm" />
                             <input value={editForm.address ?? ""} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
@@ -571,15 +679,12 @@ export default function HospitalsPage() {
                               <option>Academic Medical Center</option><option>Teaching Hospital</option><option>Community Hospital</option><option>VA Hospital</option><option>Private</option>
                             </select>
                           </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">—</td>
                           <td className="px-3 py-2">
                             <select value={editForm.status ?? "new"} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
                               className="rounded border border-gray-300 px-2 py-1 text-xs">
                               {Object.keys(STATUS_STYLES).map((s) => <option key={s} value={s}>{s}</option>)}
                             </select>
-                          </td>
-                          <td className="px-3 py-2">
-                            <input value={editForm.url ?? ""} onChange={(e) => setEditForm({ ...editForm, url: e.target.value })}
-                              placeholder="URL" className="w-full rounded border border-gray-300 px-2 py-1 text-xs" />
                           </td>
                           <td className="px-3 py-2 text-right">
                             <button onClick={saveEdit} className="rounded p-1 text-green-600 hover:bg-green-50 mr-1"><Check className="h-4 w-4" /></button>
@@ -587,16 +692,40 @@ export default function HospitalsPage() {
                           </td>
                         </tr>
                       ) : (
-                        <tr key={h.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-3">
+                        <tr key={h.id} className={`hover:bg-gray-50 transition-colors ${selectedIds.has(h.id) ? "bg-purple-50/40" : ""}`}>
+                          <td className="pl-4 py-3">
+                            <input type="checkbox" checked={selectedIds.has(h.id)} onChange={() => toggleSelect(h.id)} className="rounded border-gray-300" />
+                          </td>
+                          <td className="px-3 py-3">
                             <p className="font-medium text-gray-900">{h.name}</p>
                             {h.address && <p className="text-xs text-gray-500 mt-0.5">{h.address}</p>}
                             {h.phone && <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5"><Phone className="h-3 w-3" />{h.phone}</p>}
+                            {h.url && (
+                              <a href={h.url} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline text-xs flex items-center gap-1 mt-0.5">
+                                <ExternalLink className="h-3 w-3" /> {(() => { try { return new URL(h.url!).hostname.replace("www.", ""); } catch { return "Visit"; } })()}
+                              </a>
+                            )}
                           </td>
                           <td className="px-3 py-3 text-gray-600">{h.city ?? "—"}</td>
                           <td className="px-3 py-3 text-xs text-gray-500">{h.state}</td>
                           <td className="px-3 py-3">
                             {h.type && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{h.type}</span>}
+                          </td>
+                          <td className="px-3 py-3">
+                            {h.directorName ? (
+                              <div>
+                                <p className="text-xs font-medium text-gray-900">{h.directorName}</p>
+                                {h.directorTitle && <p className="text-[10px] text-gray-500">{h.directorTitle}</p>}
+                                {h.directorEmail && (
+                                  <a href={`mailto:${h.directorEmail}`} className="text-xs text-brand-600 hover:underline flex items-center gap-1 mt-0.5">
+                                    <Mail className="h-3 w-3" />{h.directorEmail}
+                                  </a>
+                                )}
+                                {h.directorPhone && <p className="text-[10px] text-gray-400 mt-0.5"><Phone className="h-2.5 w-2.5 inline mr-0.5" />{h.directorPhone}</p>}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
                           </td>
                           <td className="px-3 py-3">
                             <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[h.status] ?? STATUS_STYLES.new}`}>
@@ -605,14 +734,11 @@ export default function HospitalsPage() {
                             {h.enriched && <span className="ml-1 text-[10px] text-green-600">enriched</span>}
                           </td>
                           <td className="px-3 py-3">
-                            {h.url ? (
-                              <a href={h.url} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline text-xs flex items-center gap-1">
-                                <ExternalLink className="h-3 w-3" /> Visit
-                              </a>
-                            ) : <span className="text-xs text-gray-400">—</span>}
-                          </td>
-                          <td className="px-3 py-3">
                             <div className="flex items-center justify-end gap-1">
+                              <button onClick={() => findDirector(h.id)} disabled={findingDirectorId === h.id}
+                                className="rounded p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 transition-colors" title="Find Residency Program Director">
+                                {findingDirectorId === h.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserSearch className="h-4 w-4" />}
+                              </button>
                               <button onClick={() => enrichHospital(h.id)} disabled={enrichingId === h.id}
                                 className="rounded p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors" title="Enrich with AI">
                                 {enrichingId === h.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
