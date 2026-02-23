@@ -34,6 +34,7 @@ model User {
   courseContents CourseContent[]
   salesPages     SalesPage[]
   coldEmails     ColdEmail[]
+  reasons        Reason[]
   activityLogs   ActivityLog[]
 }
 
@@ -61,6 +62,7 @@ model Company {
   courseContents CourseContent[]
   salesPages     SalesPage[]
   coldEmails     ColdEmail[]
+  reasons        Reason[]
 }
 
 model CompanyInfo {
@@ -422,6 +424,29 @@ model ColdEmail {
   @@index([companyId])
   @@index([userId])
   @@index([status])
+}
+
+// ─── 10. Reasons ───────────────────────────────────
+
+model Reason {
+  id             String        @id @default(cuid())
+  companyId      String
+  userId         String?
+  reasonNumber   Int
+  audience       String        // Doctors, Nurses, Pediatricians, Hospitals, etc.
+  output         String        // The reason text
+  status         ContentStatus @default(PENDING)
+  feedback       String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([status])
+  @@index([audience])
 }
 
 // ─── Lessons (accumulated feedback) ─────────────────

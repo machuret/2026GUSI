@@ -35,6 +35,7 @@ import {
   Send,
   ShieldCheck,
   Star,
+  Hash,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasRole } from "@/lib/auth";
@@ -46,6 +47,7 @@ const mainNav = [
 
 const contentNav = [
   { href: "/ideas",      label: "Ideas",            icon: Lightbulb },
+  { href: "/reasons",   label: "Reasons",          icon: Hash },
   { href: "/generate",  label: "Generate",         icon: Sparkles },
   { href: "/bulk",      label: "Bulk Generate",    icon: Layers },
   { href: "/carousel",  label: "Carousel Creator", icon: GalleryHorizontal },
