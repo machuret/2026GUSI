@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { authFetch } from "@/lib/authFetch";
 
 export interface Grant {
   id: string;
@@ -43,8 +44,8 @@ export function useGrants() {
     try {
       // TODO: replace DEMO_COMPANY_ID with session companyId when multi-tenancy lands
       const [grantsRes, companyRes] = await Promise.all([
-        fetch(`/api/grants?companyId=${DEMO_COMPANY_ID}`),
-        fetch(`/api/company?companyId=${DEMO_COMPANY_ID}`),
+        authFetch(`/api/grants?companyId=${DEMO_COMPANY_ID}`),
+        authFetch(`/api/company?companyId=${DEMO_COMPANY_ID}`),
       ]);
       if (!grantsRes.ok) throw new Error(`Failed to load grants (${grantsRes.status})`);
       if (!companyRes.ok && companyRes.status !== 404) throw new Error(`Failed to load company (${companyRes.status})`);
@@ -77,7 +78,7 @@ export function useGrants() {
   useEffect(() => { fetchGrants(); }, [fetchGrants]);
 
   const updateGrant = useCallback(async (id: string, data: Partial<Grant>): Promise<{ success: boolean; grant?: Grant }> => {
-    const res = await fetch(`/api/grants/${id}`, {
+    const res = await authFetch(`/api/grants/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -90,7 +91,7 @@ export function useGrants() {
   }, []);
 
   const deleteGrant = useCallback(async (id: string) => {
-    const res = await fetch(`/api/grants/${id}`, { method: "DELETE" });
+    const res = await authFetch(`/api/grants/${id}`, { method: "DELETE" });
     const result = await res.json();
     if (result.success) {
       setGrants((prev) => prev.filter((g) => g.id !== id));

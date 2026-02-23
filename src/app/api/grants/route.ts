@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { logActivity } from "@/lib/activity";
 import { z } from "zod";
 
 const grantSchema = z.object({
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
 // POST /api/grants
 export async function POST(req: NextRequest) {
   try {
-    const { response: authError } = await requireAuth();
+    const { user: authUser, response: authError } = await requireAuth();
     if (authError) return authError;
 
     const body = await req.json();
@@ -59,6 +60,9 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) throw error;
+
+    await logActivity(authUser.id, authUser.email || "", "grants.add", `Added: ${data.name.slice(0, 80)}`);
+
     return NextResponse.json({ success: true, grant });
   } catch (error) {
     return handleApiError(error, "Create Grant");

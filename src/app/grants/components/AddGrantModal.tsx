@@ -43,7 +43,7 @@ export function AddGrantModal({ onClose, onSaved }: Props) {
     if (!form.name?.trim()) { setError("Grant name is required"); return; }
     setSaving(true); setError(null);
     try {
-      const res = await fetch("/api/grants", {
+      const res = await authFetch("/api/grants", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, companyId: DEMO_COMPANY_ID }),
       });

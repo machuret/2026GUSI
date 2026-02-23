@@ -35,8 +35,12 @@ export async function POST(req: NextRequest) {
     let totalPrompt = 0;
     let totalCompletion = 0;
 
-    for (const grant of grants) {
-      const systemPrompt = `You are a grant application complexity analyst. Assess how complex and time-consuming this grant would be to apply for.
+    // Batch grants in groups of 5 to reduce API calls
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < grants.length; i += BATCH_SIZE) {
+      const batch = grants.slice(i, i + BATCH_SIZE);
+
+      const systemPrompt = `You are a grant application complexity analyst. For each grant, assess how complex and time-consuming it would be to apply for.
 
 Consider:
 1. Application requirements — how many documents, forms, reports needed?
@@ -45,27 +49,17 @@ Consider:
 4. Competition level — how selective is this grant typically?
 5. Technical requirements — does it require specialist knowledge to apply?
 
-Return ONLY valid JSON, no markdown:
-{
-  "complexityScore": <integer 0-100>,
-  "complexityLabel": "<one of: Low | Medium | High | Very High>",
-  "complexityNotes": "<2 sentence plain-English explanation of why>"
-}`;
+Return ONLY valid JSON array, no markdown:
+[{"id": "<grant_id>", "complexityScore": <integer 0-100>, "complexityLabel": "<Low | Medium | High | Very High>", "complexityNotes": "<2 sentence explanation>"}, ...]`;
 
-      const userPrompt = `Grant: ${grant.name}
-Eligibility: ${grant.eligibility ?? "Not specified"}
-How to Apply: ${grant.howToApply ?? "Not specified"}
-Amount: ${grant.amount ?? "Not specified"}
-Duration: ${grant.projectDuration ?? "Not specified"}
-Geographic Scope: ${grant.geographicScope ?? "Not specified"}
-Notes: ${grant.notes ?? "None"}`;
+      const userPrompt = batch.map(g => `ID: ${g.id}\nGrant: ${g.name}\nEligibility: ${g.eligibility ?? "Not specified"}\nHow to Apply: ${g.howToApply ?? "Not specified"}\nAmount: ${g.amount ?? "Not specified"}\nDuration: ${g.projectDuration ?? "Not specified"}\nGeographic Scope: ${g.geographicScope ?? "Not specified"}\nNotes: ${g.notes ?? "None"}`).join("\n\n---\n\n");
 
       try {
         const aiResult = await callOpenAIWithUsage({
           systemPrompt,
           userPrompt,
           model: MODEL_CONFIG.grantsAnalyse,
-          maxTokens: 300,
+          maxTokens: 600,
           temperature: 0.2,
           jsonMode: true,
         });
@@ -74,21 +68,28 @@ Notes: ${grant.notes ?? "None"}`;
         totalCompletion += aiResult.completionTokens;
 
         const parsed = JSON.parse(aiResult.content);
-        const complexityScore = typeof parsed.complexityScore === "number" ? Math.min(100, Math.max(0, parsed.complexityScore)) : 50;
-        const complexityLabel = ["Low", "Medium", "High", "Very High"].includes(parsed.complexityLabel) ? parsed.complexityLabel : "Medium";
-        const complexityNotes = typeof parsed.complexityNotes === "string" ? parsed.complexityNotes : "";
+        const scores: { id: string; complexityScore: number; complexityLabel: string; complexityNotes: string }[] = Array.isArray(parsed) ? parsed : (parsed.results ?? []);
 
-        // Persist to DB
-        await db.from("Grant").update({
-          complexityScore,
-          complexityLabel,
-          complexityNotes,
-          updatedAt: new Date().toISOString(),
-        }).eq("id", grant.id);
+        for (const s of scores) {
+          if (!s.id) continue;
+          const complexityScore = typeof s.complexityScore === "number" ? Math.min(100, Math.max(0, Math.round(s.complexityScore))) : 50;
+          const complexityLabel = ["Low", "Medium", "High", "Very High"].includes(s.complexityLabel) ? s.complexityLabel : "Medium";
+          const complexityNotes = typeof s.complexityNotes === "string" ? s.complexityNotes : "";
 
-        results.push({ id: grant.id, complexityScore, complexityLabel, complexityNotes });
+          await db.from("Grant").update({
+            complexityScore,
+            complexityLabel,
+            complexityNotes,
+            updatedAt: new Date().toISOString(),
+          }).eq("id", s.id);
+
+          results.push({ id: s.id, complexityScore, complexityLabel, complexityNotes });
+        }
       } catch {
-        results.push({ id: grant.id, complexityScore: 50, complexityLabel: "Medium", complexityNotes: "Could not assess complexity." });
+        // Fallback: mark batch as medium on error
+        for (const g of batch) {
+          results.push({ id: g.id, complexityScore: 50, complexityLabel: "Medium", complexityNotes: "Could not assess complexity." });
+        }
       }
     }
 

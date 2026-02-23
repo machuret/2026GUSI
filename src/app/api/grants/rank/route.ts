@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
+import { logActivity } from "@/lib/activity";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 
 // POST /api/grants/rank — re-score all grants against the GrantProfile
@@ -103,6 +104,8 @@ Return ONLY valid JSON array, no markdown:
       completionTokens: totalCompletion,
       userId: authUser?.id,
     });
+
+    await logActivity(authUser!.id, authUser!.email || "", "grants.rank", `Ranked ${results.length} grants`);
 
     return NextResponse.json({ success: true, ranked: results.length, results });
   } catch (error) {

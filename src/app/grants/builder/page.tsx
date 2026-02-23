@@ -59,14 +59,18 @@ export default function GrantBuilderPage() {
   // ── Load grants + drafts ───────────────────────────────────────────────────
   useEffect(() => {
     Promise.all([
-      fetch(`/api/grants?companyId=${DEMO_COMPANY_ID}`).then((r) => r.json()),
+      authFetch(`/api/grants?companyId=${DEMO_COMPANY_ID}`).then((r) => r.json()),
       authFetch("/api/grants/drafts").then((r) => r.json()),
     ])
       .then(([gData, dData]) => {
         const all: Grant[] = gData.grants ?? [];
-        // Prioritise Apply + CRM grants; fall back to all if none qualify
-        const priority = all.filter((g) => g.decision === "Apply" || g.crmStatus != null);
-        setGrants(priority.length > 0 ? priority : all);
+        // Sort: Apply + CRM grants first, then the rest
+        all.sort((a, b) => {
+          const aPri = (a.decision === "Apply" || a.crmStatus != null) ? 0 : 1;
+          const bPri = (b.decision === "Apply" || b.crmStatus != null) ? 0 : 1;
+          return aPri - bPri;
+        });
+        setGrants(all);
         setDrafts(dData.drafts ?? []);
       })
       .catch(() => {})

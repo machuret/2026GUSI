@@ -1,9 +1,10 @@
 ﻿"use client";
 
 import { useState } from "react";
-import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss } from "lucide-react";
+import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock } from "lucide-react";
 import Link from "next/link";
 import { useGrants, type Grant } from "@/hooks/useGrants";
+import { authFetch } from "@/lib/authFetch";
 import { exportToCsv } from "@/lib/exportCsv";
 import { GrantRow } from "./components/GrantRow";
 import { AddGrantModal } from "./components/AddGrantModal";
@@ -16,6 +17,7 @@ export default function GrantsPage() {
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [decisionFilter, setDecisionFilter] = useState("All");
+  const [deadlineFilter, setDeadlineFilter] = useState<"all" | "7" | "14" | "30" | "expired">("all");
   const [sortField, setSortField] = useState<"deadlineDate" | "fitScore" | "matchScore" | "complexityScore" | "name">("matchScore");
   const [sortAsc, setSortAsc] = useState(false);
   const [ranking, setRanking] = useState(false);
@@ -31,7 +33,7 @@ export default function GrantsPage() {
     setRanking(true);
     setActionMsg(null);
     try {
-      const res = await fetch("/api/grants/rank", { method: "POST" });
+      const res = await authFetch("/api/grants/rank", { method: "POST" });
       const data = await res.json();
       if (!res.ok) { setActionMsg(data.error ?? "Ranking failed"); return; }
       setActionMsg(`✓ Ranked ${data.ranked} grants by profile match`);
@@ -50,7 +52,7 @@ export default function GrantsPage() {
       // Score in batches of 20
       for (let i = 0; i < ids.length; i += 20) {
         const batch = ids.slice(i, i + 20);
-        await fetch("/api/grants/score-complexity", {
+        await authFetch("/api/grants/score-complexity", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ grantIds: batch }),
@@ -62,12 +64,30 @@ export default function GrantsPage() {
     finally { setScoring(false); }
   };
 
+  const now = Date.now();
+  const DAY = 86400000;
+
+  const deadlineCounts = {
+    closing7: grants.filter(g => { if (!g.deadlineDate) return false; const d = new Date(g.deadlineDate).getTime() - now; return d >= 0 && d <= 7 * DAY; }).length,
+    closing14: grants.filter(g => { if (!g.deadlineDate) return false; const d = new Date(g.deadlineDate).getTime() - now; return d >= 0 && d <= 14 * DAY; }).length,
+    closing30: grants.filter(g => { if (!g.deadlineDate) return false; const d = new Date(g.deadlineDate).getTime() - now; return d >= 0 && d <= 30 * DAY; }).length,
+    expired: grants.filter(g => { if (!g.deadlineDate) return false; return new Date(g.deadlineDate).getTime() < now; }).length,
+  };
+
   const filtered = grants
     .filter((g) => {
       const q = search.toLowerCase();
       const matchSearch = !search || g.name.toLowerCase().includes(q) || (g.founder ?? "").toLowerCase().includes(q) || (g.notes ?? "").toLowerCase().includes(q);
       const matchDecision = decisionFilter === "All" || g.decision === decisionFilter;
-      return matchSearch && matchDecision;
+      let matchDeadline = true;
+      if (deadlineFilter !== "all" && g.deadlineDate) {
+        const diff = new Date(g.deadlineDate).getTime() - now;
+        if (deadlineFilter === "expired") matchDeadline = diff < 0;
+        else matchDeadline = diff >= 0 && diff <= parseInt(deadlineFilter) * DAY;
+      } else if (deadlineFilter !== "all" && !g.deadlineDate) {
+        matchDeadline = false;
+      }
+      return matchSearch && matchDecision && matchDeadline;
     })
     .sort((a, b) => {
       let av: string | number = 0, bv: string | number = 0;
@@ -196,7 +216,7 @@ export default function GrantsPage() {
       </div>
 
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
           <p className="text-xs text-gray-400">Total</p>
           <p className="text-2xl font-bold text-gray-900">{grants.length}</p>
@@ -213,6 +233,17 @@ export default function GrantsPage() {
           <p className="text-xs text-red-500">No</p>
           <p className="text-2xl font-bold text-red-700">{counts.No}</p>
         </div>
+        <button
+          onClick={() => { setDeadlineFilter(deadlineFilter === "14" ? "all" : "14"); setSortField("deadlineDate"); setSortAsc(true); }}
+          className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+            deadlineCounts.closing14 > 0
+              ? "border-orange-300 bg-orange-50 hover:bg-orange-100"
+              : "border-gray-200 bg-white"
+          }`}
+        >
+          <p className="text-xs text-orange-600 flex items-center gap-1"><Clock className="h-3 w-3" /> Closing Soon</p>
+          <p className={`text-2xl font-bold ${deadlineCounts.closing14 > 0 ? "text-orange-700" : "text-gray-400"}`}>{deadlineCounts.closing14}</p>
+        </button>
       </div>
 
       {/* Filters */}
@@ -229,6 +260,22 @@ export default function GrantsPage() {
               {d}
             </button>
           ))}
+        </div>
+        <div className="flex gap-1.5">
+          {(["all", "7", "14", "30", "expired"] as const).map((d) => {
+            const label = d === "all" ? "Any deadline" : d === "expired" ? "Expired" : `≤ ${d}d`;
+            const count = d === "7" ? deadlineCounts.closing7 : d === "14" ? deadlineCounts.closing14 : d === "30" ? deadlineCounts.closing30 : d === "expired" ? deadlineCounts.expired : null;
+            return (
+              <button key={d} onClick={() => { setDeadlineFilter(d); if (d !== "all") { setSortField("deadlineDate"); setSortAsc(true); } }}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                  deadlineFilter === d
+                    ? d === "expired" ? "bg-red-600 text-white" : "bg-orange-500 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}>
+                {label}{count != null && count > 0 ? ` (${count})` : ""}
+              </button>
+            );
+          })}
         </div>
       </div>
 
