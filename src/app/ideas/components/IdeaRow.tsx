@@ -4,8 +4,8 @@ import {
   Loader2, Sparkles, Check, Archive, Trash2,
   ThumbsUp, ThumbsDown, CheckCircle2,
 } from "lucide-react";
-import type { Idea, ContentType, IdeaCategory } from "@/hooks/useIdeas";
-import { CONTENT_TYPES, IDEA_CATEGORIES } from "../constants";
+import type { Idea, ContentType, IdeaCategory, IdeaStyle } from "@/hooks/useIdeas";
+import { CONTENT_TYPES, IDEA_CATEGORIES, IDEA_STYLES } from "../constants";
 
 function ContentTypeBadge({ type }: { type: ContentType }) {
   const ct = CONTENT_TYPES.find((c) => c.key === type);
@@ -29,7 +29,18 @@ function CategoryBadge({ cat }: { cat: IdeaCategory }) {
   );
 }
 
-export { ContentTypeBadge, CategoryBadge };
+function StyleBadge({ style }: { style: IdeaStyle }) {
+  const s = IDEA_STYLES.find((x) => x.key === style);
+  if (!s) return null;
+  const Icon = s.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${s.color}`}>
+      <Icon className="h-3 w-3" />{s.label}
+    </span>
+  );
+}
+
+export { ContentTypeBadge, CategoryBadge, StyleBadge };
 
 interface IdeaRowProps {
   idea: Idea;
@@ -59,6 +70,7 @@ export function IdeaRow({ idea, busy, onApprove, onArchive, onDelete, onRate }: 
         <div className="mb-1 flex flex-wrap gap-1.5">
           <ContentTypeBadge type={idea.contentType as ContentType} />
           <CategoryBadge cat={idea.category as IdeaCategory} />
+          {idea.style && <StyleBadge style={idea.style as IdeaStyle} />}
           {isDone && (
             <span className="inline-flex items-center gap-1 rounded-full border border-purple-300 bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
               <CheckCircle2 className="h-3 w-3" /> Done

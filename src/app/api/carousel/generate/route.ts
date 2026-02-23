@@ -103,10 +103,16 @@ TONE: ${toneLabel}
 SLIDE COUNT: Exactly ${slideTarget} slides
 
 CAROUSEL STRUCTURE RULES:
-- Slide 1 (HOOK): Interrupt the scroll. Bold statement, provocative question, or tension-creating claim. No explanation yet — only curiosity. Max 10 words headline + 1 short subline.
-- Slide 2 (CONTEXT): Frame the problem or set the scene. Why does this matter? 1-2 short sentences.
-- Middle slides (BODY): One dominant idea per slide. No competing messages. Use compressed communication — short sentences, clear statements, visual hierarchy in mind. Each slide must justify the next swipe with an open loop or implied continuation.
+- Slide 1 (HOOK): Interrupt the scroll. Bold statement, provocative question, or tension-creating claim. The headline should be max 10 words. The body is a 1-sentence teaser.
+- Slide 2 (CONTEXT): Frame the problem or set the scene. Why does this matter?
+- Middle slides (BODY): Each slide covers ONE clear topic. The headline is the topic name (short, punchy). The body is a detailed explanation of ~100 words — informative, specific, and actionable. Each slide must justify the next swipe.
 - Final slide (RESOLUTION): Resolve the sequence. Summarise the core takeaway OR deliver the CTA. Must feel like closure, not abandonment.
+
+SLIDE CONTENT DEPTH:
+- Each slide's "body" should be approximately 100 words — rich, informative, and specific.
+- Do NOT write short 1-line bodies. Each explanation should teach, persuade, or tell a mini-story.
+- The headline is the TOPIC (short, bold). The body is the EXPLANATION (detailed, ~100 words).
+- Think of it as: Carousel Title → Slide 1 Topic + Explanation → Slide 2 Topic + Explanation → etc.
 
 OUTPUT FORMAT — return valid JSON only, no markdown:
 {
@@ -115,8 +121,8 @@ OUTPUT FORMAT — return valid JSON only, no markdown:
     {
       "slideNumber": 1,
       "role": "hook",
-      "headline": "...",
-      "body": "...",
+      "headline": "Slide topic (short, bold)",
+      "body": "Detailed explanation of this slide's topic, approximately 100 words. Rich, specific, informative content.",
       "designNote": "brief visual/layout suggestion for Canva"
     }
   ],
@@ -128,10 +134,11 @@ RULES:
 1. Follow the Writing DNA as your primary voice instruction.
 2. Each slide communicates ONE dominant idea — never two.
 3. Every slide must make the viewer want to swipe to the next.
-4. Text is compressed — no long paragraphs, no filler words.
-5. Never use: ${HYPE_WORDS}.
-6. Apply all lessons from past rejections.
-7. Return ONLY valid JSON — no prose, no markdown fences.`;
+4. Each slide body must be approximately 100 words — detailed and informative, not compressed.
+5. The headline is the topic, the body is the explanation. Both are required for every slide.
+6. Never use: ${HYPE_WORDS}.
+7. Apply all lessons from past rejections.
+8. Return ONLY valid JSON — no prose, no markdown fences.`;
 }
 
 export async function POST(req: NextRequest) {

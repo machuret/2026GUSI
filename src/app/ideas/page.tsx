@@ -6,9 +6,9 @@ import {
   Lightbulb, Sparkles, Loader2, Check,
   RefreshCw, ChevronDown, ChevronUp, ThumbsDown,
 } from "lucide-react";
-import { useIdeas, type ContentType, type Idea } from "@/hooks/useIdeas";
-import { IdeaRow, ContentTypeBadge, CategoryBadge } from "./components/IdeaRow";
-import { CONTENT_TYPES, IDEA_CATEGORIES, CONTENT_TYPE_TO_CATEGORY } from "./constants";
+import { useIdeas, type ContentType, type IdeaStyle, type Idea } from "@/hooks/useIdeas";
+import { IdeaRow, ContentTypeBadge, CategoryBadge, StyleBadge } from "./components/IdeaRow";
+import { CONTENT_TYPES, IDEA_CATEGORIES, IDEA_STYLES, CONTENT_TYPE_TO_CATEGORY } from "./constants";
 
 export default function IdeasPage() {
   const router = useRouter();
@@ -118,6 +118,21 @@ export default function IdeasPage() {
           </div>
         </div>
 
+        <div>
+          <p className="mb-2 text-sm font-medium text-gray-600">Style / Tone</p>
+          <div className="flex flex-wrap gap-2">
+            {IDEA_STYLES.map(({ key, label, icon: Icon, color }) => {
+              const active = h.selectedStyles.includes(key);
+              return (
+                <button key={key} onClick={() => h.toggleStyle(key)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${active ? color : "border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300 hover:text-gray-600"}`}>
+                  <Icon className="h-4 w-4" />{label}{active && <Check className="h-3.5 w-3.5" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
             <label className="text-sm font-medium text-gray-600">Ideas to generate:</label>
@@ -164,6 +179,7 @@ export default function IdeasPage() {
                   <div className="mb-2 flex flex-wrap gap-1.5">
                     <ContentTypeBadge type={idea.contentType as ContentType} />
                     <CategoryBadge cat={idea.category as any} />
+                    {idea.style && <StyleBadge style={idea.style as IdeaStyle} />}
                   </div>
                   <p className="mb-1 text-sm font-semibold text-gray-900 leading-snug">{idea.title}</p>
                   <p className="flex-1 text-xs text-gray-500 leading-relaxed">{idea.summary}</p>

@@ -6,7 +6,8 @@ import { authFetch } from "@/lib/authFetch";
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export type ContentType = "newsletter" | "social_media" | "blog_post" | "carousel";
-export type IdeaCategory = "Education" | "Touching Base" | "Company Win" | "Company Blog Post" | "Carousel Topic";
+export type IdeaCategory = "Education" | "Touching Base" | "Company Win" | "Company Blog Post" | "Carousel Topic" | "Facts" | "Motivational";
+export type IdeaStyle = "relaxed" | "educational" | "for_doctors" | "funny" | "inspirational" | "professional" | "storytelling" | "data_driven";
 export type IdeaStatus = "saved" | "approved" | "archived" | "done";
 export type IdeaRating = "up" | "down" | null;
 
@@ -16,6 +17,7 @@ export interface Idea {
   summary: string;
   contentType: ContentType;
   category: IdeaCategory;
+  style?: IdeaStyle | null;
   status: IdeaStatus;
   contentId?: string | null;
   contentTable?: string | null;
@@ -31,7 +33,8 @@ export type FreshIdea = Omit<Idea, "id" | "status" | "createdAt">;
 export function useIdeas() {
   // Generator state
   const [selectedTypes, setSelectedTypes]       = useState<ContentType[]>(["newsletter", "social_media", "blog_post", "carousel"]);
-  const [selectedCategories, setSelectedCategories] = useState<IdeaCategory[]>(["Education", "Touching Base", "Company Win", "Company Blog Post", "Carousel Topic"]);
+  const [selectedCategories, setSelectedCategories] = useState<IdeaCategory[]>(["Education", "Touching Base", "Company Win", "Company Blog Post", "Carousel Topic", "Facts", "Motivational"]);
+  const [selectedStyles, setSelectedStyles] = useState<IdeaStyle[]>(["relaxed", "educational", "inspirational"]);
   const [count, setCount]                       = useState(6);
   const [generating, setGenerating]             = useState(false);
   const [genError, setGenError]                 = useState<string | null>(null);
@@ -76,6 +79,11 @@ export function useIdeas() {
       prev.includes(key) ? (prev.length > 1 ? prev.filter((k) => k !== key) : prev) : [...prev, key]
     );
 
+  const toggleStyle = (key: IdeaStyle) =>
+    setSelectedStyles((prev) =>
+      prev.includes(key) ? (prev.length > 1 ? prev.filter((k) => k !== key) : prev) : [...prev, key]
+    );
+
   // ── Generate ───────────────────────────────────────────────────────────────
 
   const handleGenerate = useCallback(async () => {
@@ -87,7 +95,7 @@ export function useIdeas() {
       const res = await authFetch("/api/ideas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contentTypes: selectedTypes, categories: selectedCategories, count }),
+        body: JSON.stringify({ contentTypes: selectedTypes, categories: selectedCategories, styles: selectedStyles, count }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Generation failed");
@@ -97,7 +105,7 @@ export function useIdeas() {
     } finally {
       setGenerating(false);
     }
-  }, [selectedTypes, selectedCategories, count]);
+  }, [selectedTypes, selectedCategories, selectedStyles, count]);
 
   // ── Save a fresh idea ──────────────────────────────────────────────────────
 
@@ -203,7 +211,7 @@ export function useIdeas() {
 
   return {
     // Generator
-    selectedTypes, toggleType, selectedCategories, toggleCategory,
+    selectedTypes, toggleType, selectedCategories, toggleCategory, selectedStyles, toggleStyle,
     count, setCount, generating, genError, freshIdeas,
     handleGenerate, saveFresh, savedFreshIdx, actionId,
     // Library
