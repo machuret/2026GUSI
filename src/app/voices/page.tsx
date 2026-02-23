@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Mic2, Plus, Loader2, ChevronRight, Trash2, AlertCircle } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 import { AuthorCard } from "./components/AuthorCard";
 import { AuthorDetail } from "./components/AuthorDetail";
 
@@ -29,7 +30,7 @@ export default function VoicesPage() {
   const fetchAuthors = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/voices");
+      const res = await authFetch("/api/voices");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load");
       setAuthors(data.authors ?? []);
@@ -44,7 +45,7 @@ export default function VoicesPage() {
     if (!newName.trim()) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/voices", {
+      const res = await authFetch("/api/voices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newName.trim(), bio: newBio.trim() || undefined }),
@@ -63,7 +64,7 @@ export default function VoicesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this author and all their content?")) return;
     try {
-      await fetch(`/api/voices/${id}`, { method: "DELETE" });
+      await authFetch(`/api/voices/${id}`, { method: "DELETE" });
       setAuthors((prev) => prev.filter((a) => a.id !== id));
       if (selected?.id === id) setSelected(null);
     } catch { setError("Failed to delete author"); }

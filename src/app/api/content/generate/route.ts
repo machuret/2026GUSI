@@ -5,28 +5,19 @@ import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logActivity } from "@/lib/activity";
 import { logAiUsage } from "@/lib/aiUsage";
 import { createContent, CATEGORIES } from "@/lib/content";
+import { categoryKeys, briefSchema } from "@/lib/contentSchemas";
 import { buildGenerationPrompt } from "@/lib/contentContext";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 import { stripMarkdown } from "@/lib/htmlUtils";
 import { z } from "zod";
 
-const categoryKeys = CATEGORIES.map((c) => c.key) as [string, ...string[]];
-
 const generateSchema = z.object({
   companyId: z.string().min(1),
   prompt: z.string().min(1).max(2000, "Prompt must be under 2000 characters"),
   category: z.enum(categoryKeys),
   extraFields: z.record(z.any()).optional(),
-  brief: z.object({
-    audience: z.string().max(500).optional(),
-    goal: z.string().max(500).optional(),
-    cta: z.string().max(300).optional(),
-    keywords: z.string().max(500).optional(),
-    tone: z.number().min(0).max(4).optional(),
-    length: z.number().min(0).max(4).optional(),
-    platform: z.string().max(100).optional(),
-  }).optional(),
+  brief: briefSchema.optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -67,6 +58,10 @@ export async function POST(req: NextRequest) {
       jsonMode: false,
     });
     const output = stripMarkdown(aiResult.content);
+
+    if (!output) {
+      return NextResponse.json({ error: "AI returned empty content — please try again" }, { status: 500 });
+    }
 
     // Get or create app user for tracking
     const appUser = await logActivity(

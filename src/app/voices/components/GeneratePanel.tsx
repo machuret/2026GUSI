@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Sparkles, Loader2, Copy, Check, AlertCircle, Sliders } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 import type { StyleProfile } from "./AuthorDetail";
 
 const CONTENT_TYPES = [
@@ -46,7 +47,7 @@ export function GeneratePanel({ authorId, authorName, style }: Props) {
     if (!prompt.trim()) return;
     setGenerating(true); setError(null); setOutput(""); setMeta(null);
     try {
-      const res = await fetch(`/api/voices/${authorId}/generate`, {
+      const res = await authFetch(`/api/voices/${authorId}/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: prompt.trim(), contentType, platform, targetWords, temperature }),

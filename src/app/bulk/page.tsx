@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { Sparkles, Plus, Trash2, CheckCircle2, XCircle, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { CategoryPicker } from "@/components/generate/CategoryPicker";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { authFetch } from "@/lib/authFetch";
 
 const SOCIAL_PLATFORMS = [
   { id: "linkedin",  label: "LinkedIn",  emoji: "💼" },
@@ -124,7 +125,7 @@ export default function BulkPage() {
     setProgress(0);
 
     try {
-      const res = await fetch("/api/content/generate-bulk", {
+      const res = await authFetch("/api/content/generate-bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

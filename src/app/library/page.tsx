@@ -6,6 +6,7 @@ import { LibraryCard } from "@/components/library/LibraryCard";
 import { CATEGORIES, type ContentWithMeta } from "@/lib/content";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { DESTINATIONS } from "@/components/library/DestinationPicker";
+import { authFetch } from "@/lib/authFetch";
 
 const STATUS_FILTERS = [
   { value: "all",      label: "All" },
@@ -46,7 +47,7 @@ export default function LibraryPage() {
     setError(null);
     try {
       const params = new URLSearchParams({ companyId: DEMO_COMPANY_ID, limit: "200" });
-      const res = await fetch(`/api/content/library?${params}`);
+      const res = await authFetch(`/api/content/library?${params}`);
       if (!res.ok) throw new Error(`Failed to load library (${res.status})`);
       const data = await res.json();
       setAllItems(data.items ?? []);
@@ -76,7 +77,7 @@ export default function LibraryPage() {
     }
     if (authorFilter !== "all") {
       filtered = filtered.filter((i) => {
-        const name = (i as any).user?.name || (i as any).user?.email || "";
+        const name = i.user?.name || i.user?.email || "";
         return name === authorFilter;
       });
     }
@@ -89,7 +90,7 @@ export default function LibraryPage() {
   const authors = useMemo(() => {
     const set = new Set<string>();
     allItems.forEach((i) => {
-      const name = (i as any).user?.name || (i as any).user?.email;
+      const name = i.user?.name || i.user?.email;
       if (name) set.add(name);
     });
     return Array.from(set).sort();
@@ -97,7 +98,7 @@ export default function LibraryPage() {
 
   const handlePublish = useCallback(async (id: string, category: string) => {
     setActionError(null);
-    const res = await fetch("/api/content/review", {
+    const res = await authFetch("/api/content/review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contentId: id, category, action: "publish" }),
@@ -109,7 +110,7 @@ export default function LibraryPage() {
 
   const handleEdit = useCallback(async (id: string, category: string, output: string) => {
     setActionError(null);
-    const res = await fetch("/api/content/review", {
+    const res = await authFetch("/api/content/review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contentId: id, category, action: "edit", output }),
@@ -121,7 +122,7 @@ export default function LibraryPage() {
 
   const handleDelete = useCallback(async (id: string, category: string) => {
     setActionError(null);
-    const res = await fetch("/api/content/review", {
+    const res = await authFetch("/api/content/review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contentId: id, category, action: "delete" }),
@@ -137,7 +138,7 @@ export default function LibraryPage() {
 
   const handleChangeCategory = useCallback(async (id: string, category: string, newCategory: string) => {
     setActionError(null);
-    const res = await fetch("/api/content/review", {
+    const res = await authFetch("/api/content/review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contentId: id, category, action: "change-category", newCategory }),

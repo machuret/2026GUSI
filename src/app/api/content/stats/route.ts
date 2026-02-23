@@ -17,33 +17,30 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
     }
 
-    // Fire one COUNT query per table per status — all in parallel
+    // One query per table — fetch status column only, count client-side (9 queries instead of 45)
     const statuses = ["PENDING", "APPROVED", "REJECTED", "REVISED", "PUBLISHED"] as const;
 
-    const countResults = await Promise.all(
-      CATEGORIES.flatMap((cat) =>
-        statuses.map(async (status) => {
-          const { count } = await db
-            .from(cat.table)
-            .select("id", { count: "exact", head: true })
-            .eq("companyId", companyId)
-            .eq("status", status)
-            .then((r) => ({ count: r.count ?? 0 }));
-          return { status, count };
-        })
-      )
+    const allRows = await Promise.all(
+      CATEGORIES.map(async (cat) => {
+        const { data: rows } = await db
+          .from(cat.table)
+          .select("status")
+          .eq("companyId", companyId)
+          .is("deletedAt", null);
+        return rows ?? [];
+      })
     );
 
-    // Aggregate across all tables
+    const flat = allRows.flat();
     const totals = statuses.reduce(
       (acc, s) => {
-        acc[s] = countResults.filter((r) => r.status === s).reduce((sum, r) => sum + r.count, 0);
+        acc[s] = flat.filter((r) => r.status === s).length;
         return acc;
       },
       {} as Record<string, number>
     );
 
-    const totalGenerated = Object.values(totals).reduce((a, b) => a + b, 0);
+    const totalGenerated = flat.length;
 
     return NextResponse.json({
       totalGenerated,

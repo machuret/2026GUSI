@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Link2, X } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 import type { PostEntry } from "./ManualPanel";
 
 const IC = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
@@ -45,7 +46,7 @@ export function UrlPanel({ urlPosts, onRemove, onAdded }: Props) {
     if (!urlInput.trim()) return;
     setScraping(true); setError(null);
     try {
-      const r = await fetch("/api/content/scrape-url", {
+      const r = await authFetch("/api/content/scrape-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: urlInput.trim() }),

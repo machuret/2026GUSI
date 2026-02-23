@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Clock, Search, X } from "lucide-react";
 import { HistoryItem, type GeneratedItem } from "@/components/history/HistoryItem";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { authFetch } from "@/lib/authFetch";
 
 const STATUS_FILTERS = ["All", "PENDING", "APPROVED", "PUBLISHED", "REJECTED", "REVISED"] as const;
 const SORT_OPTIONS = [
@@ -26,7 +27,7 @@ export default function HistoryPage() {
 
   const fetchHistory = useCallback(async () => {
     try {
-      const res = await fetch(`/api/content/history?companyId=${DEMO_COMPANY_ID}&limit=100`);
+      const res = await authFetch(`/api/content/history?companyId=${DEMO_COMPANY_ID}&limit=100`);
       if (!res.ok) throw new Error(`Failed to load history (${res.status})`);
       const data = await res.json();
       setItems(data.history || []);
@@ -42,7 +43,7 @@ export default function HistoryPage() {
 
   const handleApprove = useCallback(async (id: string, category: string) => {
     setActionError(null);
-    const res = await fetch("/api/content/review", {
+    const res = await authFetch("/api/content/review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contentId: id, category, action: "approve" }),
@@ -54,20 +55,20 @@ export default function HistoryPage() {
   const handleReject = useCallback(async (id: string, category: string, feedback: string, tags: string[]) => {
     const lessonSaves = tags.length > 0
       ? tags.map((tag) =>
-          fetch("/api/lessons", {
+          authFetch("/api/lessons", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ feedback, contentType: category, severity: "high", source: `reject:${tag}` }),
           })
         )
-      : [fetch("/api/lessons", {
+      : [authFetch("/api/lessons", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ feedback, contentType: category, severity: "medium", source: "reject" }),
         })];
     await Promise.all([
       ...lessonSaves,
-      fetch("/api/content/review", {
+      authFetch("/api/content/review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contentId: id, category, action: "reject", feedback }),
@@ -78,7 +79,7 @@ export default function HistoryPage() {
 
   const handleRevise = useCallback(async (id: string) => {
     setActionError(null);
-    const res = await fetch("/api/content/revise", {
+    const res = await authFetch("/api/content/revise", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contentId: id }),
@@ -88,7 +89,7 @@ export default function HistoryPage() {
   }, [fetchHistory]);
 
   const handleEdit = useCallback(async (id: string, category: string, output: string) => {
-    await fetch("/api/content/review", {
+    await authFetch("/api/content/review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contentId: id, category, action: "edit", output }),
@@ -97,7 +98,7 @@ export default function HistoryPage() {
   }, [fetchHistory]);
 
   const handleMarkPublish = useCallback(async (id: string, category: string) => {
-    await fetch("/api/content/review", {
+    await authFetch("/api/content/review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contentId: id, category, action: "publish" }),

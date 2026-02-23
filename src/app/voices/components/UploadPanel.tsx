@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Upload, Trash2, Loader2, FileText, Plus, X } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 import type { AuthorPost } from "./AuthorDetail";
 
 const CONTENT_TYPES = [
@@ -65,7 +66,7 @@ export function UploadPanel({ authorId, posts, onUploaded, onDeleted }: Props) {
     if (!valid.length) { setError("Add at least one piece of content"); return; }
     setUploading(true); setError(null); setSuccess(null);
     try {
-      const res = await fetch(`/api/voices/${authorId}/posts`, {
+      const res = await authFetch(`/api/voices/${authorId}/posts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ posts: valid }),
@@ -83,7 +84,7 @@ export function UploadPanel({ authorId, posts, onUploaded, onDeleted }: Props) {
   const handleDelete = async (postId: string) => {
     setDeletingId(postId);
     try {
-      await fetch(`/api/voices/${authorId}/posts?postId=${postId}`, { method: "DELETE" });
+      await authFetch(`/api/voices/${authorId}/posts?postId=${postId}`, { method: "DELETE" });
       onDeleted();
     } finally { setDeletingId(null); }
   };

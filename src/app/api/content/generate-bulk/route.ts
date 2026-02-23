@@ -5,27 +5,18 @@ import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logActivity } from "@/lib/activity";
 import { logAiUsage } from "@/lib/aiUsage";
 import { createContent, CATEGORIES } from "@/lib/content";
+import { categoryKeys, briefSchema } from "@/lib/contentSchemas";
 import { buildGenerationPrompt } from "@/lib/contentContext";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 import { stripMarkdown } from "@/lib/htmlUtils";
 import { z } from "zod";
 
-const categoryKeys = CATEGORIES.map((c) => c.key) as [string, ...string[]];
-
 const bulkSchema = z.object({
   companyId: z.string().min(1),
   category: z.enum(categoryKeys),
   topics: z.array(z.string().min(1).max(500, "Topic must be under 500 characters")).min(1).max(20),
-  brief: z.object({
-    audience: z.string().max(500).optional(),
-    goal: z.string().max(500).optional(),
-    cta: z.string().max(300).optional(),
-    keywords: z.string().max(500).optional(),
-    tone: z.number().min(0).max(4).optional(),
-    length: z.number().min(0).max(4).optional(),
-    platform: z.string().max(100).optional(),
-  }).optional(),
+  brief: briefSchema.optional(),
 });
 
 export async function POST(req: NextRequest) {

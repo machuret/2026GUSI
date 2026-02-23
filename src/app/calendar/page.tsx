@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Clock } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { authFetch } from "@/lib/authFetch";
 import { MonthView } from "./components/MonthView";
 import { WeekView } from "./components/WeekView";
 import { CalendarCard, type CalendarItem } from "./components/CalendarCard";
@@ -19,7 +20,9 @@ export default function CalendarPage() {
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/content/calendar?companyId=${DEMO_COMPANY_ID}`);
+      const from = new Date(year, month, 1).toISOString();
+      const to = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+      const res = await authFetch(`/api/content/calendar?companyId=${DEMO_COMPANY_ID}&from=${from}&to=${to}`);
       if (!res.ok) throw new Error(`Failed to load calendar (${res.status})`);
       const data = await res.json();
       setItems(data.items ?? []);
@@ -27,7 +30,7 @@ export default function CalendarPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load calendar");
     } finally { setLoading(false); }
-  }, []);
+  }, [year, month]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 

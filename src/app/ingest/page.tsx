@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { authFetch } from "@/lib/authFetch";
 import { Upload, AlignLeft, Link2, FileText, Send } from "lucide-react";
 import { TrainingDashboard, type TrainingStats } from "./components/TrainingDashboard";
 import { ManualPanel, type PostEntry } from "./components/ManualPanel";
@@ -53,7 +54,7 @@ export default function IngestPage() {
   const fetchStats = useCallback(async () => {
     setStatsLoading(true);
     try {
-      const r = await fetch(`/api/content/training-stats?companyId=${CID}`);
+      const r = await authFetch(`/api/content/training-stats?companyId=${CID}`);
       if (!r.ok) throw new Error(`Failed to load stats (${r.status})`);
       const d = await r.json();
       if (d.success) setStats(d);
@@ -77,7 +78,7 @@ export default function IngestPage() {
     if (!active.length) return;
     setLoading(true); setError(null); setIngestedCount(null);
     try {
-      const r = await fetch("/api/content/ingest", {
+      const r = await authFetch("/api/content/ingest", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           companyId: CID,
@@ -100,7 +101,7 @@ export default function IngestPage() {
   const handleAnalyse = async () => {
     setAnalysing(true); setError(null);
     try {
-      const r = await fetch("/api/style/analyze", {
+      const r = await authFetch("/api/style/analyze", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companyId: CID }),
       });

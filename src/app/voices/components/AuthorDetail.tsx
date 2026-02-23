@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ArrowLeft, Upload, Brain, Sparkles, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 import type { Author } from "../page";
 import { UploadPanel } from "./UploadPanel";
 import { StylePanel } from "./StylePanel";
@@ -56,7 +57,7 @@ export function AuthorDetail({ author, onBack, onUpdated }: Props) {
   const fetchDetail = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/voices/${author.id}`);
+      const res = await authFetch(`/api/voices/${author.id}`);
       const data = await res.json();
       if (res.ok) {
         setPosts(data.posts ?? []);
@@ -71,7 +72,7 @@ export function AuthorDetail({ author, onBack, onUpdated }: Props) {
   const handleAnalyse = async () => {
     setAnalysing(true); setAnalyseError(null); setAnalyseOk(false);
     try {
-      const res = await fetch(`/api/voices/${author.id}/analyse`, { method: "POST" });
+      const res = await authFetch(`/api/voices/${author.id}/analyse`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) { setAnalyseError(data.error || "Analysis failed"); return; }
       setStyle(data.style);
