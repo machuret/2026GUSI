@@ -20,9 +20,12 @@ export async function loadGenerationContext(
   const cached = generationContextCache.get(cacheKey) as GenerationContext | undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
   if (cached) return cached;
 
-  const [styleRes, postsRes, infoRes, promptRes, lessonsRes, vaultRes, faqCtx] = await Promise.all([
+  const [styleRes, matchingPostsRes, recentPostsRes, infoRes, promptRes, lessonsRes, vaultRes, faqCtx] = await Promise.all([
     db.from("StyleProfile").select("*").eq("companyId", companyId).maybeSingle(),
-    db.from("ContentPost").select("*").eq("companyId", companyId).order("createdAt", { ascending: false }).limit(5),
+    // Posts matching the target category — best examples for style matching
+    db.from("ContentPost").select("*").eq("companyId", companyId).eq("contentType", category).order("createdAt", { ascending: false }).limit(5),
+    // Fallback: recent posts from any category (used if few category matches)
+    db.from("ContentPost").select("*").eq("companyId", companyId).neq("contentType", category).order("createdAt", { ascending: false }).limit(5),
     db.from("CompanyInfo").select("*").eq("companyId", companyId).maybeSingle(),
     db.from("PromptTemplate").select("*").eq("companyId", companyId).eq("contentType", category).eq("active", true).limit(1),
     db.from("Lesson").select("*").eq("companyId", companyId).eq("active", true).or(`contentType.eq.${category},contentType.is.null`).order("createdAt", { ascending: false }).limit(30),
@@ -30,9 +33,27 @@ export async function loadGenerationContext(
     getFAQContext({ companyId }),
   ]);
 
+  // Prefer category-matched posts; backfill with other types if < 3 matches
+  const matched = matchingPostsRes.data ?? [];
+  const fallback = recentPostsRes.data ?? [];
+  const recentPosts = matched.length >= 3
+    ? matched.slice(0, 5)
+    : [...matched, ...fallback].slice(0, 5);
+
+  // Prefer per-content-type style profile; fall back to global
+  const rawStyle = styleRes.data ?? null;
+  let effectiveStyle = rawStyle;
+  if (rawStyle?.byContentType && typeof rawStyle.byContentType === "object") {
+    const typeProfile = (rawStyle.byContentType as Record<string, any>)[category];
+    if (typeProfile?.tone) {
+      // Merge: use type-specific fields but keep global as baseline
+      effectiveStyle = { ...rawStyle, ...typeProfile };
+    }
+  }
+
   const ctx: GenerationContext = {
-    styleProfile: styleRes.data ?? null,
-    recentPosts: postsRes.data ?? [],
+    styleProfile: effectiveStyle,
+    recentPosts,
     companyInfo: infoRes.data ?? null,
     promptTemplate: promptRes.data?.[0] ?? null,
     lessons: lessonsRes.data ?? [],

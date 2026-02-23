@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { logActivity } from "@/lib/activity";
 import { findContentById, updateContent, createContent, CATEGORIES } from "@/lib/content";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { maybeConsolidateLessons } from "@/lib/lessonConsolidator";
 import { z } from "zod";
 
 const reviewSchema = z.object({
@@ -34,15 +35,9 @@ export async function POST(req: NextRequest) {
     if (data.action === "approve") {
       await updateContent(category, data.contentId, { status: "APPROVED" });
 
-      // Create a positive lesson so the AI learns from approved content
-      const snippet = content.output.slice(0, 400);
-      await db.from("Lesson").insert({
-        companyId: content.companyId,
-        contentType: category,
-        feedback: `This was approved as excellent ${categoryLabel} content. Use it as a style and quality reference: "${snippet}"`,
-        source: "approval",
-        severity: "low",
-      });
+      // Note: we no longer create a "positive lesson" on approval — approved content
+      // is already available as example posts via ContentPost, and approval lessons
+      // were polluting the lessons context with redundant low-severity entries.
 
       // Auto-run compliance scan (fire-and-forget — does not block the approve response)
       const { data: activeRules } = await db
@@ -132,6 +127,9 @@ export async function POST(req: NextRequest) {
       source: "rejection",
       severity: "high",
     });
+
+    // Fire-and-forget: consolidate if too many active lessons
+    maybeConsolidateLessons(content.companyId).catch(() => {});
 
     await logActivity(
       authUser.id,

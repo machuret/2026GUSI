@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Vault, Loader2 } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { VaultItemRow } from "./components/VaultItemRow";
 import { PasteTab } from "./components/PasteTab";
@@ -29,7 +30,7 @@ export default function VaultPage() {
 
   const fetchItems = useCallback(async () => {
     try {
-      const res = await fetch("/api/vault");
+      const res = await authFetch("/api/vault");
       if (!res.ok) throw new Error(`Failed to load vault (${res.status})`);
       const data = await res.json();
       setItems(data.items ?? []);
@@ -48,7 +49,7 @@ export default function VaultPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Remove this item from the vault?")) return;
     setItems((prev) => prev.filter((i) => i.id !== id));
-    try { await fetch(`/api/vault?id=${id}`, { method: "DELETE" }); }
+    try { await authFetch(`/api/vault?id=${id}`, { method: "DELETE" }); }
     catch { fetchItems(); }
   };
 

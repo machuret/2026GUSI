@@ -26,24 +26,30 @@ export async function POST(req: NextRequest) {
 
     const analysis = await analyzeCompanyStyle(companyId);
 
+    const typeProfileCount = Object.keys(analysis.byContentType).length;
+
     const { data: styleProfile } = await db
       .from("StyleProfile")
       .upsert({
         companyId,
-        tone: analysis.tone,
-        vocabulary: analysis.vocabulary,
-        avgWordCount: analysis.avgWordCount,
-        commonPhrases: analysis.commonPhrases,
-        preferredFormats: analysis.preferredFormats,
-        summary: analysis.summary,
+        tone: analysis.global.tone,
+        vocabulary: analysis.global.vocabulary,
+        avgWordCount: analysis.global.avgWordCount,
+        commonPhrases: analysis.global.commonPhrases,
+        preferredFormats: analysis.global.preferredFormats,
+        summary: analysis.global.summary,
+        byContentType: analysis.byContentType,
         updatedAt: new Date().toISOString(),
       }, { onConflict: "companyId" })
       .select()
       .single();
 
-    await logActivity(authUser.id, authUser.email || "", "style.analyze", `Style analysis for company ${companyId}`);
+    await logActivity(
+      authUser.id, authUser.email || "", "style.analyze",
+      `Style analysis: global + ${typeProfileCount} content-type profiles`
+    );
 
-    return NextResponse.json({ success: true, styleProfile });
+    return NextResponse.json({ success: true, styleProfile, typeProfileCount });
   } catch (error) {
     return handleApiError(error, "Style analyze");
   }

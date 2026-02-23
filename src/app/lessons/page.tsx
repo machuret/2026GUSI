@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, BookOpen, ToggleLeft, ToggleRight, FileText, Loader2, Copy, Check } from "lucide-react";
+import { Plus, Trash2, BookOpen, ToggleLeft, ToggleRight, FileText, Loader2, Copy, Check, Sparkles } from "lucide-react";
 import { CATEGORIES } from "@/lib/content";
 import { fetchJSON } from "@/lib/fetchJSON";
+import { authFetch } from "@/lib/authFetch";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
 interface LessonItem {
@@ -38,6 +39,8 @@ export default function LessonsPage() {
   const [compiling, setCompiling] = useState(false);
   const [report, setReport] = useState<string | null>(null);
   const [reportCopied, setReportCopied] = useState(false);
+  const [applyingToDna, setApplyingToDna] = useState(false);
+  const [appliedToDna, setAppliedToDna] = useState(false);
 
   const fetchLessons = useCallback(async () => {
     try {
@@ -116,6 +119,28 @@ export default function LessonsPage() {
     });
   }, [report]);
 
+  const handleApplyToDna = useCallback(async () => {
+    if (!report) return;
+    setApplyingToDna(true);
+    setAppliedToDna(false);
+    try {
+      const res = await authFetch("/api/company/append-dna", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appendText: `\n\n--- COMPILED LESSONS (auto-applied) ---\n${report}` }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Failed to apply");
+      }
+      setAppliedToDna(true);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to apply to Writing DNA");
+    } finally {
+      setApplyingToDna(false);
+    }
+  }, [report]);
+
   const activeCount = useMemo(
     () => lessons.filter((l) => l.active).length,
     [lessons]
@@ -181,12 +206,21 @@ export default function LessonsPage() {
             <h3 className="font-semibold text-brand-800 flex items-center gap-2">
               <FileText className="h-4 w-4" /> AI Learning Report
             </h3>
-            <button
-              onClick={handleCopyReport}
-              className="flex items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
-            >
-              {reportCopied ? <><Check className="h-3.5 w-3.5 text-green-600" /> Copied</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleApplyToDna}
+                disabled={applyingToDna || appliedToDna}
+                className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                {appliedToDna ? <><Check className="h-3.5 w-3.5" /> Applied to DNA</> : applyingToDna ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Applying…</> : <><Sparkles className="h-3.5 w-3.5" /> Apply to Writing DNA</>}
+              </button>
+              <button
+                onClick={handleCopyReport}
+                className="flex items-center gap-1.5 rounded-lg border border-brand-200 bg-white px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
+              >
+                {reportCopied ? <><Check className="h-3.5 w-3.5 text-green-600" /> Copied</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}
+              </button>
+            </div>
           </div>
           <pre className="whitespace-pre-wrap text-sm text-brand-900 leading-relaxed font-sans">{report}</pre>
         </div>
