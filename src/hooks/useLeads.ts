@@ -49,10 +49,12 @@ export const STATUS_STYLES: Record<string, string> = {
 };
 
 export const SOURCE_STYLES: Record<string, string> = {
-  linkedin:  "bg-blue-50 text-blue-700",
-  webmd:     "bg-teal-50 text-teal-700",
-  doctolib:  "bg-indigo-50 text-indigo-700",
-  manual:    "bg-gray-50 text-gray-600",
+  linkedin:           "bg-blue-50 text-blue-700",
+  webmd:              "bg-teal-50 text-teal-700",
+  doctolib:           "bg-indigo-50 text-indigo-700",
+  residency_director: "bg-purple-50 text-purple-700",
+  hospital:           "bg-rose-50 text-rose-700",
+  manual:             "bg-gray-50 text-gray-600",
 };
 
 export function useLeads(initialFilters?: { status?: string; source?: string }) {

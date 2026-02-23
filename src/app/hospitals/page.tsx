@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   Building2, Search, Loader2, Save, Trash2,
   MapPin, Globe, Sparkles, Plus, Pencil, X, Check,
-  ChevronDown, ChevronUp, Hospital, UserSearch,
+  ChevronDown, ChevronUp, Hospital, UserSearch, UserPlus,
 } from "lucide-react";
 import { useHospitals, STATUS_STYLES, type HospitalLead } from "@/hooks/useHospitals";
 import { HospitalRow } from "./components/HospitalRow";
@@ -21,6 +21,8 @@ export default function HospitalsPage() {
   const [editForm, setEditForm]         = useState<Partial<HospitalLead>>({});
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
   const [bulkFinding, setBulkFinding]   = useState(false);
+  const [bulkExporting, setBulkExporting] = useState(false);
+  const [residencyCategory, setResidencyCategory] = useState("");
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -52,9 +54,16 @@ export default function HospitalsPage() {
   const handleBulkFind = async () => {
     if (selectedIds.size === 0) return;
     setBulkFinding(true);
-    await h.bulkFindDirectors(Array.from(selectedIds));
+    await h.bulkFindDirectors(Array.from(selectedIds), residencyCategory || undefined);
     setSelectedIds(new Set());
     setBulkFinding(false);
+  };
+
+  const handleBulkExport = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkExporting(true);
+    await h.bulkConvertToLeads(Array.from(selectedIds));
+    setBulkExporting(false);
   };
 
   return (
@@ -208,11 +217,31 @@ export default function HospitalsPage() {
             <span className="text-sm font-normal text-gray-500">({h.hospitals.length})</span>
           </h2>
           <div className="flex items-center gap-2">
+            <select
+              value={residencyCategory}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => { e.stopPropagation(); setResidencyCategory(e.target.value); }}
+              className="rounded-lg border border-purple-200 bg-purple-50 px-2 py-1.5 text-xs font-medium text-purple-700 focus:border-purple-400 focus:outline-none"
+            >
+              <option value="">All Specialties</option>
+              <option value="family">Family Medicine</option>
+              <option value="internal">Internal Medicine</option>
+              <option value="ob">OB/GYN</option>
+              <option value="pediatrics">Pediatrics</option>
+              <option value="emergency">Emergency Medicine</option>
+              <option value="critical_care">Critical Care</option>
+            </select>
             <button onClick={(e) => { e.stopPropagation(); handleBulkFind(); }}
               disabled={selectedIds.size === 0 || bulkFinding}
               className="rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-40 flex items-center gap-1">
               {bulkFinding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserSearch className="h-3.5 w-3.5" />}
-              {bulkFinding ? "Finding..." : `Find Directors${selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}`}
+              {bulkFinding ? "Finding..." : `Find ${residencyCategory ? residencyCategory.replace("_", " ").replace(/\b\w/g, c => c.toUpperCase()) + " " : ""}Directors${selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}`}
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); handleBulkExport(); }}
+              disabled={selectedIds.size === 0 || bulkExporting}
+              className="rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-40 flex items-center gap-1">
+              {bulkExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+              {bulkExporting ? "Exporting..." : `Export Directors${selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}`}
             </button>
             <button onClick={(e) => { e.stopPropagation(); setShowAdd(!showAdd); }}
               className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 flex items-center gap-1">
@@ -326,6 +355,7 @@ export default function HospitalsPage() {
                           onEnrich={h.enrichHospital}
                           enrichingId={h.enrichingId}
                           onFindDirector={h.findDirector}
+                          residencyCategory={residencyCategory || undefined}
                           findingDirectorId={h.findingDirectorId}
                           onConvertToLead={h.convertToLead}
                           convertingId={h.convertingId}

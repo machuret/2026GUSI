@@ -11,7 +11,8 @@ interface Props {
   onDelete: (id: string) => void;
   onEnrich: (id: string) => void;
   enrichingId: string | null;
-  onFindDirector: (id: string) => void;
+  onFindDirector: (id: string, category?: string) => void;
+  residencyCategory?: string;
   findingDirectorId: string | null;
   onConvertToLead: (h: HospitalLead) => void;
   convertingId: string | null;
@@ -20,7 +21,7 @@ interface Props {
 export function HospitalRow({
   hospital: h, selected, onSelect, onEdit, onDelete,
   onEnrich, enrichingId, onFindDirector, findingDirectorId,
-  onConvertToLead, convertingId,
+  onConvertToLead, convertingId, residencyCategory,
 }: Props) {
   return (
     <tr className={`hover:bg-gray-50 transition-colors ${selected ? "bg-purple-50/40" : ""}`}>
@@ -66,7 +67,7 @@ export function HospitalRow({
       </td>
       <td className="px-3 py-3">
         <div className="flex items-center justify-end gap-1">
-          <button onClick={() => onFindDirector(h.id)} disabled={findingDirectorId === h.id}
+          <button onClick={() => onFindDirector(h.id, residencyCategory)} disabled={findingDirectorId === h.id}
             className="rounded p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 transition-colors" title="Find Residency Program Director">
             {findingDirectorId === h.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserSearch className="h-4 w-4" />}
           </button>

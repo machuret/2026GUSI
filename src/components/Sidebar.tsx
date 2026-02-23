@@ -24,6 +24,7 @@ import {
   Languages,
   Mic2,
   UserCheck,
+  UserSearch,
   BotMessageSquare,
   Lightbulb,
   PenLine,
@@ -74,9 +75,10 @@ const grantsNav = [
 ];
 
 const leadsNav = [
-  { href: "/leads",     label: "Scrape Leads",     icon: Users },
-  { href: "/hospitals", label: "Hospital Scraper",  icon: Building2 },
-  { href: "/qualified", label: "Qualified",          icon: Star },
+  { href: "/leads",      label: "Scrape Leads",     icon: Users },
+  { href: "/hospitals",  label: "Hospital Scraper",  icon: Building2 },
+  { href: "/directors",  label: "Directors",          icon: UserSearch },
+  { href: "/qualified",  label: "Qualified",          icon: Star },
 ];
 
 const settingsNav = [

@@ -5,6 +5,8 @@ import { normalise } from "@/lib/leadNormalisers";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { getEnv } from "@/lib/env";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
+import { logAiUsage } from "@/lib/aiUsage";
 
 const APIFY_BASE = "https://api.apify.com/v2";
 
@@ -14,6 +16,9 @@ const SOURCE_ACTORS: Record<string, string> = {
   doctolib: "giovannibiancia/doctolib-scraper",
   linkedin: "od6RadQV98FOARtrp",
 };
+
+// Sources that should use the deep OpenAI enricher instead of Apify
+const AI_ENRICH_SOURCES = new Set(["residency_director", "hospital", "manual"]);
 
 async function pollUntilDone(runId: string, token: string, maxWaitMs = 55000): Promise<string> {
   const deadline = Date.now() + maxWaitMs;
@@ -29,18 +34,186 @@ async function pollUntilDone(runId: string, token: string, maxWaitMs = 55000): P
   throw new Error("Enrichment timed out — run is still in progress");
 }
 
+// ── Deep AI Enrichment (OpenAI) ─────────────────────────────────────────────
+// Used for residency_director, hospital, and manual leads that don't have Apify actors
+async function deepAIEnrich(
+  lead: Record<string, unknown>,
+  userId?: string,
+): Promise<{ updates: Record<string, unknown>; error?: string }> {
+  const fullName  = (lead.fullName as string) ?? "";
+  const company   = (lead.company as string) ?? "";
+  const jobTitle  = (lead.jobTitle as string) ?? "";
+  const city      = (lead.city as string) ?? "";
+  const state     = (lead.state as string) ?? "";
+  const country   = (lead.country as string) ?? "United States";
+  const website   = (lead.website as string) ?? "";
+  const email     = (lead.email as string) ?? "";
+  const phone     = (lead.phone as string) ?? "";
+  const notes     = (lead.notes as string) ?? "";
+  const linkedin  = (lead.linkedinUrl as string) ?? "";
+
+  if (!fullName && !company) return { updates: {}, error: "No name or company to research" };
+
+  const systemPrompt = `You are an elite medical professional research analyst with expertise in US healthcare, academic medicine, and residency programs.
+
+Your mission: Given a person's name and available context, perform DEEP research to find everything possible about this individual. Think like an investigative researcher — cross-reference multiple data points to build a comprehensive profile.
+
+RESEARCH METHODOLOGY — follow this step by step:
+
+1. **IDENTITY VERIFICATION**
+   - Confirm the person exists at the stated institution
+   - Cross-reference name + institution + specialty to ensure correct match
+   - Note any name variations (e.g., middle initial, credentials listed differently)
+
+2. **CONTACT INFORMATION** (highest priority)
+   - Email: Deduce institutional email from the hospital's email domain pattern
+     Common patterns: firstname.lastname@hospital.edu, flastname@hospital.org, first.last@healthsystem.edu
+     Look at the hospital website domain to infer the email domain
+   - Phone: Department phone, direct line, or office number
+   - Fax: Academic department fax if available
+
+3. **PROFESSIONAL PROFILE**
+   - Full credentials (MD, DO, PhD, MBA, MPH, FACP, FACEP, etc.)
+   - Board certifications
+   - Medical school and graduation year
+   - Residency training location and year
+   - Fellowship training if applicable
+   - Current academic rank (Assistant/Associate/Full Professor)
+
+4. **LINKEDIN & WEB PRESENCE**
+   - LinkedIn URL: Search pattern "firstname lastname MD [institution] site:linkedin.com"
+   - Doximity profile URL
+   - Hospital/department faculty page URL
+   - ResearchGate or Google Scholar profile
+
+5. **PROGRAM DETAILS** (for residency program directors)
+   - Program name and ACGME ID
+   - Number of residency positions
+   - Program type (categorical, preliminary, combined)
+   - Associated medical school affiliation
+
+6. **RESEARCH & PUBLICATIONS**
+   - Key research interests / focus areas
+   - Notable publications (just topics, not full citations)
+   - Any leadership roles in professional societies
+
+7. **SPECIALTIES & INTERESTS**
+   - Clinical specialties
+   - Teaching interests
+   - Administrative roles
+
+Return ONLY valid JSON:
+{
+  "fullName": "Full Name with all credentials (e.g., John Smith, MD, FACP)" or null,
+  "firstName": "First" or null,
+  "lastName": "Last" or null,
+  "email": "verified institutional email" or null,
+  "phone": "office/department phone" or null,
+  "gender": "Male" | "Female" or null,
+  "jobTitle": "Complete title including all roles" or null,
+  "company": "Full institution name" or null,
+  "industry": "Healthcare / Academic Medicine / etc." or null,
+  "location": "Full address if known" or null,
+  "city": "city" or null,
+  "state": "state" or null,
+  "country": "country" or null,
+  "linkedinUrl": "https://linkedin.com/in/..." or null,
+  "profileUrl": "faculty page or Doximity URL" or null,
+  "website": "department or institution URL" or null,
+  "specialties": ["specialty1", "specialty2", ...] or [],
+  "notes": "Comprehensive profile summary: credentials, education, training, research interests, program details, board certs, academic rank, society memberships. Be thorough — include everything relevant.",
+  "rating": 1-5 based on data completeness (5 = very complete, 1 = minimal data found),
+  "confidence": "high" | "medium" | "low",
+  "dataPoints": number of distinct facts found
+}
+
+CRITICAL RULES:
+- Do NOT fabricate emails. Only provide an email if you can deduce it from a known institutional domain pattern.
+- Do NOT invent LinkedIn URLs. Only provide if you're confident the profile exists.
+- Be thorough in the notes field — this is the most valuable part. Include education, training timeline, research areas, publications topics, society memberships, administrative roles.
+- Rate confidence based on how much you actually know vs. inferred.`;
+
+  const userPrompt = `DEEP ENRICH this person:
+
+Name: ${fullName}
+Job Title: ${jobTitle}
+Institution: ${company}
+Location: ${[city, state, country].filter(Boolean).join(", ") || "unknown"}
+Website: ${website || "unknown"}
+Current Email: ${email || "unknown"}
+Current Phone: ${phone || "unknown"}
+Current LinkedIn: ${linkedin || "unknown"}
+Existing Notes: ${notes || "none"}
+
+Search thoroughly. Find everything you can about this person in academic medicine / healthcare.`;
+
+  try {
+    const aiResult = await callOpenAIWithUsage({
+      systemPrompt,
+      userPrompt,
+      model: MODEL_CONFIG.generate,
+      maxTokens: 2000,
+      temperature: 0.15,
+      jsonMode: true,
+    });
+
+    logAiUsage({
+      model: MODEL_CONFIG.generate,
+      feature: "leads.deepEnrich",
+      promptTokens: aiResult.promptTokens,
+      completionTokens: aiResult.completionTokens,
+      userId,
+    });
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(aiResult.content);
+    } catch {
+      return { updates: {}, error: "AI returned invalid JSON" };
+    }
+
+    // Build updates — only overwrite empty fields, always overwrite notes/specialties/rating
+    const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+    const fieldMap = [
+      "fullName","firstName","lastName","email","phone","gender","jobTitle","company",
+      "industry","location","city","state","country","linkedinUrl","profileUrl","website",
+    ] as const;
+    for (const f of fieldMap) {
+      const newVal = parsed[f];
+      const oldVal = lead[f];
+      // Only fill empty fields for basic contact info, but always update if AI has better data
+      if (newVal && newVal !== null && newVal !== "") {
+        if (!oldVal || oldVal === "" || oldVal === null) {
+          updates[f] = newVal;
+        }
+      }
+    }
+    // Always update these enrichment fields
+    if (parsed.specialties && Array.isArray(parsed.specialties) && parsed.specialties.length > 0) {
+      updates.specialties = parsed.specialties;
+    }
+    if (parsed.notes && typeof parsed.notes === "string" && parsed.notes.length > 10) {
+      updates.notes = String(parsed.notes);
+    }
+    if (typeof parsed.rating === "number" && parsed.rating >= 1 && parsed.rating <= 5) {
+      updates.rating = parsed.rating;
+    }
+    // Store full AI result as rawData for reference
+    updates.rawData = parsed;
+
+    return { updates };
+  } catch (err) {
+    return { updates: {}, error: err instanceof Error ? err.message : "AI enrichment failed" };
+  }
+}
+
 // POST /api/leads/enrich
 // Body: { leadIds: string[] }
-// Re-fetches each lead's profile URL via its source actor and merges new data.
+// Re-fetches each lead's profile URL via its source actor (Apify) or deep AI enrichment (OpenAI).
 export async function POST(req: NextRequest) {
   try {
-    const { response: authError } = await requireAuth();
+    const { user: authUser, response: authError } = await requireAuth();
     if (authError) return authError;
-
-    const { APIFY_API_TOKEN } = getEnv();
-    if (!APIFY_API_TOKEN) {
-      return NextResponse.json({ error: "Apify token not configured" }, { status: 500 });
-    }
 
     const body = await req.json();
     const leadIds: string[] = Array.isArray(body.leadIds) ? body.leadIds : [];
@@ -65,19 +238,46 @@ export async function POST(req: NextRequest) {
 
     const enriched: { id: string; updated: boolean; error?: string }[] = [];
 
-    // Group leads by source so we can batch per actor
-    const bySource: Record<string, typeof leads> = {};
+    // Separate leads into AI-enrichable and Apify-enrichable
+    const aiLeads: typeof leads = [];
+    const apifyBySource: Record<string, typeof leads> = {};
     for (const lead of leads) {
       const src = lead.source as string;
-      if (!bySource[src]) bySource[src] = [];
-      bySource[src].push(lead);
+      if (AI_ENRICH_SOURCES.has(src)) {
+        aiLeads.push(lead);
+      } else {
+        if (!apifyBySource[src]) apifyBySource[src] = [];
+        apifyBySource[src].push(lead);
+      }
     }
 
-    for (const [source, group] of Object.entries(bySource)) {
+    // ── Deep AI enrichment for residency_director / hospital / manual leads ──
+    for (const lead of aiLeads) {
+      const { updates, error: aiErr } = await deepAIEnrich(lead, authUser?.id);
+      if (aiErr) {
+        enriched.push({ id: lead.id, updated: false, error: aiErr });
+        continue;
+      }
+      if (Object.keys(updates).length <= 1) { // only updatedAt
+        enriched.push({ id: lead.id, updated: false, error: "No new data found" });
+        continue;
+      }
+      const { error: updateErr } = await db.from("Lead").update(updates).eq("id", lead.id);
+      enriched.push({ id: lead.id, updated: !updateErr, error: updateErr?.message });
+    }
+
+    // ── Apify enrichment for linkedin/webmd/doctolib leads ──
+    const { APIFY_API_TOKEN } = getEnv();
+
+    for (const [source, group] of Object.entries(apifyBySource)) {
       const actorId = SOURCE_ACTORS[source];
       if (!actorId) {
-        // Can't re-enrich manual leads via Apify
         for (const l of group) enriched.push({ id: l.id, updated: false, error: `No actor for source "${source}"` });
+        continue;
+      }
+
+      if (!APIFY_API_TOKEN) {
+        for (const l of group) enriched.push({ id: l.id, updated: false, error: "Apify token not configured" });
         continue;
       }
 

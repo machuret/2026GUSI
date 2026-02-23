@@ -1,45 +1,40 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useState } from "react";
 import {
-  Users, Search, Loader2, X, Zap, RefreshCw, Download, AlertCircle,
-  CheckSquare, Trash2, Sparkles, Star,
+  UserCheck, Search, Loader2, X, RefreshCw, Download, AlertCircle,
+  CheckSquare, Trash2, Sparkles, Star, ArrowLeft, Building2,
 } from "lucide-react";
+import Link from "next/link";
 import { useLeads, LEAD_STATUSES, STATUS_STYLES, type Lead } from "@/hooks/useLeads";
 import { exportToCsv } from "@/lib/exportCsv";
 import { leadToCsvRow } from "@/lib/leadExport";
-import { ScraperModal } from "./components/ScraperModal";
-import { LeadRow } from "./components/LeadRow";
+import { LeadRow } from "@/app/leads/components/LeadRow";
 import { authFetch } from "@/lib/authFetch";
 
-export default function LeadsPage() {
+export default function DirectorsPage() {
   const {
     leads, loading, error, total, page, setPage,
     search, setSearch,
     statusFilter, setStatusFilter,
-    sourceFilter, setSourceFilter,
     updateLead, deleteLead, addLeads, fetchLeads,
-  } = useLeads();
+  } = useLeads({ source: "residency_director" });
 
-  const [showScraper, setShowScraper] = useState(false);
   const [dismissedError, setDismissedError] = useState<string | null>(null);
 
   // ── Selection state ──────────────────────────────────────────────────────
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds]       = useState<Set<string>>(new Set());
   const [bulkEnriching, setBulkEnriching]   = useState(false);
   const [bulkDeleting, setBulkDeleting]     = useState(false);
   const [bulkQualifying, setBulkQualifying] = useState(false);
   const [bulkMsg, setBulkMsg]               = useState<string | null>(null);
 
-  const allSelected = leads.length > 0 && leads.every((l) => selectedIds.has(l.id));
+  const allSelected  = leads.length > 0 && leads.every((l) => selectedIds.has(l.id));
   const someSelected = selectedIds.size > 0;
 
   const toggleSelectAll = () => {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(leads.map((l) => l.id)));
-    }
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(leads.map((l) => l.id)));
   };
 
   const handleSelect = useCallback((id: string, checked: boolean) => {
@@ -50,7 +45,7 @@ export default function LeadsPage() {
     });
   }, []);
 
-  // ── Single-lead enrich ───────────────────────────────────────────────────
+  // ── Single-lead enrich ─────────────────────────────────────────────────
   const handleEnrich = useCallback(async (id: string) => {
     setBulkMsg(null);
     const res = await authFetch("/api/leads/enrich", {
@@ -61,14 +56,14 @@ export default function LeadsPage() {
     const data = await res.json();
     if (res.ok && data.updatedCount > 0) {
       await fetchLeads();
-      setBulkMsg(`✓ Lead re-enriched`);
+      setBulkMsg("✓ Lead re-enriched");
     } else {
       const err = data.enriched?.[0]?.error ?? data.error ?? "Enrichment failed";
       setBulkMsg(`⚠ ${err}`);
     }
   }, [fetchLeads]);
 
-  // ── Bulk enrich ──────────────────────────────────────────────────────────
+  // ── Bulk enrich ────────────────────────────────────────────────────────
   const handleBulkEnrich = async () => {
     if (selectedIds.size === 0) return;
     setBulkEnriching(true);
@@ -91,7 +86,7 @@ export default function LeadsPage() {
     }
   };
 
-  // ── Bulk qualify ─────────────────────────────────────────────────────
+  // ── Bulk qualify ───────────────────────────────────────────────────────
   const handleBulkQualify = async () => {
     if (selectedIds.size === 0) return;
     setBulkQualifying(true);
@@ -105,7 +100,7 @@ export default function LeadsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Bulk qualify failed");
       await fetchLeads();
-      setBulkMsg(`✓ ${data.updatedCount} lead${data.updatedCount !== 1 ? "s" : ""} moved to Qualified`);
+      setBulkMsg(`✓ ${data.updatedCount} director${data.updatedCount !== 1 ? "s" : ""} moved to Qualified`);
       setSelectedIds(new Set());
     } catch (err) {
       setBulkMsg(`⚠ ${err instanceof Error ? err.message : "Some updates failed"}`);
@@ -114,15 +109,15 @@ export default function LeadsPage() {
     }
   };
 
-  // ── Bulk delete ──────────────────────────────────────────────────────────
+  // ── Bulk delete ────────────────────────────────────────────────────────
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`Delete ${selectedIds.size} selected lead${selectedIds.size !== 1 ? "s" : ""}?`)) return;
+    if (!confirm(`Delete ${selectedIds.size} selected director${selectedIds.size !== 1 ? "s" : ""}?`)) return;
     setBulkDeleting(true);
     setBulkMsg(null);
     try {
       await Promise.all(Array.from(selectedIds).map((id) => deleteLead(id)));
-      setBulkMsg(`✓ ${selectedIds.size} leads deleted`);
+      setBulkMsg(`✓ ${selectedIds.size} directors deleted`);
       setSelectedIds(new Set());
     } catch {
       setBulkMsg("⚠ Some deletes failed");
@@ -131,10 +126,10 @@ export default function LeadsPage() {
     }
   };
 
-  // ── Bulk export ──────────────────────────────────────────────────────────
-  const handleBulkExport = () => {
+  // ── Export CSV ─────────────────────────────────────────────────────────
+  const handleExport = () => {
     const toExport = someSelected ? leads.filter((l) => selectedIds.has(l.id)) : leads;
-    exportToCsv(`leads-${new Date().toISOString().slice(0, 10)}.csv`, toExport.map(leadToCsvRow));
+    exportToCsv(`directors-${new Date().toISOString().slice(0, 10)}.csv`, toExport.map(leadToCsvRow));
   };
 
   const statusCounts = LEAD_STATUSES.reduce((acc, s) => {
@@ -144,50 +139,75 @@ export default function LeadsPage() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      {showScraper && (
-        <ScraperModal
-          onClose={() => setShowScraper(false)}
-          onImported={(newLeads) => { addLeads(newLeads); setShowScraper(false); }}
-        />
-      )}
-
       {error && error !== dismissedError && (
         <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
           <p className="flex-1 text-sm text-amber-800">{error}</p>
-          <button onClick={() => setDismissedError(error)} className="text-amber-500 hover:text-amber-700"><X className="h-4 w-4" /></button>
+          <button onClick={() => setDismissedError(error)} className="text-amber-500 hover:text-amber-700">
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
       {/* Header */}
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Scrape Leads</h1>
-          <p className="mt-1 text-gray-500">Scrape, import, and manage your lead pipeline</p>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-100">
+              <UserCheck className="h-5 w-5 text-purple-600" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900">Residency Program Directors</h1>
+          </div>
+          <p className="mt-1 text-gray-500 ml-11">
+            Full lead management for residency program directors exported from the Hospital Scraper
+          </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/hospitals"
+            className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
+            <Building2 className="h-4 w-4" /> Hospital Scraper
+          </Link>
           <button onClick={fetchLeads} title="Refresh" className="rounded-lg border border-gray-200 p-2.5 hover:bg-gray-50">
             <RefreshCw className="h-4 w-4 text-gray-500" />
           </button>
           <button
-            onClick={handleBulkExport}
+            onClick={handleExport}
             disabled={leads.length === 0}
-            title={someSelected ? `Export ${selectedIds.size} selected leads` : "Export all visible leads"}
+            title={someSelected ? `Export ${selectedIds.size} selected` : "Export all directors"}
             className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
           >
-            <Download className="h-4 w-4" />{someSelected ? `Export (${selectedIds.size})` : "Export CSV"}
+            <Download className="h-4 w-4" />
+            {someSelected ? `Export (${selectedIds.size})` : "Export CSV"}
           </button>
-          <button onClick={() => setShowScraper(true)} className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700">
-            <Zap className="h-4 w-4" /> Scrape Leads
+        </div>
+      </div>
+
+      {/* Pipeline stats */}
+      <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
+        {LEAD_STATUSES.map((s) => (
+          <button key={s}
+            onClick={() => setStatusFilter(statusFilter === s ? "" : s)}
+            className={`shrink-0 rounded-xl border px-4 py-2.5 text-left transition-colors ${statusFilter === s ? STATUS_STYLES[s] : "border-gray-200 bg-white hover:border-gray-300"}`}
+          >
+            <p className="text-xs font-medium capitalize text-current">{s}</p>
+            <p className="text-xl font-bold">{statusCounts[s] ?? 0}</p>
           </button>
+        ))}
+        <div className="shrink-0 rounded-xl border border-purple-200 bg-purple-50 px-4 py-2.5">
+          <p className="text-xs font-medium text-purple-600">Total Directors</p>
+          <p className="text-xl font-bold text-purple-700">{total}</p>
         </div>
       </div>
 
       {/* Bulk action toolbar */}
       {someSelected && (
-        <div className="mb-4 flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5">
-          <CheckSquare className="h-4 w-4 text-brand-600" />
-          <span className="text-sm font-medium text-brand-800">{selectedIds.size} lead{selectedIds.size !== 1 ? "s" : ""} selected</span>
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-purple-200 bg-purple-50 px-4 py-2.5">
+          <CheckSquare className="h-4 w-4 text-purple-600" />
+          <span className="text-sm font-medium text-purple-800">
+            {selectedIds.size} director{selectedIds.size !== 1 ? "s" : ""} selected
+          </span>
           <div className="ml-auto flex items-center gap-2">
             <button
               onClick={handleBulkQualify}
@@ -220,7 +240,7 @@ export default function LeadsPage() {
         </div>
       )}
 
-      {/* Bulk action feedback */}
+      {/* Bulk feedback */}
       {bulkMsg && (
         <div className={`mb-3 flex items-center justify-between rounded-xl border px-4 py-2.5 text-sm ${
           bulkMsg.startsWith("✓") ? "border-green-200 bg-green-50 text-green-800" : "border-amber-200 bg-amber-50 text-amber-800"
@@ -230,66 +250,53 @@ export default function LeadsPage() {
         </div>
       )}
 
-      {/* Pipeline stats */}
-      <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
-        {LEAD_STATUSES.map((s) => (
-          <button key={s}
-            onClick={() => setStatusFilter(statusFilter === s ? "" : s)}
-            className={`shrink-0 rounded-xl border px-4 py-2.5 text-left transition-colors ${statusFilter === s ? STATUS_STYLES[s] : "border-gray-200 bg-white hover:border-gray-300"}`}
-          >
-            <p className="text-xs font-medium capitalize text-current">{s}</p>
-            <p className="text-xl font-bold">{statusCounts[s] ?? 0}</p>
-          </button>
-        ))}
-        <div className="shrink-0 rounded-xl border border-gray-200 bg-white px-4 py-2.5">
-          <p className="text-xs font-medium text-gray-400">Total</p>
-          <p className="text-xl font-bold text-gray-900">{total}</p>
-        </div>
-      </div>
-
-      {/* Filters */}
+      {/* Search */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, company…"
-            className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search director name, email, hospital…"
+            className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          />
         </div>
-        <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none">
-          <option value="">All sources</option>
-          <option value="linkedin">LinkedIn</option>
-          <option value="webmd">WebMD</option>
-          <option value="doctolib">Doctolib</option>
-          <option value="residency_director">Residency Director</option>
-          <option value="hospital">Hospital</option>
-          <option value="manual">Manual</option>
-        </select>
       </div>
 
       {/* Table */}
       {loading ? (
-        <div className="py-20 text-center text-gray-400"><Loader2 className="mx-auto h-8 w-8 animate-spin mb-3" />Loading leads…</div>
+        <div className="py-20 text-center text-gray-400">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin mb-3" />
+          Loading directors…
+        </div>
       ) : leads.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-300 py-20 text-center">
-          <Users className="mx-auto h-10 w-10 text-gray-200 mb-3" />
-          <p className="text-gray-400 text-sm">{total === 0 ? "No leads yet — click \"Scrape Leads\" to get started." : "No leads match the current filter."}</p>
+        <div className="rounded-xl border border-dashed border-purple-200 bg-purple-50 py-20 text-center">
+          <UserCheck className="mx-auto h-12 w-12 text-purple-200 mb-3" />
+          <p className="text-gray-500 font-medium">No residency program directors yet</p>
+          <p className="text-sm text-gray-400 mt-1">
+            Go to{" "}
+            <Link href="/hospitals" className="text-brand-600 hover:underline font-medium">
+              Hospital Scraper
+            </Link>
+            , find directors, then click <strong>Export Directors</strong> to add them here.
+          </p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
+              <tr className="border-b border-gray-100 bg-purple-50">
                 <th className="pl-4 pr-2 py-3 w-8">
                   <input
                     type="checkbox"
                     checked={allSelected}
                     onChange={toggleSelectAll}
-                    className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                    className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                     title={allSelected ? "Deselect all" : "Select all"}
                   />
                 </th>
                 <th className="px-2 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Name</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Workplace</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Hospital</th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Phone</th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Email</th>
                 <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Location</th>
@@ -320,7 +327,7 @@ export default function LeadsPage() {
       {total > 50 && (
         <div className="mt-4 flex items-center justify-between">
           <p className="text-xs text-gray-500">
-            Showing {Math.min((page - 1) * 50 + 1, total)}–{Math.min(page * 50, total)} of {total} leads
+            Showing {Math.min((page - 1) * 50 + 1, total)}–{Math.min(page * 50, total)} of {total} directors
           </p>
           <div className="flex items-center gap-2">
             <button

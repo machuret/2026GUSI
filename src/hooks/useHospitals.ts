@@ -211,13 +211,13 @@ export function useHospitals() {
 
   // ── Find Director ──────────────────────────────────────────────────────────
 
-  const findDirector = useCallback(async (id: string) => {
+  const findDirector = useCallback(async (id: string, residencyCategory?: string) => {
     setFindingDirectorId(id);
     try {
       const res = await authFetch(`/api/hospitals/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ findDirector: true }),
+        body: JSON.stringify({ findDirector: true, ...(residencyCategory ? { residencyCategory } : {}) }),
       });
       if (!res.ok) throw new Error("Find Director failed");
       const data = await res.json();
@@ -243,7 +243,7 @@ export function useHospitals() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           companyId: DEMO_COMPANY_ID,
-          source: "hospital",
+          source: "residency_director",
           fullName: h.directorName,
           email: h.directorEmail || null,
           phone: h.directorPhone || null,
@@ -270,6 +270,42 @@ export function useHospitals() {
     }
   }, [showToast]);
 
+  // ── Bulk convert directors to Leads ────────────────────────────────────────
+
+  const bulkConvertToLeads = useCallback(async (ids: string[]) => {
+    const withDirector = hospitals.filter((h) => ids.includes(h.id) && h.directorName);
+    if (withDirector.length === 0) { showToast("No directors found in selection — find directors first"); return; }
+    try {
+      const leads = withDirector.map((h) => ({
+        companyId: DEMO_COMPANY_ID,
+        source: "residency_director",
+        fullName: h.directorName,
+        email: h.directorEmail || null,
+        phone: h.directorPhone || null,
+        jobTitle: h.directorTitle || "Residency Program Director",
+        company: h.name,
+        city: h.city || null,
+        state: h.state,
+        country: h.country,
+        website: h.url || null,
+        notes: `Converted from Hospital DB. Hospital: ${h.name}, ${h.city ?? ""} ${h.state}`,
+        status: "new",
+      }));
+      const res = await authFetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leads }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Export failed");
+      const skipped = data.skipped ?? 0;
+      const inserted = data.inserted ?? 0;
+      showToast(`✓ ${inserted} director${inserted !== 1 ? "s" : ""} exported to leads${skipped > 0 ? ` (${skipped} duplicates skipped)` : ""}`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Bulk export failed");
+    }
+  }, [hospitals, showToast]);
+
   // ── Add manual hospital ────────────────────────────────────────────────────
 
   const addHospital = useCallback(async (form: Record<string, string>) => {
@@ -294,14 +330,14 @@ export function useHospitals() {
 
   // ── Bulk find directors ────────────────────────────────────────────────────
 
-  const bulkFindDirectors = useCallback(async (ids: string[]) => {
+  const bulkFindDirectors = useCallback(async (ids: string[], residencyCategory?: string) => {
     let found = 0;
     for (const id of ids) {
       try {
         const res = await authFetch(`/api/hospitals/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ findDirector: true }),
+          body: JSON.stringify({ findDirector: true, ...(residencyCategory ? { residencyCategory } : {}) }),
         });
         if (res.ok) {
           const data = await res.json();
@@ -333,7 +369,7 @@ export function useHospitals() {
     // Actions
     updateHospital, deleteHospital, enrichHospital, enrichingId,
     findDirector, findingDirectorId, bulkFindDirectors,
-    convertToLead, convertingId, addHospital,
+    convertToLead, convertingId, bulkConvertToLeads, addHospital,
     // Toast
     toast, setToast, showToast,
   };

@@ -103,33 +103,66 @@ Be accurate — do not fabricate information.`;
 
       const { user: authUser } = await requireAuth();
 
-      const systemPrompt = `You are a US medical education researcher. Given a hospital name and location, find the Residency Program Director or Graduate Medical Education (GME) leader.
+      // Optional residency specialty category
+      const category: string = body.residencyCategory ?? "";
 
-Search for:
-1. The name of the Residency Program Director (or DIO - Designated Institutional Official)
-2. Their professional email address (must be a real institutional email, not fabricated)
-3. Their phone number if available
-4. Their exact title/role
+      const CATEGORY_LABELS: Record<string, string> = {
+        family:        "Family Medicine",
+        internal:      "Internal Medicine",
+        ob:            "Obstetrics & Gynecology (OB/GYN)",
+        pediatrics:    "Pediatrics",
+        emergency:     "Emergency Medicine",
+        critical_care: "Critical Care / Pulmonary Critical Care",
+      };
+
+      const categoryLabel = CATEGORY_LABELS[category] ?? "";
+      const categoryClause = categoryLabel
+        ? `Specifically search for the **${categoryLabel} Residency Program Director**.`
+        : "Search for the overall Residency Program Director or DIO (Designated Institutional Official).";
+
+      const systemPrompt = `You are an expert US medical education researcher with deep knowledge of ACGME-accredited residency programs, GME leadership structures, and academic medical centers.
+
+Your task: Given a hospital, find the Residency Program Director.
+${categoryClause}
+
+Search strategy — think step by step:
+1. Identify whether this hospital has an ACGME-accredited ${categoryLabel || "residency"} program.
+2. Find the Program Director's full name with credentials (MD, DO, PhD, FACP, etc.)
+3. Find their institutional email — use the hospital's known email domain (e.g. @hospital.edu, @health.org). NEVER fabricate an email — if unsure, return null.
+4. Find their direct phone number or department phone.
+5. Determine their exact title and any additional roles (e.g. Vice Chair of Education, Associate Professor).
+6. Note the program's ACGME ID if known.
+7. List any associate program directors if the main PD is found.
 
 Return ONLY valid JSON:
 {
-  "directorName": "Full Name, MD" or null,
-  "directorEmail": "email@hospital.edu" or null,
+  "directorName": "Full Name, MD/DO + credentials" or null,
+  "directorEmail": "email@institution.edu" or null,
   "directorPhone": "phone number" or null,
   "directorTitle": "exact title e.g. Program Director, Internal Medicine Residency" or null,
+  "department": "Department of Internal Medicine" or null,
+  "associateDirectors": ["Name, MD", ...] or [],
+  "programId": "ACGME program ID" or null,
+  "residencyCategory": "${categoryLabel || "General/DIO"}",
   "confidence": "high" | "medium" | "low",
-  "source": "brief note on where this info would be found"
+  "source": "where this info would typically be found (e.g. department website, ACGME directory, Doximity)",
+  "reasoning": "brief explanation of how you identified this person"
 }
 
-IMPORTANT: Only include information you are reasonably confident about. Return null for fields you cannot verify. Do NOT fabricate email addresses.`;
+CRITICAL: Only include information you are confident about. Return null for any fields you cannot verify. Do NOT guess email addresses — institutional emails follow patterns like firstname.lastname@domain.edu.`;
 
-      const userPrompt = `Find the Residency Program Director for:\nHospital: ${hospital.name}\nCity: ${hospital.city || "unknown"}, ${hospital.state}\nWebsite: ${hospital.url || "unknown"}\nType: ${hospital.type || "unknown"}`;
+      const userPrompt = `Find the ${categoryLabel || "Residency"} Program Director for:
+Hospital: ${hospital.name}
+City: ${hospital.city || "unknown"}, ${hospital.state}
+Website: ${hospital.url || "unknown"}
+Type: ${hospital.type || "unknown"}
+Existing notes: ${hospital.notes || "none"}`;
 
       const aiResult = await callOpenAIWithUsage({
         systemPrompt,
         userPrompt,
         model: MODEL_CONFIG.generate,
-        maxTokens: 500,
+        maxTokens: 1000,
         temperature: 0.2,
         jsonMode: true,
       });
@@ -154,7 +187,9 @@ IMPORTANT: Only include information you are reasonably confident about. Return n
       if (directorInfo.directorName) { dirUpdates.directorName = String(directorInfo.directorName); fieldsUpdated.push("directorName"); }
       if (directorInfo.directorEmail) { dirUpdates.directorEmail = String(directorInfo.directorEmail); fieldsUpdated.push("directorEmail"); }
       if (directorInfo.directorPhone) { dirUpdates.directorPhone = String(directorInfo.directorPhone); fieldsUpdated.push("directorPhone"); }
-      if (directorInfo.directorTitle) { dirUpdates.directorTitle = String(directorInfo.directorTitle); fieldsUpdated.push("directorTitle"); }
+      // Build a rich title that includes category + department
+      const titleParts = [directorInfo.directorTitle, directorInfo.department].filter(Boolean);
+      if (titleParts.length > 0) { dirUpdates.directorTitle = titleParts.join(" — "); fieldsUpdated.push("directorTitle"); }
 
       const { data, error } = await db
         .from("HospitalLead")
@@ -170,6 +205,9 @@ IMPORTANT: Only include information you are reasonably confident about. Return n
         fieldsUpdated,
         confidence: directorInfo.confidence ?? "unknown",
         source: directorInfo.source ?? "",
+        residencyCategory: directorInfo.residencyCategory ?? categoryLabel,
+        associateDirectors: directorInfo.associateDirectors ?? [],
+        reasoning: directorInfo.reasoning ?? "",
       });
     }
 
