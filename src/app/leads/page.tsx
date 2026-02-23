@@ -14,7 +14,7 @@ import { authFetch } from "@/lib/authFetch";
 
 export default function LeadsPage() {
   const {
-    leads, loading, error, total,
+    leads, loading, error, total, page, setPage,
     search, setSearch,
     statusFilter, setStatusFilter,
     sourceFilter, setSourceFilter,
@@ -311,6 +311,32 @@ export default function LeadsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {total > 50 && (
+        <div className="mt-4 flex items-center justify-between">
+          <p className="text-xs text-gray-500">
+            Showing {Math.min((page - 1) * 50 + 1, total)}–{Math.min(page * 50, total)} of {total} leads
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(Math.max(1, page - 1))}
+              disabled={page <= 1}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            >
+              ← Previous
+            </button>
+            <span className="text-xs text-gray-500">Page {page} of {Math.ceil(total / 50)}</span>
+            <button
+              onClick={() => setPage(Math.min(Math.ceil(total / 50), page + 1))}
+              disabled={page >= Math.ceil(total / 50)}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            >
+              Next →
+            </button>
+          </div>
         </div>
       )}
     </div>
