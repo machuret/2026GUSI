@@ -46,6 +46,10 @@ export default function VaultPage() {
     setItems((prev) => [item, ...prev]);
   };
 
+  const handleUpdated = (updated: VaultItem) => {
+    setItems((prev) => prev.map((i) => i.id === updated.id ? updated : i));
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm("Remove this item from the vault?")) return;
     setItems((prev) => prev.filter((i) => i.id !== id));
@@ -134,7 +138,7 @@ export default function VaultPage() {
       ) : (
         <div className="space-y-2">
           {filtered.map((item) => (
-            <VaultItemRow key={item.id} item={item} onDelete={handleDelete} />
+            <VaultItemRow key={item.id} item={item} onDelete={handleDelete} onUpdated={handleUpdated} />
           ))}
         </div>
       )}

@@ -16,8 +16,8 @@ import type { Effort } from "./grantTypes";
 
 interface Props {
   grant: Grant;
-  onUpdate: (id: string, d: Partial<Grant>) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
+  onUpdate: (id: string, d: Partial<Grant>) => Promise<{ success: boolean; grant?: Grant }>;
+  onDelete: (id: string) => Promise<{ success: boolean }>;
   companyDNA: string;
   selected?: boolean;
   onToggleSelect?: () => void;
@@ -35,13 +35,24 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
   const [analysis, setAnalysis] = useState<GrantAnalysis | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [researchMsg, setResearchMsg] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const inCrm = !!grant.crmStatus;
   const set = (k: keyof Grant, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
 
   const save = async () => {
     setSaving(true);
-    try { await onUpdate(grant.id, form); setEditing(false); }
-    finally { setSaving(false); }
+    setSaveError(null);
+    try {
+      const result = await onUpdate(grant.id, form);
+      if (result.success) {
+        setEditing(false);
+        setForm({ ...form, ...result.grant });
+      } else {
+        setSaveError("Save failed — please try again.");
+      }
+    } catch {
+      setSaveError("Network error — changes were not saved.");
+    } finally { setSaving(false); }
   };
 
   const del = async () => {
@@ -124,6 +135,7 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
             </div>
           </div>
         </td>
+        <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{grant.geographicScope || <span className="text-gray-300">—</span>}</td>
         <td className="px-3 py-3 whitespace-nowrap"><DeadlineBadge date={grant.deadlineDate} /></td>
         <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{grant.amount || <span className="text-gray-300">—</span>}</td>
         <td className="px-3 py-3">
@@ -148,7 +160,7 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
         </td>
         <td className="px-3 py-3"><FitStars value={grant.fitScore} /></td>
         <td className="px-3 py-3"><EffortBadge value={grant.submissionEffort as Effort | null} /></td>
-        <td className="px-3 py-3"><DecisionBadge value={grant.decision as "Apply" | "Maybe" | "No" | null} /></td>
+        <td className="px-3 py-3"><DecisionBadge value={grant.decision as "Apply" | "Maybe" | "No" | "Rejected" | null} /></td>
         <td className="px-3 py-3">
           <div className="flex items-center gap-1.5">
             {grant.url && (
@@ -186,7 +198,8 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
 
       {expanded && (
         <tr className="border-b border-gray-100 bg-gray-50">
-          <td colSpan={10} className="px-6 py-5">
+          <td colSpan={11} className="px-6 py-5">
+            {saveError && <p className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700 font-medium">{saveError}</p>}
             {aiError && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{aiError}</p>}
             {researchMsg && <p className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{researchMsg}</p>}
             {(analysing || researching) && (

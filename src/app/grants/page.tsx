@@ -12,19 +12,21 @@ import { GrantSearchModal } from "./components/GrantSearchModal";
 
 export default function GrantsPage() {
   const { grants, loading, companyDNA, updateGrant: updateGrantRaw, deleteGrant, addGrant, fetchGrants } = useGrants();
-  const updateGrant = async (id: string, d: Partial<Grant>) => { await updateGrantRaw(id, d); };
+  const updateGrant = async (id: string, d: Partial<Grant>) => { return await updateGrantRaw(id, d); };
   const [showAdd, setShowAdd] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [decisionFilter, setDecisionFilter] = useState("All");
   const [deadlineFilter, setDeadlineFilter] = useState<"all" | "7" | "14" | "30" | "expired">("all");
-  const [sortField, setSortField] = useState<"deadlineDate" | "fitScore" | "matchScore" | "complexityScore" | "name">("matchScore");
+  const [sortField, setSortField] = useState<"deadlineDate" | "fitScore" | "matchScore" | "complexityScore" | "name" | "geographicScope" | "amount">("matchScore");
   const [sortAsc, setSortAsc] = useState(false);
   const [ranking, setRanking] = useState(false);
   const [scoring, setScoring] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [perPage, setPerPage] = useState(25);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const toggleSelect = (id: string) => setSelected((prev) => {
     const next = new Set(prev);
@@ -138,14 +140,17 @@ export default function GrantsPage() {
       else if (sortField === "fitScore") { av = a.fitScore ?? 0; bv = b.fitScore ?? 0; }
       else if (sortField === "matchScore") { av = a.matchScore ?? -1; bv = b.matchScore ?? -1; }
       else if (sortField === "complexityScore") { av = a.complexityScore ?? -1; bv = b.complexityScore ?? -1; }
+      else if (sortField === "geographicScope") { av = (a.geographicScope ?? "zzz").toLowerCase(); bv = (b.geographicScope ?? "zzz").toLowerCase(); }
+      else if (sortField === "amount") { av = (a.amount ?? "").toLowerCase(); bv = (b.amount ?? "").toLowerCase(); }
       else { av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
       return av < bv ? (sortAsc ? -1 : 1) : av > bv ? (sortAsc ? 1 : -1) : 0;
     });
 
   const counts = {
-    Apply: grants.filter(g => g.decision === "Apply").length,
-    Maybe: grants.filter(g => g.decision === "Maybe").length,
-    No:    grants.filter(g => g.decision === "No").length,
+    Apply:    grants.filter(g => g.decision === "Apply").length,
+    Maybe:    grants.filter(g => g.decision === "Maybe").length,
+    No:       grants.filter(g => g.decision === "No").length,
+    Rejected: grants.filter(g => g.decision === "Rejected").length,
   };
 
   const SortBtn = ({ field, label }: { field: typeof sortField; label: string }) => (
@@ -259,7 +264,7 @@ export default function GrantsPage() {
       </div>
 
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-6">
         <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
           <p className="text-xs text-gray-400">Total</p>
           <p className="text-2xl font-bold text-gray-900">{grants.length}</p>
@@ -275,6 +280,10 @@ export default function GrantsPage() {
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
           <p className="text-xs text-red-500">No</p>
           <p className="text-2xl font-bold text-red-700">{counts.No}</p>
+        </div>
+        <div className="rounded-xl border border-gray-300 bg-gray-100 px-4 py-3">
+          <p className="text-xs text-gray-500">Rejected</p>
+          <p className="text-2xl font-bold text-gray-700">{counts.Rejected}</p>
         </div>
         <button
           onClick={() => { setDeadlineFilter(deadlineFilter === "14" ? "all" : "14"); setSortField("deadlineDate"); setSortAsc(true); }}
@@ -293,24 +302,24 @@ export default function GrantsPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search grants…"
-            className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+          <input value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} placeholder="Search grants…"
+            className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
         </div>
-        <div className="flex gap-1.5">
-          {["All", "Apply", "Maybe", "No"].map((d) => (
-            <button key={d} onClick={() => setDecisionFilter(d)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${decisionFilter === d ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
-              {d}
+        <div className="flex flex-shrink-0 gap-1.5">
+          {["All", "Apply", "Maybe", "No", "Rejected"].map((d) => (
+            <button key={d} onClick={() => { setDecisionFilter(d); setCurrentPage(1); }}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${decisionFilter === d ? (d === "Rejected" ? "bg-gray-600 text-white" : "bg-brand-600 text-white") : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+              {d}{d !== "All" && counts[d as keyof typeof counts] > 0 ? ` (${counts[d as keyof typeof counts]})` : ""}
             </button>
           ))}
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex flex-shrink-0 gap-1.5">
           {(["all", "7", "14", "30", "expired"] as const).map((d) => {
             const label = d === "all" ? "Any deadline" : d === "expired" ? "Expired" : `≤ ${d}d`;
             const count = d === "7" ? deadlineCounts.closing7 : d === "14" ? deadlineCounts.closing14 : d === "30" ? deadlineCounts.closing30 : d === "expired" ? deadlineCounts.expired : null;
             return (
-              <button key={d} onClick={() => { setDeadlineFilter(d); if (d !== "all") { setSortField("deadlineDate"); setSortAsc(true); } }}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+              <button key={d} onClick={() => { setDeadlineFilter(d); setCurrentPage(1); if (d !== "all") { setSortField("deadlineDate"); setSortAsc(true); } }}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
                   deadlineFilter === d
                     ? d === "expired" ? "bg-red-600 text-white" : "bg-orange-500 text-white"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
@@ -339,8 +348,9 @@ export default function GrantsPage() {
                     onChange={toggleSelectAll} className="h-3.5 w-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
                 </th>
                 <th className="px-4 py-3 text-left"><SortBtn field="name" label="Grant" /></th>
+                <th className="px-3 py-3 text-left"><SortBtn field="geographicScope" label="Country" /></th>
                 <th className="px-3 py-3 text-left"><SortBtn field="deadlineDate" label="Deadline" /></th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Amount</th>
+                <th className="px-3 py-3 text-left"><SortBtn field="amount" label="Amount" /></th>
                 <th className="px-3 py-3 text-left"><SortBtn field="matchScore" label="Match" /></th>
                 <th className="px-3 py-3 text-left"><SortBtn field="complexityScore" label="Complexity" /></th>
                 <th className="px-3 py-3 text-left"><SortBtn field="fitScore" label="Fit" /></th>
@@ -350,7 +360,7 @@ export default function GrantsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((grant) => (
+              {filtered.slice((currentPage - 1) * perPage, currentPage * perPage).map((grant) => (
                 <GrantRow key={grant.id} grant={grant} onUpdate={updateGrant} onDelete={deleteGrant} companyDNA={companyDNA}
                   selected={selected.has(grant.id)} onToggleSelect={() => toggleSelect(grant.id)} />
               ))}
@@ -358,6 +368,51 @@ export default function GrantsPage() {
           </table>
         </div>
       )}
+
+      {/* Pagination */}
+      {!loading && filtered.length > 0 && (() => {
+        const totalPages = Math.ceil(filtered.length / perPage);
+        return (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <span>Show</span>
+              <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                className="rounded-lg border border-gray-300 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span>per page</span>
+              <span className="ml-2 text-gray-400">·</span>
+              <span className="text-gray-500">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</span>
+            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1}
+                  className="rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40">First</button>
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                  className="rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40">Prev</button>
+                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                  let page: number;
+                  if (totalPages <= 7) page = i + 1;
+                  else if (currentPage <= 4) page = i + 1;
+                  else if (currentPage >= totalPages - 3) page = totalPages - 6 + i;
+                  else page = currentPage - 3 + i;
+                  return (
+                    <button key={page} onClick={() => setCurrentPage(page)}
+                      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                        currentPage === page ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-100"
+                      }`}>{page}</button>
+                  );
+                })}
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                  className="rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40">Next</button>
+                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}
+                  className="rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40">Last</button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
 
       {/* Bulk action bar */}
       {selected.size > 0 && (

@@ -11,8 +11,9 @@ import { hasRole } from "@/lib/auth";
  * Reads the Bearer token from the Authorization header (via next/headers),
  * or falls back to cookie-based Supabase session.
  */
-function getSupabaseClient() {
-  const token = headers().get("authorization")?.replace("Bearer ", "").trim() ?? null;
+async function getSupabaseClient() {
+  const hdrs = await headers();
+  const token = hdrs.get("authorization")?.replace("Bearer ", "").trim() ?? null;
   if (token) {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,7 +29,7 @@ function getSupabaseClient() {
  * Accepts Bearer token in Authorization header OR cookie-based session.
  */
 export async function requireAuth() {
-  const { supabase, token } = getSupabaseClient();
+  const { supabase, token } = await getSupabaseClient();
   const { data: { user } } = token
     ? await supabase.auth.getUser(token)
     : await supabase.auth.getUser();
@@ -41,7 +42,7 @@ export async function requireAuth() {
  * Use on Settings routes: company, vault, templates, prompts, lessons.
  */
 export async function requireAdminAuth() {
-  const { supabase, token } = getSupabaseClient();
+  const { supabase, token } = await getSupabaseClient();
   const { data: { user } } = token
     ? await supabase.auth.getUser(token)
     : await supabase.auth.getUser();
@@ -59,7 +60,7 @@ export async function requireAdminAuth() {
  * Use on User Management routes.
  */
 export async function requireSuperAdminAuth() {
-  const { supabase, token } = getSupabaseClient();
+  const { supabase, token } = await getSupabaseClient();
   const { data: { user } } = token
     ? await supabase.auth.getUser(token)
     : await supabase.auth.getUser();

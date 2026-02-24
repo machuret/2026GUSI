@@ -21,6 +21,7 @@ const SECTIONS = [
   "Budget & Budget Narrative",
   "Sustainability Plan",
   "Appendices & Supporting Documents",
+  "Contact Details",
 ] as const;
 
 type Section = typeof SECTIONS[number];
@@ -58,6 +59,7 @@ const SECTION_INSTRUCTIONS: Record<Section, string> = {
   "Budget & Budget Narrative": "Provide a detailed breakdown of all anticipated costs, then justify each line item. Categories: personnel (salaries, contractor fees), equipment and materials, travel and accommodation, overheads/indirect costs, evaluation costs, and any contingency. For each item explain: what it is, why it is needed, how the cost was calculated. Show any co-contributions or in-kind support. Tie every dollar directly to a project activity. Demonstrate value for money.",
   "Sustainability Plan": "Explain specifically how the project or its outcomes will continue after the grant period ends. Cover: revenue model (earned income, future grants, government contracts, membership fees), partnerships that will sustain the work, plans to scale or embed into ongoing operations, community ownership or handover plans, and any commitments already secured. Be concrete — 'we will seek further funding' is not a sustainability plan.",
   "Appendices & Supporting Documents": "List and briefly describe the supporting documents that accompany this application. Common appendices include: organisational chart, key staff biosketches (1 page each), letters of support from partners or community, evidence of legal status (ABN, charity registration, incorporation), audited financial statements, board member list, relevant research or data cited in the proposal, and any required forms. Note which documents are attached and what each demonstrates.",
+  "Contact Details": "Provide the primary contact person for this grant application. Format as: Full Name, Position/Title, Organisation Name, Phone Number, Email Address, Mailing Address. If available, also include a secondary contact. Use the organisation details from the company profile. Present the information in a clear, professional format suitable for a formal grant application.",
 };
 
 async function crawlGrantUrl(url: string): Promise<string> {

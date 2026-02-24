@@ -11,6 +11,7 @@ interface Props {
   onConnected: (conn: MCConnection) => void;
   onDisconnected: () => void;
   onSync: () => Promise<void>;
+  onRefreshData: () => Promise<void>;
   syncing: boolean;
   lastSync: string | null;
 }
@@ -19,7 +20,7 @@ const inputCls =
   "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
 
 export default function ConnectTab({
-  connection, onConnected, onDisconnected, onSync, syncing, lastSync,
+  connection, onConnected, onDisconnected, onSync, onRefreshData, syncing, lastSync,
 }: Props) {
   const [apiKey,    setApiKey]    = useState("");
   const [loading,   setLoading]   = useState(false);
@@ -38,7 +39,8 @@ export default function ConnectTab({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Connection failed");
-      setSuccess(`Connected to "${data.account.name}" (${data.account.email})`);
+      const syncInfo = data.synced ? ` — synced ${data.synced.audiences} audience(s) and ${data.synced.campaigns} campaign(s)` : "";
+      setSuccess(`Connected to "${data.account.name}" (${data.account.email})${syncInfo}`);
       setApiKey("");
       onConnected({
         id: "",
@@ -47,6 +49,8 @@ export default function ConnectTab({
         dataCenter:   data.account.dc,
         connectedAt:  new Date().toISOString(),
       });
+      // Refresh audiences + campaigns from DB (backend auto-synced them)
+      await onRefreshData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connection failed");
     } finally {

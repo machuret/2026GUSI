@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Upload, Loader2, CheckCircle2, X } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 import { VAULT_CATEGORIES, type VaultItem } from "./vaultTypes";
 
 const inp = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
@@ -26,7 +27,7 @@ export function CsvTab({ onSaved, onError }: Props) {
       fd.append("file", file);
       fd.append("category", category);
       if (title.trim()) fd.append("title", title.trim());
-      const res = await fetch("/api/vault/upload", { method: "POST", body: fd });
+      const res = await authFetch("/api/vault/upload", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) { onError(data.error || "Upload failed"); return; }
       onSaved(data.item);

@@ -1,4 +1,4 @@
-export type Decision = "Apply" | "Maybe" | "No";
+export type Decision = "Apply" | "Maybe" | "No" | "Rejected";
 export type Effort = "Low" | "Medium" | "High";
 
 export interface GrantAnalysis {
@@ -45,9 +45,10 @@ export const GRANT_TYPES = ["Innovation & R&D", "Social Impact", "Sustainability
 export const APPLICANT_COUNTRIES = ["Australia", "United States", "United Kingdom", "Canada", "New Zealand", "Germany", "France", "Netherlands", "Singapore", "India", "South Africa", "Kenya", "Brazil", "Any country"];
 
 export const DECISION_STYLES: Record<Decision, string> = {
-  Apply: "bg-green-100 text-green-800 border-green-300",
-  Maybe: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  No:    "bg-red-100 text-red-700 border-red-300",
+  Apply:    "bg-green-100 text-green-800 border-green-300",
+  Maybe:    "bg-yellow-100 text-yellow-800 border-yellow-300",
+  No:       "bg-red-100 text-red-700 border-red-300",
+  Rejected: "bg-gray-200 text-gray-600 border-gray-400",
 };
 
 export const EFFORT_STYLES: Record<Effort, string> = {
@@ -77,7 +78,7 @@ export const EMPTY_FORM = (): {
   name: string; founder: string; url: string; deadlineDate: string; howToApply: string;
   geographicScope: string; eligibility: string; amount: string; projectDuration: string;
   fitScore: number | null; submissionEffort: "Low" | "Medium" | "High" | null;
-  decision: "Apply" | "Maybe" | "No"; notes: string;
+  decision: "Apply" | "Maybe" | "No" | "Rejected"; notes: string;
 } => ({
   name: "", founder: "", url: "", deadlineDate: "", howToApply: "",
   geographicScope: "", eligibility: "", amount: "", projectDuration: "",

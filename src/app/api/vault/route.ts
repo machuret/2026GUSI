@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, requireAdminAuth, handleApiError } from "@/lib/apiHelpers";
+import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 
 // GET /api/vault — list vault items with pagination
@@ -35,10 +35,10 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/vault — add a manual text item (ADMIN+ only)
+// POST /api/vault — add a manual text item
 export async function POST(req: NextRequest) {
   try {
-    const { response: authError } = await requireAdminAuth();
+    const { response: authError } = await requireAuth();
     if (authError) return authError;
 
     const body = await req.json();
@@ -66,10 +66,39 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE /api/vault?id=xxx (ADMIN+ only)
+// PATCH /api/vault — update filename and/or fileType of a vault item
+export async function PATCH(req: NextRequest) {
+  try {
+    const { response: authError } = await requireAuth();
+    if (authError) return authError;
+
+    const { id, filename, fileType } = await req.json();
+    if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+    if (!filename && !fileType) return NextResponse.json({ error: "filename or fileType required" }, { status: 400 });
+
+    const patch: Record<string, string> = {};
+    if (filename) patch.filename = filename;
+    if (fileType) patch.fileType = fileType;
+
+    const { data, error } = await db
+      .from("Document")
+      .update(patch)
+      .eq("id", id)
+      .eq("companyId", DEMO_COMPANY_ID)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    return NextResponse.json({ success: true, item: data });
+  } catch (err) {
+    return handleApiError(err, "Vault PATCH");
+  }
+}
+
+// DELETE /api/vault?id=xxx
 export async function DELETE(req: NextRequest) {
   try {
-    const { response: authError } = await requireAdminAuth();
+    const { response: authError } = await requireAuth();
     if (authError) return authError;
 
     const id = req.nextUrl.searchParams.get("id");

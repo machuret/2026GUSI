@@ -33,6 +33,7 @@ export const ALL_SECTIONS = [
   "Budget & Budget Narrative",
   "Sustainability Plan",
   "Appendices & Supporting Documents",
+  "Contact Details",
 ] as const;
 
 export type SectionName = typeof ALL_SECTIONS[number];
@@ -51,6 +52,7 @@ export const SECTION_META: Record<SectionName, { icon: string; hint: string }> =
   "Budget & Budget Narrative":         { icon: "💰",  hint: "Line-item costs + justification for every dollar" },
   "Sustainability Plan":               { icon: "🌱",  hint: "Revenue model, partnerships, post-grant continuation" },
   "Appendices & Supporting Documents": { icon: "📎",  hint: "Biosketches, letters of support, legal docs, financials" },
+  "Contact Details":                    { icon: "📞",  hint: "Your name, position, organisation, contact information" },
 };
 
 export function wordCount(text: string) {

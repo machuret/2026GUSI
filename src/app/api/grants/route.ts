@@ -18,7 +18,7 @@ const grantSchema = z.object({
   projectDuration: z.string().optional(),
   fitScore: z.number().int().min(1).max(5).optional().nullable(),
   submissionEffort: z.enum(["Low", "Medium", "High"]).optional().nullable(),
-  decision: z.enum(["Apply", "Maybe", "No"]).optional().nullable(),
+  decision: z.enum(["Apply", "Maybe", "No", "Rejected"]).optional().nullable(),
   notes: z.string().optional(),
 });
 
@@ -53,9 +53,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const data = grantSchema.parse(body);
 
+    // Coerce empty strings to null for optional fields to avoid DB type errors
+    const cleaned = Object.fromEntries(
+      Object.entries(data).map(([k, v]) => [k, v === "" ? null : v])
+    );
+
     const { data: grant, error } = await db
       .from("Grant")
-      .insert({ ...data, updatedAt: new Date().toISOString() })
+      .insert({ ...cleaned, updatedAt: new Date().toISOString() })
       .select()
       .single();
 

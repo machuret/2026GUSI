@@ -18,7 +18,7 @@ export interface Grant {
   projectDuration?: string | null;
   fitScore?: number | null;
   submissionEffort?: "Low" | "Medium" | "High" | null;
-  decision?: "Apply" | "Maybe" | "No" | null;
+  decision?: "Apply" | "Maybe" | "No" | "Rejected" | null;
   notes?: string | null;
   aiScore?: number | null;
   aiVerdict?: string | null;

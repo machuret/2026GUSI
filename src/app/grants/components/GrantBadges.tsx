@@ -19,7 +19,7 @@ export function FitStars({ value, onChange }: { value?: number | null; onChange?
   );
 }
 
-export function DecisionBadge({ value }: { value?: Decision | null }) {
+export function DecisionBadge({ value }: { value?: Decision | "Rejected" | null }) {
   if (!value) return <span className="text-xs text-gray-300">—</span>;
   return <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${DECISION_STYLES[value]}`}>{value}</span>;
 }

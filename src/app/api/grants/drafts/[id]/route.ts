@@ -5,15 +5,16 @@ import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 
 // GET /api/grants/drafts/[id] — load full draft (with sections)
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { response: authError } = await requireAuth();
     if (authError) return authError;
 
     const { data, error } = await db
       .from("GrantDraft")
       .select("*")
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("companyId", DEMO_COMPANY_ID)
       .maybeSingle();
 
@@ -27,15 +28,16 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 // DELETE /api/grants/drafts/[id]
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { response: authError } = await requireAuth();
     if (authError) return authError;
 
     const { error } = await db
       .from("GrantDraft")
       .delete()
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("companyId", DEMO_COMPANY_ID);
 
     if (error) throw error;

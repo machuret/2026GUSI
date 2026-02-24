@@ -49,6 +49,19 @@ export default function MailchimpPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // ── Refresh cached data from DB ─────────────────────────────────────────
+  const refreshData = useCallback(async () => {
+    const [audRes, campRes] = await Promise.all([
+      authFetch("/api/mailchimp/audiences").then((r) => r.json()),
+      authFetch("/api/mailchimp/campaigns").then((r) => r.json()),
+    ]);
+    setAudiences(audRes.audiences ?? []);
+    setCampaigns(campRes.campaigns ?? []);
+    if (audRes.audiences?.length > 0) {
+      setLastSync(audRes.audiences[0]?.syncedAt ?? null);
+    }
+  }, []);
+
   // ── Sync ──────────────────────────────────────────────────────────────────
   const handleSync = useCallback(async () => {
     setSyncing(true);
@@ -153,6 +166,7 @@ export default function MailchimpPage() {
               onConnected={(conn) => { setConnection(conn); setActiveTab("audiences"); }}
               onDisconnected={() => { setConnection(null); setAudiences([]); setCampaigns([]); }}
               onSync={handleSync}
+              onRefreshData={refreshData}
               syncing={syncing}
               lastSync={lastSync}
             />

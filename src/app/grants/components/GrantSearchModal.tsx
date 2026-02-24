@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  Search, Loader2, X, Plus, ExternalLink, Globe,
+  Search, Loader2, X, Plus, ExternalLink, Globe, Calendar, AlertTriangle,
   ChevronDown, ChevronUp, CheckCircle2, ShieldAlert, BadgeCheck,
 } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
@@ -214,7 +214,32 @@ export function GrantSearchModal({ onClose, onAdded, companyDNA, existingNames }
                         <div className="flex flex-wrap gap-3 text-xs text-gray-500">
                           {r.geographicScope && <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{r.geographicScope}</span>}
                           {r.amount && <span className="font-medium text-gray-700">{r.amount}</span>}
-                          {r.deadlineDate && <span>Deadline: {new Date(r.deadlineDate).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</span>}
+                          {r.deadlineDate && (() => {
+                            const dl = new Date(r.deadlineDate);
+                            const diff = dl.getTime() - Date.now();
+                            const days = Math.ceil(diff / 86400000);
+                            const fmtd = dl.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+                            if (days < 0) return (
+                              <span className="flex items-center gap-1 rounded-full bg-red-100 border border-red-300 px-2 py-0.5 text-red-700 font-semibold">
+                                <AlertTriangle className="h-3 w-3" /> Expired {fmtd}
+                              </span>
+                            );
+                            if (days <= 14) return (
+                              <span className="flex items-center gap-1 rounded-full bg-orange-100 border border-orange-300 px-2 py-0.5 text-orange-700 font-semibold">
+                                <Calendar className="h-3 w-3" /> {fmtd} ({days}d left)
+                              </span>
+                            );
+                            return (
+                              <span className="flex items-center gap-1 rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-green-700 font-medium">
+                                <Calendar className="h-3 w-3" /> {fmtd}
+                              </span>
+                            );
+                          })()}
+                          {!r.deadlineDate && (
+                            <span className="flex items-center gap-1 text-gray-400 italic">
+                              <Calendar className="h-3 w-3" /> No deadline listed
+                            </span>
+                          )}
                           {r.submissionEffort && <EffortBadge value={r.submissionEffort} />}
                         </div>
                         {r.fitReason && <p className="mt-2 text-xs text-brand-700 bg-brand-50 rounded-lg px-2.5 py-1.5 border border-brand-100">✦ {r.fitReason}</p>}

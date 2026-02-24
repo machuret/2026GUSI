@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
 import { VAULT_CATEGORIES, type VaultItem } from "./vaultTypes";
 
 const inp = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
@@ -22,7 +23,7 @@ export function PasteTab({ onSaved, onError }: Props) {
     if (!title.trim() || !content.trim()) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/vault", {
+      const res = await authFetch("/api/vault", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filename: title.trim(), content: content.trim(), fileType: `text:${category}` }),
