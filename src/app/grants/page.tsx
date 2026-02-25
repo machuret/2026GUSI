@@ -17,7 +17,7 @@ export default function GrantsPage() {
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [decisionFilter, setDecisionFilter] = useState("All");
-  const [deadlineFilter, setDeadlineFilter] = useState<"all" | "7" | "14" | "30" | "expired">("all");
+  const [deadlineFilter, setDeadlineFilter] = useState<"all" | "active" | "7" | "14" | "30" | "expired">("all");
   const [sortField, setSortField] = useState<"deadlineDate" | "fitScore" | "matchScore" | "complexityScore" | "name" | "geographicScope" | "amount">("matchScore");
   const [sortAsc, setSortAsc] = useState(false);
   const [ranking, setRanking] = useState(false);
@@ -163,6 +163,7 @@ export default function GrantsPage() {
   const DAY = 86400000;
 
   const deadlineCounts = {
+    active: grants.filter(g => !g.deadlineDate || new Date(g.deadlineDate).getTime() >= now).length,
     closing7: grants.filter(g => { if (!g.deadlineDate) return false; const d = new Date(g.deadlineDate).getTime() - now; return d >= 0 && d <= 7 * DAY; }).length,
     closing14: grants.filter(g => { if (!g.deadlineDate) return false; const d = new Date(g.deadlineDate).getTime() - now; return d >= 0 && d <= 14 * DAY; }).length,
     closing30: grants.filter(g => { if (!g.deadlineDate) return false; const d = new Date(g.deadlineDate).getTime() - now; return d >= 0 && d <= 30 * DAY; }).length,
@@ -175,12 +176,14 @@ export default function GrantsPage() {
       const matchSearch = !search || g.name.toLowerCase().includes(q) || (g.founder ?? "").toLowerCase().includes(q) || (g.notes ?? "").toLowerCase().includes(q);
       const matchDecision = decisionFilter === "All" || g.decision === decisionFilter;
       let matchDeadline = true;
-      if (deadlineFilter !== "all" && g.deadlineDate) {
+      if (deadlineFilter === "active") {
+        matchDeadline = !g.deadlineDate || new Date(g.deadlineDate).getTime() >= now;
+      } else if (deadlineFilter !== "all" && g.deadlineDate) {
         const diff = new Date(g.deadlineDate).getTime() - now;
         if (deadlineFilter === "expired") matchDeadline = diff < 0;
         else matchDeadline = diff >= 0 && diff <= parseInt(deadlineFilter) * DAY;
       } else if (deadlineFilter !== "all" && !g.deadlineDate) {
-        matchDeadline = false;
+        matchDeadline = deadlineFilter === "expired" ? false : false;
       }
       return matchSearch && matchDecision && matchDeadline;
     })
@@ -373,14 +376,14 @@ export default function GrantsPage() {
           ))}
         </div>
         <div className="flex flex-shrink-0 flex-wrap gap-1.5 items-center">
-          {(["all", "7", "14", "30", "expired"] as const).map((d) => {
-            const label = d === "all" ? "Any deadline" : d === "expired" ? "Expired" : `≤ ${d}d`;
-            const count = d === "7" ? deadlineCounts.closing7 : d === "14" ? deadlineCounts.closing14 : d === "30" ? deadlineCounts.closing30 : d === "expired" ? deadlineCounts.expired : null;
+          {(["all", "active", "7", "14", "30", "expired"] as const).map((d) => {
+            const label = d === "all" ? "Any deadline" : d === "active" ? "Non-expired" : d === "expired" ? "Expired" : `≤ ${d}d`;
+            const count = d === "active" ? deadlineCounts.active : d === "7" ? deadlineCounts.closing7 : d === "14" ? deadlineCounts.closing14 : d === "30" ? deadlineCounts.closing30 : d === "expired" ? deadlineCounts.expired : null;
             return (
-              <button key={d} onClick={() => { setDeadlineFilter(d); setCurrentPage(1); if (d !== "all") { setSortField("deadlineDate"); setSortAsc(true); } }}
+              <button key={d} onClick={() => { setDeadlineFilter(d); setCurrentPage(1); if (d !== "all" && d !== "active") { setSortField("deadlineDate"); setSortAsc(true); } }}
                 className={`rounded-full px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
                   deadlineFilter === d
-                    ? d === "expired" ? "bg-red-600 text-white" : "bg-orange-500 text-white"
+                    ? d === "expired" ? "bg-red-600 text-white" : d === "active" ? "bg-green-600 text-white" : "bg-orange-500 text-white"
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}>
                 {label}{count != null && count > 0 ? ` (${count})` : ""}

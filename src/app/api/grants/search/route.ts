@@ -81,7 +81,7 @@ RULES:
       : "";
 
     const excludeSection = existingNames && existingNames.length > 0
-      ? `\nEXCLUDE THESE (already in our database — do not return them):\n${existingNames.slice(0, 100).join(", ")}`
+      ? `\nEXCLUDE THESE (already in our database — do not return them):\n${existingNames.slice(0, 50).join(", ")}`
       : "";
 
     const userPrompt = `Find up to 20 real grant opportunities matching ALL of these filters:
@@ -92,9 +92,15 @@ Be exhaustive — search your knowledge across government grants, foundations, c
 
     let result: Record<string, unknown>;
     try {
-      result = await callOpenAIJson({ systemPrompt, userPrompt, maxTokens: 5000, temperature: 0.2 });
+      result = await callOpenAIJson({ systemPrompt, userPrompt, maxTokens: 6000, temperature: 0.2 });
     } catch (err) {
-      return NextResponse.json({ error: err instanceof Error ? err.message : "AI failed" }, { status: 500 });
+      const msg = err instanceof Error ? err.message : "AI failed";
+      const isJsonErr = msg.toLowerCase().includes("json") || msg.toLowerCase().includes("token");
+      return NextResponse.json({
+        error: isJsonErr
+          ? "AI returned a malformed response — please try again. If this keeps happening, reduce the number of filters."
+          : msg,
+      }, { status: 500 });
     }
     return NextResponse.json({ success: true, results: (result.results as unknown[]) ?? [] });
   } catch (err) {

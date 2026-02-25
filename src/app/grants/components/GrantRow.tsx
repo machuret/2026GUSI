@@ -193,7 +193,7 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
                 <KanbanSquare className="h-3.5 w-3.5" />
               </Link>
             ) : (
-              <div className="relative">
+              <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setShowCrmMenu(false); }}>
                 <button
                   onClick={() => setShowCrmMenu(v => !v)}
                   disabled={sendingToCrm}
@@ -202,9 +202,10 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
                   {sendingToCrm ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronsRight className="h-3.5 w-3.5" />}
                 </button>
                 {showCrmMenu && (
-                  <div className="absolute right-0 top-6 z-20 w-36 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                  <div className="fixed z-[999] w-36 rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
                     {(["Researching", "Pipeline", "Active"] as const).map((s) => (
-                      <button key={s} onClick={() => sendToCrm(s)}
+                      <button key={s}
+                        onMouseDown={(e) => { e.preventDefault(); sendToCrm(s); }}
                         className="w-full px-3 py-1.5 text-left text-xs font-medium text-gray-700 hover:bg-gray-50">
                         → {s}
                       </button>
