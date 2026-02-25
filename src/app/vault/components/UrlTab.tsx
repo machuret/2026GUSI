@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Globe, Loader2, CheckCircle2, AlertCircle, X } from "lucide-react";
+import { Globe, Loader2, CheckCircle2, AlertCircle, AlertTriangle, X } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { VAULT_CATEGORIES, type VaultItem } from "./vaultTypes";
 
@@ -11,19 +11,21 @@ const lbl = "mb-1 block text-xs font-medium text-gray-600";
 interface Props {
   onSaved: (item: VaultItem) => void;
   onError: (msg: string) => void;
+  checkDuplicate?: (content: string) => VaultItem | null;
 }
 
-export function UrlTab({ onSaved, onError }: Props) {
+export function UrlTab({ onSaved, onError, checkDuplicate }: Props) {
   const [url, setUrl] = useState("");
   const [category, setCategory] = useState("general");
   const [crawling, setCrawling] = useState(false);
   const [saving, setSaving] = useState(false);
   const [crawlError, setCrawlError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ title: string; content: string } | null>(null);
+  const [dupItem, setDupItem] = useState<VaultItem | null>(null);
 
   const handleCrawl = async () => {
     if (!url.trim()) return;
-    setCrawling(true); setCrawlError(null); setPreview(null);
+    setCrawling(true); setCrawlError(null); setPreview(null); setDupItem(null);
     try {
       const res = await authFetch("/api/vault/crawl", {
         method: "POST",
@@ -32,7 +34,12 @@ export function UrlTab({ onSaved, onError }: Props) {
       });
       const data = await res.json();
       if (!res.ok) { setCrawlError(data.error || "Crawl failed"); return; }
-      setPreview({ title: data.title, content: data.content });
+      const p = { title: data.title, content: data.content };
+      setPreview(p);
+      if (checkDuplicate) {
+        const dup = checkDuplicate(data.content);
+        if (dup) setDupItem(dup);
+      }
     } catch (err) {
       setCrawlError(err instanceof Error ? err.message : "Network error");
     } finally { setCrawling(false); }
@@ -50,7 +57,7 @@ export function UrlTab({ onSaved, onError }: Props) {
       const data = await res.json();
       if (!res.ok) { onError(data.error || "Save failed"); return; }
       onSaved(data.item);
-      setPreview(null); setUrl(""); setCategory("general");
+      setPreview(null); setUrl(""); setCategory("general"); setDupItem(null);
     } catch (err) {
       onError(err instanceof Error ? err.message : "Network error");
     } finally { setSaving(false); }
@@ -95,27 +102,39 @@ export function UrlTab({ onSaved, onError }: Props) {
       )}
 
       {preview && (
-        <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <p className="font-semibold text-green-800 text-sm">{preview.title}</p>
+        <div className="space-y-2">
+          {dupItem && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-500" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-amber-800">Possible duplicate of <span className="font-semibold">"{dupItem.filename}"</span></p>
+                <p className="text-xs text-amber-600 mt-0.5">This URL content looks very similar to an existing vault entry.</p>
+                <button onClick={() => setDupItem(null)} className="mt-1.5 text-xs text-amber-700 underline">Dismiss and save anyway</button>
+              </div>
             </div>
-            <button onClick={() => setPreview(null)} className="text-green-400 hover:text-green-700">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <p className="text-xs text-green-700 mb-3 line-clamp-4 whitespace-pre-wrap">{preview.content}</p>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
-            >
-              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Save to Vault
-            </button>
-            <span className="text-xs text-green-600">{preview.content.length.toLocaleString()} chars extracted</span>
+          )}
+          <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <p className="font-semibold text-green-800 text-sm">{preview.title}</p>
+              </div>
+              <button onClick={() => { setPreview(null); setDupItem(null); }} className="text-green-400 hover:text-green-700">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-xs text-green-700 mb-3 line-clamp-4 whitespace-pre-wrap">{preview.content}</p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSave}
+                disabled={saving || (dupItem !== null)}
+                className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Save to Vault
+              </button>
+              <span className="text-xs text-green-600">{preview.content.length.toLocaleString()} chars extracted</span>
+            </div>
           </div>
         </div>
       )}

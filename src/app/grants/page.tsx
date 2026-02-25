@@ -340,23 +340,23 @@ export default function GrantsPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-          <table className="w-full">
+          <table className="w-full min-w-[860px]">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-2 py-3 w-8">
+                <th className="px-2 py-3 w-7 shrink-0">
                   <input type="checkbox" checked={filtered.length > 0 && selected.size === filtered.length}
                     onChange={toggleSelectAll} className="h-3.5 w-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
                 </th>
-                <th className="px-4 py-3 text-left"><SortBtn field="name" label="Grant" /></th>
-                <th className="px-3 py-3 text-left"><SortBtn field="geographicScope" label="Country" /></th>
-                <th className="px-3 py-3 text-left"><SortBtn field="deadlineDate" label="Deadline" /></th>
-                <th className="px-3 py-3 text-left"><SortBtn field="amount" label="Amount" /></th>
-                <th className="px-3 py-3 text-left"><SortBtn field="matchScore" label="Match" /></th>
-                <th className="px-3 py-3 text-left"><SortBtn field="complexityScore" label="Complexity" /></th>
-                <th className="px-3 py-3 text-left"><SortBtn field="fitScore" label="Fit" /></th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Effort</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Decision</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Actions</th>
+                <th className="px-3 py-3 text-left w-[28%]"><SortBtn field="name" label="Grant" /></th>
+                <th className="px-2 py-3 text-left w-[9%]"><SortBtn field="geographicScope" label="Country" /></th>
+                <th className="px-2 py-3 text-left w-[9%]"><SortBtn field="deadlineDate" label="Deadline" /></th>
+                <th className="px-2 py-3 text-left w-[9%]"><SortBtn field="amount" label="Amount" /></th>
+                <th className="px-2 py-3 text-left w-[7%]"><SortBtn field="matchScore" label="Match" /></th>
+                <th className="px-2 py-3 text-left w-[9%]"><SortBtn field="complexityScore" label="Complexity" /></th>
+                <th className="px-2 py-3 text-left w-[6%]"><SortBtn field="fitScore" label="Fit" /></th>
+                <th className="px-2 py-3 text-left w-[7%] text-xs font-semibold uppercase tracking-wide text-gray-500">Effort</th>
+                <th className="px-2 py-3 text-left w-[8%] text-xs font-semibold uppercase tracking-wide text-gray-500">Decision</th>
+                <th className="px-2 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Actions</th>
               </tr>
             </thead>
             <tbody>

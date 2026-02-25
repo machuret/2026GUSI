@@ -99,7 +99,10 @@ export function VaultItemRow({ item, onDelete, onUpdated }: Props) {
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
                 {(item.content?.length ?? 0).toLocaleString()} chars ·{" "}
-                {new Date(item.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+                Added {new Date(item.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+                {item.updatedAt && item.updatedAt !== item.createdAt && (
+                  <> · <span className="text-gray-400">Edited {new Date(item.updatedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</span></>
+                )}
               </p>
             </div>
           </button>

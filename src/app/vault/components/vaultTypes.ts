@@ -4,6 +4,7 @@ export interface VaultItem {
   content: string;
   fileType: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export const VAULT_CATEGORIES = [
