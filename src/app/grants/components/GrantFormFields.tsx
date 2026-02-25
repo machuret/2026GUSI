@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { Sparkles, Loader2 } from "lucide-react";
 import type { Grant } from "@/hooks/useGrants";
 import { GEO_SCOPES, PROJECT_DURATIONS, inputCls, labelCls } from "./grantTypes";
 import { FitStars } from "./GrantBadges";
@@ -12,16 +12,17 @@ interface Props {
   researching?: boolean;
 }
 
-export function GrantFormFields({ form, set, onResearch }: Props) {
+export function GrantFormFields({ form, set, onResearch, researching }: Props) {
   return (
     <div className="space-y-4">
       <div>
         <div className="mb-1 flex items-center justify-between">
           <label className={labelCls}>Grant Name <span className="text-red-400">*</span></label>
           {onResearch && (
-            <button type="button" onClick={onResearch}
-              className="flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100">
-              <Sparkles className="h-3.5 w-3.5" /> AI Auto-fill
+            <button type="button" onClick={onResearch} disabled={researching}
+              className="flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-50">
+              {researching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {researching ? "Researching…" : "AI Auto-fill"}
             </button>
           )}
         </div>

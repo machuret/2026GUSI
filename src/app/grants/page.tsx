@@ -50,7 +50,7 @@ export default function GrantsPage() {
         if (res.success) ok++;
       } catch { /* skip */ }
     }
-    setActionMsg(`✓ Moved ${ok} grant${ok !== 1 ? "s" : ""} to ${status}`);
+    setMsg(`✓ Moved ${ok} grant${ok !== 1 ? "s" : ""} to ${status}`);
     setSelected(new Set());
     setBulkBusy(false);
   };
@@ -66,7 +66,7 @@ export default function GrantsPage() {
         if (res.success) ok++;
       } catch { /* skip */ }
     }
-    setActionMsg(`✓ Deleted ${ok} grant${ok !== 1 ? "s" : ""}`);
+    setMsg(`✓ Deleted ${ok} grant${ok !== 1 ? "s" : ""}`);
     setSelected(new Set());
     setBulkBusy(false);
   };
@@ -82,13 +82,18 @@ export default function GrantsPage() {
     try {
       const res = await authFetch("/api/grants/rank", { method: "POST" });
       const data = await res.json();
-      if (!res.ok) { setActionMsg(data.error ?? "Ranking failed"); return; }
-      setActionMsg(`✓ Ranked ${data.ranked} grants by profile match`);
+      if (!res.ok) { setMsg(data.error ?? "Ranking failed"); return; }
+      setMsg(`✓ Ranked ${data.ranked} grants by profile match`);
       await fetchGrants();
       setSortField("matchScore");
       setSortAsc(false);
-    } catch { setActionMsg("Ranking failed — try again"); }
+    } catch { setMsg("Ranking failed — try again"); }
     finally { setRanking(false); }
+  };
+
+  const setMsg = (msg: string) => {
+    setActionMsg(msg);
+    setTimeout(() => setActionMsg(null), 5000);
   };
 
   const handleScoreComplexity = async () => {
@@ -96,24 +101,27 @@ export default function GrantsPage() {
     setActionMsg(null);
     try {
       const ids = grants.map((g) => g.id);
+      let scored = 0;
       for (let i = 0; i < ids.length; i += 20) {
         const batch = ids.slice(i, i + 20);
-        await authFetch("/api/grants/score-complexity", {
+        const res = await authFetch("/api/grants/score-complexity", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ grantIds: batch }),
         });
+        const data = await res.json();
+        if (res.ok && data.results) scored += data.results.length;
       }
-      setActionMsg(`✓ Complexity scored ${ids.length} grants`);
+      setMsg(`✓ Complexity scored ${scored} grants`);
       await fetchGrants();
-    } catch { setActionMsg("Scoring failed — try again"); }
+    } catch { setMsg("Scoring failed — try again"); }
     finally { setScoring(false); }
   };
 
   const handleBulkAnalyse = async () => {
     const ids = selected.size > 0 ? Array.from(selected) : grants.map((g) => g.id);
     if (ids.length === 0) return;
-    if (!companyDNA) { setActionMsg("No company profile found — fill in Settings → Company Info first"); return; }
+    if (!companyDNA) { setMsg("No company profile found — fill in Settings → Company Info first"); return; }
     if (!confirm(`Run AI Fit analysis on ${ids.length} grant${ids.length !== 1 ? "s" : ""}? This may take a while.`)) return;
     setBulkAnalysing(true); setActionMsg(null);
     let ok = 0;
@@ -129,16 +137,15 @@ export default function GrantsPage() {
         const data = await res.json();
         if (data.success && data.analysis) {
           const a = data.analysis;
-          await updateGrantRaw(id, {
-            fitScore: a.fitScore ?? undefined,
-            submissionEffort: a.effort ?? undefined,
-            decision: a.verdict === "Apply" ? "Apply" : a.verdict === "Skip" ? "No" : "Maybe",
-          });
+          const fitScore = typeof a.score === "number" ? Math.round(a.score / 20) : undefined;
+          const decision = a.verdict === "Strong Fit" || a.verdict === "Good Fit" ? "Apply"
+            : a.verdict === "Not Eligible" ? "No" : "Maybe";
+          await updateGrantRaw(id, { fitScore, decision });
           ok++;
         }
       } catch { /* skip */ }
     }
-    setActionMsg(`✓ AI Fit analysed ${ok} of ${ids.length} grants`);
+    setMsg(`✓ AI Fit analysed ${ok} of ${ids.length} grants`);
     setSelected(new Set());
     setBulkAnalysing(false);
   };
@@ -147,14 +154,14 @@ export default function GrantsPage() {
     const expiredIds = grants
       .filter(g => g.deadlineDate && new Date(g.deadlineDate).getTime() < Date.now())
       .map(g => g.id);
-    if (expiredIds.length === 0) { setActionMsg("No expired grants found"); return; }
+    if (expiredIds.length === 0) { setMsg("No expired grants found"); return; }
     if (!confirm(`Permanently delete ${expiredIds.length} expired grant${expiredIds.length !== 1 ? "s" : ""}?`)) return;
     setDeletingExpired(true); setActionMsg(null);
     let ok = 0;
     for (const id of expiredIds) {
       try { const r = await deleteGrant(id); if (r.success) ok++; } catch { /* skip */ }
     }
-    setActionMsg(`✓ Deleted ${ok} expired grant${ok !== 1 ? "s" : ""}`);
+    setMsg(`✓ Deleted ${ok} expired grant${ok !== 1 ? "s" : ""}`);
     setDeadlineFilter("all");
     setDeletingExpired(false);
   };
@@ -183,7 +190,7 @@ export default function GrantsPage() {
         if (deadlineFilter === "expired") matchDeadline = diff < 0;
         else matchDeadline = diff >= 0 && diff <= parseInt(deadlineFilter) * DAY;
       } else if (deadlineFilter !== "all" && !g.deadlineDate) {
-        matchDeadline = deadlineFilter === "expired" ? false : false;
+        matchDeadline = false;
       }
       return matchSearch && matchDecision && matchDeadline;
     })

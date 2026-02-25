@@ -83,7 +83,9 @@ Return ONLY valid JSON array, no markdown:
         totalPrompt += aiResult.promptTokens;
         totalCompletion += aiResult.completionTokens;
 
-        const parsed = JSON.parse(aiResult.content);
+        const cleaned = aiResult.content
+          .replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+        const parsed = JSON.parse(cleaned);
         const scores: { id: string; matchScore: number }[] = Array.isArray(parsed) ? parsed : (parsed.scores ?? []);
 
         for (const s of scores) {

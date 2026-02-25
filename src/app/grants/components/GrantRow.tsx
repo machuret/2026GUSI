@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   ExternalLink, Trash2, ChevronDown, ChevronUp,
@@ -33,12 +33,19 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
   const [researching, setResearching] = useState(false);
   const [sendingToCrm, setSendingToCrm] = useState(false);
   const [showCrmMenu, setShowCrmMenu] = useState(false);
+  const [crmMenuPos, setCrmMenuPos] = useState({ top: 0, left: 0 });
+  const crmBtnRef = useRef<HTMLButtonElement>(null);
   const [analysis, setAnalysis] = useState<GrantAnalysis | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [researchMsg, setResearchMsg] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const inCrm = !!grant.crmStatus;
   const set = (k: keyof Grant, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
+
+  // Bug fix: sync form when grant prop updates (e.g. after save/update from parent)
+  useEffect(() => {
+    if (!editing) setForm({ ...grant });
+  }, [grant, editing]);
 
   const save = async () => {
     setSaving(true);
@@ -78,8 +85,18 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
         body: JSON.stringify({ grant, companyDNA }),
       });
       const data = await res.json();
-      if (data.success) setAnalysis(data.analysis);
-      else setAiError(data.error || "Analysis failed");
+      if (data.success && data.analysis) {
+        setAnalysis(data.analysis);
+        // Bug fix: persist fitScore, submissionEffort, decision back to DB
+        const a = data.analysis;
+        const fitScore = typeof a.score === "number" ? Math.round(a.score / 20) : undefined;
+        const decision = a.verdict === "Strong Fit" || a.verdict === "Good Fit" ? "Apply"
+          : a.verdict === "Not Eligible" ? "No" : "Maybe";
+        await onUpdate(grant.id, {
+          fitScore: fitScore ?? undefined,
+          decision,
+        });
+      } else setAiError(data.error || "Analysis failed");
     } catch { setAiError("Network error"); }
     finally { setAnalysing(false); }
   };
@@ -195,14 +212,23 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
             ) : (
               <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setShowCrmMenu(false); }}>
                 <button
-                  onClick={() => setShowCrmMenu(v => !v)}
+                  ref={crmBtnRef}
+                  onClick={() => {
+                    if (crmBtnRef.current) {
+                      const r = crmBtnRef.current.getBoundingClientRect();
+                      setCrmMenuPos({ top: r.bottom + 4, left: r.left });
+                    }
+                    setShowCrmMenu(v => !v);
+                  }}
                   disabled={sendingToCrm}
                   title="Add to CRM"
                   className="rounded p-1 text-indigo-300 hover:bg-indigo-50 hover:text-indigo-500 disabled:opacity-40">
                   {sendingToCrm ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronsRight className="h-3.5 w-3.5" />}
                 </button>
                 {showCrmMenu && (
-                  <div className="fixed z-[999] w-36 rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
+                  <div
+                    className="fixed z-[999] w-36 rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
+                    style={{ top: crmMenuPos.top, left: crmMenuPos.left }}>
                     {(["Researching", "Pipeline", "Active"] as const).map((s) => (
                       <button key={s}
                         onMouseDown={(e) => { e.preventDefault(); sendToCrm(s); }}
