@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   ExternalLink, Trash2, ChevronDown, ChevronUp,
-  FileText, Loader2, Save, Sparkles, FlaskConical, PenLine, KanbanSquare,
+  FileText, Loader2, Save, Sparkles, FlaskConical, PenLine, KanbanSquare, ChevronsRight,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import type { Grant } from "@/hooks/useGrants";
@@ -32,6 +32,7 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
   const [analysing, setAnalysing] = useState(false);
   const [researching, setResearching] = useState(false);
   const [sendingToCrm, setSendingToCrm] = useState(false);
+  const [showCrmMenu, setShowCrmMenu] = useState(false);
   const [analysis, setAnalysis] = useState<GrantAnalysis | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [researchMsg, setResearchMsg] = useState<string | null>(null);
@@ -62,9 +63,9 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
     finally { setDeleting(false); }
   };
 
-  const sendToCrm = async () => {
-    setSendingToCrm(true);
-    try { await onUpdate(grant.id, { crmStatus: "Researching" }); }
+  const sendToCrm = async (status: Grant["crmStatus"] = "Researching") => {
+    setSendingToCrm(true); setShowCrmMenu(false);
+    try { await onUpdate(grant.id, { crmStatus: status }); }
     finally { setSendingToCrm(false); }
   };
 
@@ -161,36 +162,60 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
         <td className="px-3 py-3"><FitStars value={grant.fitScore} /></td>
         <td className="px-3 py-3"><EffortBadge value={grant.submissionEffort as Effort | null} /></td>
         <td className="px-3 py-3"><DecisionBadge value={grant.decision as "Apply" | "Maybe" | "No" | "Rejected" | null} /></td>
-        <td className="px-3 py-3">
-          <div className="flex items-center gap-1.5">
+        <td className="px-2 py-3">
+          <div className="flex items-center gap-1">
             {grant.url && (
-              <a href={grant.url} target="_blank" rel="noopener noreferrer" title="Open URL" className="text-brand-500 hover:text-brand-700">
-                <ExternalLink className="h-4 w-4" />
+              <a href={grant.url} target="_blank" rel="noopener noreferrer" title="Open URL"
+                className="rounded p-1 text-brand-400 hover:bg-brand-50 hover:text-brand-700">
+                <ExternalLink className="h-3.5 w-3.5" />
               </a>
             )}
-            <button onClick={handleAnalyse} disabled={analysing} title="AI Fit Calculator" className="text-purple-400 hover:text-purple-600 disabled:opacity-40">
-              {analysing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
+            <button onClick={handleAnalyse} disabled={analysing} title="AI Fit Calculator"
+              className="rounded p-1 text-purple-400 hover:bg-purple-50 hover:text-purple-600 disabled:opacity-40">
+              {analysing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5" />}
             </button>
-            <button onClick={handleResearch} disabled={researching} title="AI Auto-fill missing fields" className="text-brand-400 hover:text-brand-600 disabled:opacity-40">
-              {researching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            <button onClick={handleResearch} disabled={researching} title="AI Auto-fill"
+              className="rounded p-1 text-brand-400 hover:bg-brand-50 hover:text-brand-600 disabled:opacity-40">
+              {researching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
             </button>
-            <button onClick={() => { setEditing(true); setExpanded(true); }} title="Edit" className="text-gray-400 hover:text-brand-600">
-              <FileText className="h-4 w-4" />
+            <button onClick={() => { setEditing(true); setExpanded(true); }} title="Edit"
+              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-brand-600">
+              <FileText className="h-3.5 w-3.5" />
             </button>
-            <Link href={`/grants/builder?grantId=${grant.id}`} title="Write Application" className="text-emerald-400 hover:text-emerald-600">
-              <PenLine className="h-4 w-4" />
+            <Link href={`/grants/builder?grantId=${grant.id}`} title="Write Application"
+              className="rounded p-1 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600">
+              <PenLine className="h-3.5 w-3.5" />
             </Link>
+            {/* CRM button / menu */}
             {inCrm ? (
-              <Link href="/grants/crm" title="View in CRM" className="text-indigo-400 hover:text-indigo-600">
-                <KanbanSquare className="h-4 w-4" />
+              <Link href="/grants/crm" title="View in CRM"
+                className="rounded p-1 text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600">
+                <KanbanSquare className="h-3.5 w-3.5" />
               </Link>
             ) : (
-              <button onClick={sendToCrm} disabled={sendingToCrm} title="Send to CRM" className="text-indigo-300 hover:text-indigo-500 disabled:opacity-40">
-                {sendingToCrm ? <Loader2 className="h-4 w-4 animate-spin" /> : <KanbanSquare className="h-4 w-4" />}
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowCrmMenu(v => !v)}
+                  disabled={sendingToCrm}
+                  title="Add to CRM"
+                  className="rounded p-1 text-indigo-300 hover:bg-indigo-50 hover:text-indigo-500 disabled:opacity-40">
+                  {sendingToCrm ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronsRight className="h-3.5 w-3.5" />}
+                </button>
+                {showCrmMenu && (
+                  <div className="absolute right-0 top-6 z-20 w-36 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                    {(["Researching", "Pipeline", "Active"] as const).map((s) => (
+                      <button key={s} onClick={() => sendToCrm(s)}
+                        className="w-full px-3 py-1.5 text-left text-xs font-medium text-gray-700 hover:bg-gray-50">
+                        → {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
-            <button onClick={del} disabled={deleting} title="Delete" className="text-gray-300 hover:text-red-500 disabled:opacity-40">
-              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            <button onClick={del} disabled={deleting} title="Delete"
+              className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-40">
+              {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
             </button>
           </div>
         </td>

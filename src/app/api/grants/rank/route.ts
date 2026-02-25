@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
     let totalCompletion = 0;
 
     // Batch grants in groups of 5 to reduce API calls
-    const BATCH_SIZE = 5;
+    const BATCH_SIZE = 3;
     for (let i = 0; i < grants.length; i += BATCH_SIZE) {
       const batch = grants.slice(i, i + BATCH_SIZE);
 

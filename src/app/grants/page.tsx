@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useState } from "react";
-import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare } from "lucide-react";
+import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical } from "lucide-react";
 import Link from "next/link";
 import { useGrants, type Grant } from "@/hooks/useGrants";
 import { authFetch } from "@/lib/authFetch";
@@ -25,6 +25,8 @@ export default function GrantsPage() {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkAnalysing, setBulkAnalysing] = useState(false);
+  const [deletingExpired, setDeletingExpired] = useState(false);
   const [perPage, setPerPage] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -94,7 +96,6 @@ export default function GrantsPage() {
     setActionMsg(null);
     try {
       const ids = grants.map((g) => g.id);
-      // Score in batches of 20
       for (let i = 0; i < ids.length; i += 20) {
         const batch = ids.slice(i, i + 20);
         await authFetch("/api/grants/score-complexity", {
@@ -107,6 +108,55 @@ export default function GrantsPage() {
       await fetchGrants();
     } catch { setActionMsg("Scoring failed — try again"); }
     finally { setScoring(false); }
+  };
+
+  const handleBulkAnalyse = async () => {
+    const ids = selected.size > 0 ? Array.from(selected) : grants.map((g) => g.id);
+    if (ids.length === 0) return;
+    if (!companyDNA) { setActionMsg("No company profile found — fill in Settings → Company Info first"); return; }
+    if (!confirm(`Run AI Fit analysis on ${ids.length} grant${ids.length !== 1 ? "s" : ""}? This may take a while.`)) return;
+    setBulkAnalysing(true); setActionMsg(null);
+    let ok = 0;
+    for (const id of ids) {
+      try {
+        const grant = grants.find((g) => g.id === id);
+        if (!grant) continue;
+        const res = await authFetch("/api/grants/analyse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ grant, companyDNA }),
+        });
+        const data = await res.json();
+        if (data.success && data.analysis) {
+          const a = data.analysis;
+          await updateGrantRaw(id, {
+            fitScore: a.fitScore ?? undefined,
+            submissionEffort: a.effort ?? undefined,
+            decision: a.verdict === "Apply" ? "Apply" : a.verdict === "Skip" ? "No" : "Maybe",
+          });
+          ok++;
+        }
+      } catch { /* skip */ }
+    }
+    setActionMsg(`✓ AI Fit analysed ${ok} of ${ids.length} grants`);
+    setSelected(new Set());
+    setBulkAnalysing(false);
+  };
+
+  const handleDeleteExpired = async () => {
+    const expiredIds = grants
+      .filter(g => g.deadlineDate && new Date(g.deadlineDate).getTime() < Date.now())
+      .map(g => g.id);
+    if (expiredIds.length === 0) { setActionMsg("No expired grants found"); return; }
+    if (!confirm(`Permanently delete ${expiredIds.length} expired grant${expiredIds.length !== 1 ? "s" : ""}?`)) return;
+    setDeletingExpired(true); setActionMsg(null);
+    let ok = 0;
+    for (const id of expiredIds) {
+      try { const r = await deleteGrant(id); if (r.success) ok++; } catch { /* skip */ }
+    }
+    setActionMsg(`✓ Deleted ${ok} expired grant${ok !== 1 ? "s" : ""}`);
+    setDeadlineFilter("all");
+    setDeletingExpired(false);
   };
 
   const now = Date.now();
@@ -260,6 +310,15 @@ export default function GrantsPage() {
           {scoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
           {scoring ? "Scoring…" : "Score Complexity"}
         </button>
+        <button
+          onClick={handleBulkAnalyse}
+          disabled={bulkAnalysing || grants.length === 0}
+          title={selected.size > 0 ? `Run AI Fit on ${selected.size} selected` : "Run AI Fit on all grants"}
+          className="flex items-center gap-2 rounded-lg border border-purple-300 bg-white px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-60"
+        >
+          {bulkAnalysing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
+          {bulkAnalysing ? "Analysing…" : selected.size > 0 ? `AI Fit (${selected.size} selected)` : "AI Fit (all)"}
+        </button>
         {actionMsg && <span className="text-sm text-brand-700 font-medium">{actionMsg}</span>}
       </div>
 
@@ -313,7 +372,7 @@ export default function GrantsPage() {
             </button>
           ))}
         </div>
-        <div className="flex flex-shrink-0 gap-1.5">
+        <div className="flex flex-shrink-0 flex-wrap gap-1.5 items-center">
           {(["all", "7", "14", "30", "expired"] as const).map((d) => {
             const label = d === "all" ? "Any deadline" : d === "expired" ? "Expired" : `≤ ${d}d`;
             const count = d === "7" ? deadlineCounts.closing7 : d === "14" ? deadlineCounts.closing14 : d === "30" ? deadlineCounts.closing30 : d === "expired" ? deadlineCounts.expired : null;
@@ -328,6 +387,17 @@ export default function GrantsPage() {
               </button>
             );
           })}
+          {deadlineCounts.expired > 0 && (
+            <button
+              onClick={handleDeleteExpired}
+              disabled={deletingExpired}
+              title="Delete all expired grants"
+              className="flex items-center gap-1.5 rounded-full border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 whitespace-nowrap"
+            >
+              {deletingExpired ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+              Delete expired
+            </button>
+          )}
         </div>
       </div>
 
