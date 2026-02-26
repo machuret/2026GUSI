@@ -137,7 +137,7 @@ export default function GrantsPage() {
         const data = await res.json();
         if (data.success && data.analysis) {
           const a = data.analysis;
-          const fitScore = typeof a.score === "number" ? Math.round(a.score / 20) : undefined;
+          const fitScore = typeof a.score === "number" ? Math.max(1, Math.min(5, Math.round(a.score / 20))) : undefined;
           const decision = a.verdict === "Strong Fit" || a.verdict === "Good Fit" ? "Apply"
             : a.verdict === "Not Eligible" ? "No" : "Maybe";
           await updateGrantRaw(id, { fitScore, decision });

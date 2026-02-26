@@ -48,6 +48,32 @@ const EMPTY: GrantProfile = {
   missionStatement: "", keyActivities: "", pastGrantsWon: "", uniqueStrengths: "",
 };
 
+function Section({ icon: Icon, title, children }: { icon: React.ElementType; title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-6">
+      <div className="mb-4 flex items-center gap-2">
+        <Icon className="h-5 w-5 text-brand-600" />
+        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+      </div>
+      <div className="space-y-4">{children}</div>
+    </div>
+  );
+}
+
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) {
+  return (
+    <label className="flex cursor-pointer items-center gap-3">
+      <div
+        onClick={onChange}
+        className={`relative h-5 w-9 rounded-full transition-colors ${checked ? "bg-brand-600" : "bg-gray-300"}`}
+      >
+        <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"}`} />
+      </div>
+      <span className="text-sm text-gray-700">{label}</span>
+    </label>
+  );
+}
+
 export default function GrantProfilePage() {
   const [profile, setProfile] = useState<GrantProfile>(EMPTY);
   const [loading, setLoading] = useState(true);
@@ -100,28 +126,6 @@ export default function GrantProfilePage() {
   const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
   const selectCls = inputCls;
   const labelCls = "block text-sm font-medium text-gray-700 mb-1";
-
-  const Section = ({ icon: Icon, title, children }: { icon: React.ElementType; title: string; children: React.ReactNode }) => (
-    <div className="rounded-xl border border-gray-200 bg-white p-6">
-      <div className="mb-4 flex items-center gap-2">
-        <Icon className="h-5 w-5 text-brand-600" />
-        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-      </div>
-      <div className="space-y-4">{children}</div>
-    </div>
-  );
-
-  const Toggle = ({ label, field }: { label: string; field: keyof GrantProfile }) => (
-    <label className="flex cursor-pointer items-center gap-3">
-      <div
-        onClick={() => set(field, !profile[field])}
-        className={`relative h-5 w-9 rounded-full transition-colors ${profile[field] ? "bg-brand-600" : "bg-gray-300"}`}
-      >
-        <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${profile[field] ? "translate-x-4" : "translate-x-0.5"}`} />
-      </div>
-      <span className="text-sm text-gray-700">{label}</span>
-    </label>
-  );
 
   if (loading) return (
     <div className="flex items-center justify-center py-32">
@@ -207,9 +211,9 @@ export default function GrantProfilePage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-4 pt-1">
-            <Toggle label="Regional or Rural location" field="regionalOrRural" />
-            <Toggle label="Indigenous-owned organisation" field="indigenousOwned" />
-            <Toggle label="Woman-owned / led organisation" field="womanOwned" />
+            <Toggle label="Regional or Rural location" checked={!!profile.regionalOrRural} onChange={() => set("regionalOrRural", !profile.regionalOrRural)} />
+            <Toggle label="Indigenous-owned organisation" checked={!!profile.indigenousOwned} onChange={() => set("indigenousOwned", !profile.indigenousOwned)} />
+            <Toggle label="Woman-owned / led organisation" checked={!!profile.womanOwned} onChange={() => set("womanOwned", !profile.womanOwned)} />
           </div>
         </Section>
 
@@ -239,9 +243,9 @@ export default function GrantProfilePage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-4 pt-1">
-            <Toggle label="Registered Charity / DGR" field="isRegisteredCharity" />
-            <Toggle label="Has ABN" field="hasABN" />
-            <Toggle label="Has ACN (incorporated company)" field="hasACN" />
+            <Toggle label="Registered Charity / DGR" checked={!!profile.isRegisteredCharity} onChange={() => set("isRegisteredCharity", !profile.isRegisteredCharity)} />
+            <Toggle label="Has ABN" checked={!!profile.hasABN} onChange={() => set("hasABN", !profile.hasABN)} />
+            <Toggle label="Has ACN (incorporated company)" checked={!!profile.hasACN} onChange={() => set("hasACN", !profile.hasACN)} />
           </div>
         </Section>
 

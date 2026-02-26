@@ -43,14 +43,16 @@ export function useGrants() {
     setError(null);
     try {
       // TODO: replace DEMO_COMPANY_ID with session companyId when multi-tenancy lands
-      const [grantsRes, companyRes] = await Promise.all([
+      const [grantsRes, companyRes, profileRes] = await Promise.all([
         authFetch(`/api/grants?companyId=${DEMO_COMPANY_ID}`),
         authFetch(`/api/company?companyId=${DEMO_COMPANY_ID}`),
+        authFetch("/api/grant-profile"),
       ]);
       if (!grantsRes.ok) throw new Error(`Failed to load grants (${grantsRes.status})`);
       if (!companyRes.ok && companyRes.status !== 404) throw new Error(`Failed to load company (${companyRes.status})`);
       const grantsData = await grantsRes.json();
       const companyData = companyRes.ok ? await companyRes.json() : {};
+      const profileData = profileRes.ok ? await profileRes.json() : {};
 
       setGrants(grantsData.grants ?? []);
 
@@ -67,7 +69,27 @@ export function useGrants() {
         info?.achievements   ? `Achievements: ${info.achievements}` : null,
         info?.products       ? `Products: ${info.products}`         : null,
       ].filter(Boolean);
-      if (parts.length > 0) setCompanyDNA(parts.join("\n").slice(0, 2500));
+
+      // Fallback: also build DNA from Grant Profile if company info is sparse
+      const gp = profileData.profile;
+      if (gp) {
+        const gpParts = [
+          gp.orgType          ? `Organisation Type: ${gp.orgType}` : null,
+          gp.sector            ? `Sector: ${gp.sector}${gp.subSector ? ` / ${gp.subSector}` : ""}` : null,
+          gp.location          ? `Location: ${gp.location}, ${gp.country ?? "Australia"}` : null,
+          gp.stage             ? `Stage: ${gp.stage}` : null,
+          gp.teamSize          ? `Team Size: ${gp.teamSize}` : null,
+          gp.annualRevenue     ? `Annual Revenue: ${gp.annualRevenue}` : null,
+          gp.missionStatement  ? `Mission: ${gp.missionStatement}` : null,
+          gp.keyActivities     ? `Key Activities: ${gp.keyActivities}` : null,
+          gp.uniqueStrengths   ? `Unique Strengths: ${gp.uniqueStrengths}` : null,
+          gp.pastGrantsWon     ? `Past Grants Won: ${gp.pastGrantsWon}` : null,
+          Array.isArray(gp.focusAreas) && gp.focusAreas.length > 0 ? `Focus Areas: ${gp.focusAreas.join(", ")}` : null,
+        ].filter(Boolean);
+        parts.push(...gpParts);
+      }
+
+      if (parts.length > 0) setCompanyDNA(parts.join("\n").slice(0, 4000));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load grants");
     } finally {

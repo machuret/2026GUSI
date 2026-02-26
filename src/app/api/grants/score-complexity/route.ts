@@ -60,7 +60,7 @@ Return ONLY valid JSON array, no markdown:
           systemPrompt,
           userPrompt,
           model: MODEL_CONFIG.grantsAnalyse,
-          maxTokens: 600,
+          maxTokens: 1200,
           temperature: 0.2,
           jsonMode: true,
         });
@@ -89,9 +89,11 @@ Return ONLY valid JSON array, no markdown:
           results.push({ id: s.id, complexityScore, complexityLabel, complexityNotes });
         }
       } catch {
-        // Fallback: mark batch as medium on error
+        // Fallback: mark batch as medium on error — also persist to DB
         for (const g of batch) {
-          results.push({ id: g.id, complexityScore: 50, complexityLabel: "Medium", complexityNotes: "Could not assess complexity." });
+          const fallback = { complexityScore: 50, complexityLabel: "Medium", complexityNotes: "Could not assess complexity." };
+          await db.from("Grant").update({ ...fallback, updatedAt: new Date().toISOString() }).eq("id", g.id);
+          results.push({ id: g.id, ...fallback });
         }
       }
     }

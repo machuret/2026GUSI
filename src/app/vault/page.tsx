@@ -53,7 +53,7 @@ export default function VaultPage() {
 
   const fetchItems = useCallback(async () => {
     try {
-      const res = await authFetch("/api/vault");
+      const res = await authFetch("/api/vault?limit=1000");
       if (!res.ok) throw new Error(`Failed to load vault (${res.status})`);
       const data = await res.json();
       setItems(data.items ?? []);

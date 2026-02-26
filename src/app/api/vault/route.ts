@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const rawLimit = parseInt(p.get("limit") ?? "50", 10);
     const search   = p.get("search") ?? "";
     const page  = Math.max(1, isNaN(rawPage)  ? 1  : rawPage);
-    const limit = Math.min(100, Math.max(1, isNaN(rawLimit) ? 50 : rawLimit));
+    const limit = Math.min(2000, Math.max(1, isNaN(rawLimit) ? 50 : rawLimit));
     const offset = (page - 1) * limit;
 
     let query = db
