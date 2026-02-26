@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   ArrowLeft, PenLine, Sparkles, ExternalLink, Loader2,
   ChevronDown, ChevronUp, StickyNote, FlaskConical, X,
+  Bell, LayoutList, Columns2,
 } from "lucide-react";
 import { useGrants } from "@/hooks/useGrants";
 import { authFetch } from "@/lib/authFetch";
@@ -12,6 +13,7 @@ import type { Grant } from "@/hooks/useGrants";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 
 type CrmStatus = "Researching" | "Pipeline" | "Active" | "Submitted" | "Won" | "Lost";
+type ViewMode = "kanban" | "list";
 
 const COLUMNS: { status: CrmStatus; label: string; color: string; bg: string; border: string }[] = [
   { status: "Researching", label: "🔍 Researching",  color: "text-blue-700",   bg: "bg-blue-50",   border: "border-blue-200" },
@@ -23,6 +25,38 @@ const COLUMNS: { status: CrmStatus; label: string; color: string; bg: string; bo
 ];
 
 const STATUS_OPTIONS: CrmStatus[] = ["Researching", "Pipeline", "Active", "Submitted", "Won", "Lost"];
+
+function parseAmount(raw?: string | null): number | null {
+  if (!raw) return null;
+  const cleaned = raw.replace(/,/g, "");
+  const m = cleaned.match(/([\d]+(?:\.\d+)?)/);
+  if (!m) return null;
+  const n = parseFloat(m[0]);
+  if (/k\b/i.test(raw)) return n * 1000;
+  return n;
+}
+
+function formatCurrency(n: number): string {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${n.toLocaleString()}`;
+}
+
+function getDaysLeft(deadlineDate?: string | null): number | null {
+  if (!deadlineDate) return null;
+  return Math.ceil((new Date(deadlineDate).getTime() - Date.now()) / 86_400_000);
+}
+
+function sortByUrgency(grants: Grant[]): Grant[] {
+  return [...grants].sort((a, b) => {
+    const da = getDaysLeft(a.deadlineDate);
+    const db = getDaysLeft(b.deadlineDate);
+    if (da === null && db === null) return 0;
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return da - db;
+  });
+}
 
 function GrantCrmCard({
   grant,
@@ -224,6 +258,7 @@ function GrantCrmCard({
 export default function GrantsCrmPage() {
   const { grants, loading, companyDNA, updateGrant } = useGrants();
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("kanban");
 
   const crmGrants = grants.filter((g) => g.crmStatus != null);
   const filtered = crmGrants.filter((g) => {
@@ -231,7 +266,7 @@ export default function GrantsCrmPage() {
     return !search || g.name.toLowerCase().includes(q) || (g.founder ?? "").toLowerCase().includes(q);
   });
 
-  const getColumn = (status: CrmStatus) => filtered.filter((g) => g.crmStatus === status);
+  const getColumn = (status: CrmStatus) => sortByUrgency(filtered.filter((g) => g.crmStatus === status));
 
   const [dragError, setDragError] = useState<string | null>(null);
 
@@ -253,10 +288,21 @@ export default function GrantsCrmPage() {
   const activeCount = crmGrants.filter((g) => g.crmStatus === "Active" || g.crmStatus === "Submitted").length;
   const researchingCount = crmGrants.filter((g) => g.crmStatus === "Researching" || g.crmStatus === "Pipeline").length;
 
+  // Total pipeline value (exclude Won/Lost from "pipeline" figure)
+  const pipelineGrants = crmGrants.filter((g) => g.crmStatus !== "Won" && g.crmStatus !== "Lost");
+  const pipelineValue = pipelineGrants.reduce((sum, g) => sum + (parseAmount(g.amount) ?? 0), 0);
+  const wonValue = crmGrants.filter((g) => g.crmStatus === "Won").reduce((sum, g) => sum + (parseAmount(g.amount) ?? 0), 0);
+
+  // Deadline alerts: grants due within 7 days across all active stages
+  const urgentGrants = crmGrants.filter((g) => {
+    const d = getDaysLeft(g.deadlineDate);
+    return d !== null && d <= 7 && g.crmStatus !== "Won" && g.crmStatus !== "Lost";
+  }).sort((a, b) => (getDaysLeft(a.deadlineDate) ?? 99) - (getDaysLeft(b.deadlineDate) ?? 99));
+
   return (
     <div className="mx-auto max-w-[1600px]">
       {/* Header */}
-      <div className="mb-5 flex items-start justify-between">
+      <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <Link href="/grants" className="flex items-center gap-1 text-sm text-gray-400 hover:text-brand-600">
@@ -266,7 +312,20 @@ export default function GrantsCrmPage() {
           <h1 className="text-3xl font-bold text-gray-900">Grants CRM</h1>
           <p className="mt-1 text-gray-500">Manage your grant pipeline — research, track progress, and write applications</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
+          {/* View toggle */}
+          <div className="flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+            <button
+              onClick={() => setViewMode("kanban")}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "kanban" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+              <Columns2 className="h-3.5 w-3.5" /> Kanban
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "list" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+              <LayoutList className="h-3.5 w-3.5" /> List
+            </button>
+          </div>
           <Link href="/grants" className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
             ← All Grants
           </Link>
@@ -277,7 +336,7 @@ export default function GrantsCrmPage() {
       </div>
 
       {/* Stats */}
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
           <p className="text-xs text-gray-400">Total in CRM</p>
           <p className="text-2xl font-bold text-gray-900">{totalInCrm}</p>
@@ -290,11 +349,42 @@ export default function GrantsCrmPage() {
           <p className="text-xs text-brand-600">Active / Submitted</p>
           <p className="text-2xl font-bold text-brand-800">{activeCount}</p>
         </div>
+        <div className="rounded-xl border border-purple-200 bg-purple-50 px-4 py-3">
+          <p className="text-xs text-purple-600">Pipeline Value</p>
+          <p className="text-2xl font-bold text-purple-800">{pipelineValue > 0 ? formatCurrency(pipelineValue) : "—"}</p>
+        </div>
         <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3">
-          <p className="text-xs text-green-600">Won</p>
+          <p className="text-xs text-green-600">Won {wonValue > 0 ? `· ${formatCurrency(wonValue)}` : ""}</p>
           <p className="text-2xl font-bold text-green-800">{wonCount}</p>
         </div>
       </div>
+
+      {/* Deadline alerts strip */}
+      {urgentGrants.length > 0 && (
+        <div className="mb-5 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Bell className="h-4 w-4 text-orange-500" />
+            <p className="text-sm font-semibold text-orange-700">
+              {urgentGrants.length} grant{urgentGrants.length !== 1 ? "s" : ""} due within 7 days
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {urgentGrants.map((g) => {
+              const d = getDaysLeft(g.deadlineDate)!;
+              const col = COLUMNS.find((c) => c.status === g.crmStatus);
+              return (
+                <div key={g.id} className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs ${d <= 0 ? "border-red-200 bg-red-50" : "border-orange-200 bg-white"}`}>
+                  <span className={`font-semibold ${d <= 0 ? "text-red-600" : "text-orange-700"}`}>
+                    {d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? "Due today" : `${d}d left`}
+                  </span>
+                  <span className="text-gray-700 font-medium">{g.name.length > 40 ? g.name.slice(0, 40) + "…" : g.name}</span>
+                  {col && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${col.bg} ${col.color}`}>{g.crmStatus}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <div className="mb-5">
@@ -320,19 +410,94 @@ export default function GrantsCrmPage() {
         </div>
       )}
 
-      {/* Kanban board */}
-      {(loading || crmGrants.length > 0) && (
+      {/* LIST VIEW */}
+      {!loading && crmGrants.length > 0 && viewMode === "list" && (
+        <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Grant</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-[110px]">Stage</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-[90px]">Amount</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-[110px]">Deadline</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-[80px]">Match</th>
+                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-[100px]">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortByUrgency(filtered).map((grant) => {
+                const daysLeft = getDaysLeft(grant.deadlineDate);
+                const colMeta = COLUMNS.find((c) => c.status === grant.crmStatus);
+                return (
+                  <tr key={grant.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-gray-900 text-sm">{grant.name}</p>
+                      {grant.founder && <p className="text-xs text-gray-400">{grant.founder}</p>}
+                    </td>
+                    <td className="px-3 py-3">
+                      <select
+                        value={grant.crmStatus ?? ""}
+                        onChange={(e) => updateGrant(grant.id, { crmStatus: e.target.value as CrmStatus })}
+                        className={`w-full rounded-lg border px-2 py-1 text-xs font-medium focus:outline-none ${colMeta ? `${colMeta.bg} ${colMeta.color} ${colMeta.border}` : "border-gray-200"}`}
+                      >
+                        {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{grant.amount || <span className="text-gray-300">—</span>}</td>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      {daysLeft !== null ? (
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${daysLeft <= 0 ? "bg-red-100 text-red-600" : daysLeft <= 7 ? "bg-orange-100 text-orange-600" : daysLeft <= 14 ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-500"}`}>
+                          {daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Today" : `${daysLeft}d`}
+                        </span>
+                      ) : <span className="text-gray-300 text-xs">—</span>}
+                    </td>
+                    <td className="px-3 py-3">
+                      {grant.matchScore != null ? (
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${grant.matchScore >= 70 ? "bg-green-100 text-green-700" : grant.matchScore >= 40 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-600"}`}>{grant.matchScore}%</span>
+                      ) : <span className="text-gray-300 text-xs">—</span>}
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-1">
+                        {grant.url && (
+                          <a href={grant.url} target="_blank" rel="noopener noreferrer" className="rounded p-1 text-brand-400 hover:bg-brand-50 hover:text-brand-700" title="Open URL">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                        <Link href={`/grants/builder?grantId=${grant.id}`} className="rounded p-1 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600" title="Write Application">
+                          <PenLine className="h-3.5 w-3.5" />
+                        </Link>
+                        <button onClick={() => updateGrant(grant.id, { crmStatus: null })} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-500" title="Remove from CRM">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* KANBAN VIEW */}
+      {(loading || crmGrants.length > 0) && viewMode === "kanban" && (
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="overflow-x-auto pb-4">
             <div className="flex gap-4 min-w-[900px]">
               {COLUMNS.map((col) => {
                 const cards = getColumn(col.status);
+                const colValue = cards.reduce((sum, g) => sum + (parseAmount(g.amount) ?? 0), 0);
                 return (
                   <div key={col.status} className="flex-1 min-w-[220px]">
                     {/* Column header */}
-                    <div className={`mb-3 flex items-center justify-between rounded-lg px-3 py-2 ${col.bg} border ${col.border}`}>
-                      <span className={`text-sm font-semibold ${col.color}`}>{col.label}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${col.bg} ${col.color}`}>{cards.length}</span>
+                    <div className={`mb-3 rounded-lg px-3 py-2 ${col.bg} border ${col.border}`}>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-sm font-semibold ${col.color}`}>{col.label}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${col.bg} ${col.color}`}>{cards.length}</span>
+                      </div>
+                      {colValue > 0 && (
+                        <p className={`text-xs mt-0.5 font-medium ${col.color} opacity-70`}>{formatCurrency(colValue)}</p>
+                      )}
                     </div>
 
                     {/* Droppable column */}
