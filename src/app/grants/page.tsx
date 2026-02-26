@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useState } from "react";
-import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical } from "lucide-react";
+import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus } from "lucide-react";
 import Link from "next/link";
 import { useGrants, type Grant } from "@/hooks/useGrants";
 import { authFetch } from "@/lib/authFetch";
@@ -40,17 +40,17 @@ export default function GrantsPage() {
     else setSelected(new Set(filtered.map((g) => g.id)));
   };
 
-  const bulkSendToCRM = async (status: string) => {
+  const bulkAddToCRM = async () => {
     setBulkBusy(true);
     setActionMsg(null);
     let ok = 0;
     for (const id of Array.from(selected)) {
       try {
-        const res = await updateGrantRaw(id, { crmStatus: status as Grant["crmStatus"] });
+        const res = await updateGrantRaw(id, { crmStatus: "Researching" as Grant["crmStatus"] });
         if (res.success) ok++;
       } catch { /* skip */ }
     }
-    setActionMsg(`✓ Moved ${ok} grant${ok !== 1 ? "s" : ""} to ${status}`);
+    setMsg(`✓ Added ${ok} grant${ok !== 1 ? "s" : ""} to CRM`);
     setSelected(new Set());
     setBulkBusy(false);
   };
@@ -505,17 +505,9 @@ export default function GrantsPage() {
             {selected.size} selected
           </span>
           <div className="h-5 w-px bg-gray-200" />
-          <button onClick={() => bulkSendToCRM("Researching")} disabled={bulkBusy}
-            className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50">
-            → Researching
-          </button>
-          <button onClick={() => bulkSendToCRM("Pipeline")} disabled={bulkBusy}
-            className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
-            → Pipeline
-          </button>
-          <button onClick={() => bulkSendToCRM("Active")} disabled={bulkBusy}
-            className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
-            → Active
+          <button onClick={bulkAddToCRM} disabled={bulkBusy}
+            className="flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
+            <ListPlus className="h-3.5 w-3.5" /> Add to CRM
           </button>
           <div className="h-5 w-px bg-gray-200" />
           <button onClick={bulkDelete} disabled={bulkBusy}
