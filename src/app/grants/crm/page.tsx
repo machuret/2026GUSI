@@ -46,13 +46,19 @@ function GrantCrmCard({
   const [researchMsg, setResearchMsg] = useState<string | null>(null);
   const [researchErr, setResearchErr] = useState<string | null>(null);
 
+  const [noteError, setNoteError] = useState<string | null>(null);
+
   const saveNotes = async () => {
-    setSavingNotes(true);
-    try { await onUpdate(grant.id, { crmNotes: notes }); }
+    setSavingNotes(true); setNoteError(null);
+    try {
+      const result = await onUpdate(grant.id, { crmNotes: notes });
+      if (result && !result.success) setNoteError("Failed to save notes");
+    } catch { setNoteError("Network error — notes not saved"); }
     finally { setSavingNotes(false); }
   };
 
   const moveStatus = async (s: CrmStatus) => {
+    if (s === status) return;
     setStatus(s);
     await onUpdate(grant.id, { crmStatus: s });
   };
@@ -207,6 +213,7 @@ function GrantCrmCard({
               {savingNotes ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
               Save Notes
             </button>
+            {noteError && <p className="mt-1 text-xs text-red-600">{noteError}</p>}
           </div>
         </div>
       )}
@@ -226,13 +233,19 @@ export default function GrantsCrmPage() {
 
   const getColumn = (status: CrmStatus) => filtered.filter((g) => g.crmStatus === status);
 
+  const [dragError, setDragError] = useState<string | null>(null);
+
   const onDragEnd = useCallback(async (result: DropResult) => {
     const { draggableId, destination } = result;
     if (!destination) return;
     const newStatus = destination.droppableId as CrmStatus;
     const grant = grants.find((g) => g.id === draggableId);
     if (!grant || grant.crmStatus === newStatus) return;
-    await updateGrant(draggableId, { crmStatus: newStatus });
+    setDragError(null);
+    const res = await updateGrant(draggableId, { crmStatus: newStatus });
+    if (!res.success) {
+      setDragError(`Failed to move "${grant.name.slice(0, 40)}" — please try again`);
+    }
   }, [grants, updateGrant]);
 
   const totalInCrm = crmGrants.length;
@@ -292,6 +305,11 @@ export default function GrantsCrmPage() {
           className="w-full max-w-sm rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         />
       </div>
+
+      {/* Drag error */}
+      {dragError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{dragError}</div>
+      )}
 
       {/* Empty state */}
       {!loading && crmGrants.length === 0 && (

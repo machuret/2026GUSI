@@ -81,7 +81,7 @@ RULES:
       : "";
 
     const excludeSection = existingNames && existingNames.length > 0
-      ? `\nEXCLUDE THESE (already in our database — do not return them):\n${existingNames.slice(0, 50).join(", ")}`
+      ? `\nEXCLUDE THESE (already in our database — do not return them):\n${existingNames.slice(0, 200).join(", ")}`
       : "";
 
     const userPrompt = `Find up to 20 real grant opportunities matching ALL of these filters:

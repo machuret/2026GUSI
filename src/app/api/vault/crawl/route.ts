@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { handleOptions } from "@/lib/cors";
 import { stripHtml } from "@/lib/htmlUtils";
+import { MODEL_CONFIG } from "@/lib/openai";
+import { isPrivateUrl } from "@/lib/urlValidation";
 
 export async function OPTIONS() { return handleOptions(); }
 
@@ -14,6 +16,9 @@ export async function POST(req: NextRequest) {
     const { url } = await req.json();
     if (!url || typeof url !== "string") {
       return NextResponse.json({ error: "url is required" }, { status: 400 });
+    }
+    if (isPrivateUrl(url)) {
+      return NextResponse.json({ error: "Cannot crawl private or internal URLs" }, { status: 400 });
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
@@ -61,7 +66,7 @@ Format as clear paragraphs. Be thorough — this will be used as training contex
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: MODEL_CONFIG.vaultCrawl,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Extract and structure the key content from this webpage:\n\nURL: ${url}\n\nRAW TEXT:\n${text}` },
@@ -88,7 +93,9 @@ Format as clear paragraphs. Be thorough — this will be used as training contex
 
     // Extract page title from HTML
     const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    const title = titleMatch ? titleMatch[1].trim().slice(0, 120) : new URL(url).hostname;
+    let title = "Untitled";
+    try { title = titleMatch ? titleMatch[1].trim().slice(0, 120) : new URL(url).hostname; }
+    catch { title = titleMatch?.[1]?.trim().slice(0, 120) || url.slice(0, 80); }
 
     return NextResponse.json({
       success: true,

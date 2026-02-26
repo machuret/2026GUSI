@@ -15,7 +15,7 @@ export function exportToCsv(filename: string, rows: Record<string, unknown>[]) {
 
   const headers = Object.keys(rows[0]);
   const csvLines = [
-    headers.join(","),
+    headers.map((h) => escape(h)).join(","),
     ...rows.map((row) => headers.map((h) => escape(row[h])).join(",")),
   ];
 

@@ -5,6 +5,7 @@ import { callOpenAIJson } from "@/lib/openai";
 import { stripHtml } from "@/lib/htmlUtils";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { handleOptions } from "@/lib/cors";
+import { isPrivateUrl } from "@/lib/urlValidation";
 
 const bodySchema = z.object({
   name: z.string().optional(),
@@ -14,6 +15,7 @@ const bodySchema = z.object({
 }).refine((d) => d.name || d.url, { message: "name or url required" });
 
 async function crawlUrl(url: string): Promise<string> {
+  if (isPrivateUrl(url)) return "";
   try {
     const res = await fetch(url, {
       headers: {
@@ -89,10 +91,14 @@ Fill in as many fields as you can.`;
       return NextResponse.json({ error: err instanceof Error ? err.message : "AI failed" }, { status: 500 });
     }
 
-    // Strip null values so we don't overwrite existing data with nulls
+    // Whitelist only known grant fields — AI can return arbitrary keys
+    const ALLOWED_KEYS = new Set([
+      "eligibility", "howToApply", "amount", "geographicScope",
+      "projectDuration", "submissionEffort", "notes",
+    ]);
     const filled: Record<string, string> = {};
     for (const [k, v] of Object.entries(result)) {
-      if (v !== null && v !== undefined && v !== "") {
+      if (ALLOWED_KEYS.has(k) && v !== null && v !== undefined && v !== "") {
         filled[k] = v as string;
       }
     }

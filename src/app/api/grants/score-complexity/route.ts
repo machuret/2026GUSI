@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
+import { logActivity } from "@/lib/activity";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
 
@@ -105,6 +106,8 @@ Return ONLY valid JSON array, no markdown:
       completionTokens: totalCompletion,
       userId: authUser?.id,
     });
+
+    await logActivity(authUser!.id, authUser!.email || "", "grants.complexity", `Scored complexity for ${results.length} grants`);
 
     return NextResponse.json({ success: true, results });
   } catch (error) {

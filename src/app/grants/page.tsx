@@ -160,10 +160,13 @@ export default function GrantsPage() {
     if (!confirm(`Permanently delete ${expiredIds.length} expired grant${expiredIds.length !== 1 ? "s" : ""}?`)) return;
     setDeletingExpired(true); setActionMsg(null);
     let ok = 0;
+    let fail = 0;
     for (const id of expiredIds) {
-      try { const r = await deleteGrant(id); if (r.success) ok++; } catch { /* skip */ }
+      try { const r = await deleteGrant(id); if (r.success) ok++; else fail++; } catch { fail++; }
     }
-    setMsg(`✓ Deleted ${ok} expired grant${ok !== 1 ? "s" : ""}`);
+    setMsg(ok > 0
+      ? `✓ Deleted ${ok} expired grant${ok !== 1 ? "s" : ""}${fail > 0 ? ` (${fail} failed)` : ""}`
+      : `Failed to delete expired grants — try again`);
     setDeadlineFilter("all");
     setDeletingExpired(false);
   };
