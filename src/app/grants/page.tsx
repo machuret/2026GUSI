@@ -425,23 +425,21 @@ export default function GrantsPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-          <table className="w-full min-w-[860px]">
+          <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-2 py-3 w-7 shrink-0">
+                <th className="px-2 py-3 w-8">
                   <input type="checkbox" checked={filtered.length > 0 && selected.size === filtered.length}
                     onChange={toggleSelectAll} className="h-3.5 w-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
                 </th>
-                <th className="px-3 py-3 text-left w-[28%]">{renderSortBtn("name", "Grant")}</th>
-                <th className="px-2 py-3 text-left w-[9%]">{renderSortBtn("geographicScope", "Country")}</th>
-                <th className="px-2 py-3 text-left w-[9%]">{renderSortBtn("deadlineDate", "Deadline")}</th>
-                <th className="px-2 py-3 text-left w-[9%]">{renderSortBtn("amount", "Amount")}</th>
-                <th className="px-2 py-3 text-left w-[7%]">{renderSortBtn("matchScore", "Match")}</th>
-                <th className="px-2 py-3 text-left w-[9%]">{renderSortBtn("complexityScore", "Complexity")}</th>
-                <th className="px-2 py-3 text-left w-[6%]">{renderSortBtn("fitScore", "Fit")}</th>
-                <th className="px-2 py-3 text-left w-[7%] text-xs font-semibold uppercase tracking-wide text-gray-500">Effort</th>
-                <th className="px-2 py-3 text-left w-[8%] text-xs font-semibold uppercase tracking-wide text-gray-500">Decision</th>
-                <th className="px-2 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Actions</th>
+                <th className="px-3 py-3 text-left">{renderSortBtn("name", "Grant")}</th>
+                <th className="px-2 py-3 text-left w-[90px]">{renderSortBtn("geographicScope", "Country")}</th>
+                <th className="px-2 py-3 text-left w-[100px]">{renderSortBtn("deadlineDate", "Deadline")}</th>
+                <th className="px-2 py-3 text-left w-[100px]">{renderSortBtn("amount", "Amount")}</th>
+                <th className="px-2 py-3 text-left w-[80px]">{renderSortBtn("matchScore", "Match")}</th>
+                <th className="px-2 py-3 text-left w-[60px]">{renderSortBtn("fitScore", "Fit")}</th>
+                <th className="px-2 py-3 text-left w-[90px] text-xs font-semibold uppercase tracking-wide text-gray-500">Decision</th>
+                <th className="px-2 py-3 text-center w-[50px] text-xs font-semibold uppercase tracking-wide text-gray-500">···</th>
               </tr>
             </thead>
             <tbody>

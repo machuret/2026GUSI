@@ -467,6 +467,48 @@ model Lesson {
   @@index([contentType])
 }
 
+// ─── Mailchimp ──────────────────────────────────────
+
+model MailchimpConnection {
+  id           String   @id @default(cuid())
+  companyId    String   @unique
+  apiKey       String
+  dataCenter   String
+  accountName  String?
+  accountEmail String?
+  connectedAt  DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model MailchimpAudience {
+  id          String   @id
+  companyId   String
+  name        String
+  memberCount Int      @default(0)
+  openRate    Float    @default(0)
+  clickRate   Float    @default(0)
+  syncedAt    DateTime @default(now())
+
+  @@index([companyId])
+}
+
+model MailchimpCampaign {
+  id              String   @id
+  companyId       String
+  audienceId      String?
+  title           String
+  subjectLine     String?
+  status          String
+  sendTime        DateTime?
+  emailsSent      Int      @default(0)
+  openRate        Float    @default(0)
+  clickRate       Float    @default(0)
+  unsubscribeRate Float    @default(0)
+  syncedAt        DateTime @default(now())
+
+  @@index([companyId])
+}
+
 // ─── Activity Log ────────────────────────────────────
 
 model ActivityLog {

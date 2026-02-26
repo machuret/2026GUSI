@@ -8,6 +8,9 @@ import { MailchimpClient, extractDataCenter } from "@/lib/mailchimp";
 export const runtime = "nodejs";
 
 export async function GET() {
+  const { response: authError } = await requireAuth();
+  if (authError) return authError;
+
   const { data } = await db
     .from("MailchimpConnection")
     .select("id, accountName, accountEmail, dataCenter, connectedAt")
@@ -39,7 +42,7 @@ export async function POST(req: NextRequest) {
     const account = await client.getAccount();
 
     const now = new Date().toISOString();
-    await db.from("MailchimpConnection").upsert(
+    const { error: upsertErr } = await db.from("MailchimpConnection").upsert(
       {
         companyId:    DEMO_COMPANY_ID,
         apiKey,
@@ -51,6 +54,9 @@ export async function POST(req: NextRequest) {
       },
       { onConflict: "companyId" }
     );
+    if (upsertErr) {
+      return NextResponse.json({ error: `Failed to save connection: ${upsertErr.message}` }, { status: 500 });
+    }
 
     // Auto-sync audiences + campaigns on connect
     let audiences: { id: string; name: string; memberCount: number; openRate: number; clickRate: number; syncedAt: string }[] = [];

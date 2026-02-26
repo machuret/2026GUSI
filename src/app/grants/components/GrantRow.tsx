@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   ExternalLink, Trash2, ChevronDown, ChevronUp,
-  FileText, Loader2, Save, Sparkles, FlaskConical, PenLine, KanbanSquare, ChevronsRight,
+  FileText, Loader2, Save, Sparkles, FlaskConical, PenLine, KanbanSquare, ChevronsRight, MoreHorizontal,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import type { Grant } from "@/hooks/useGrants";
@@ -32,15 +32,24 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
   const [analysing, setAnalysing] = useState(false);
   const [researching, setResearching] = useState(false);
   const [sendingToCrm, setSendingToCrm] = useState(false);
-  const [showCrmMenu, setShowCrmMenu] = useState(false);
-  const [crmMenuPos, setCrmMenuPos] = useState({ top: 0, left: 0 });
-  const crmBtnRef = useRef<HTMLButtonElement>(null);
   const [analysis, setAnalysis] = useState<GrantAnalysis | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [researchMsg, setResearchMsg] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [showActions, setShowActions] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
   const inCrm = !!grant.crmStatus;
   const set = (k: keyof Grant, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
+
+  // Close actions dropdown on outside click
+  useEffect(() => {
+    if (!showActions) return;
+    const handler = (e: MouseEvent) => {
+      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) setShowActions(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showActions]);
 
   // Bug fix: sync form when grant prop updates (e.g. after save/update from parent)
   useEffect(() => {
@@ -158,99 +167,71 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
         <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{grant.amount || <span className="text-gray-300">—</span>}</td>
         <td className="px-3 py-3">
           {grant.matchScore != null ? (
-            <div className="flex items-center gap-1.5">
-              <div className="h-1.5 w-16 rounded-full bg-gray-200">
-                <div className={`h-1.5 rounded-full ${grant.matchScore >= 70 ? "bg-green-500" : grant.matchScore >= 40 ? "bg-yellow-400" : "bg-red-400"}`} style={{ width: `${grant.matchScore}%` }} />
-              </div>
-              <span className="text-xs font-semibold text-gray-700">{grant.matchScore}</span>
-            </div>
-          ) : <span className="text-gray-300 text-xs">—</span>}
-        </td>
-        <td className="px-3 py-3">
-          {grant.complexityLabel ? (
-            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-              grant.complexityLabel === "Low" ? "bg-green-100 text-green-700" :
-              grant.complexityLabel === "Medium" ? "bg-yellow-100 text-yellow-700" :
-              grant.complexityLabel === "High" ? "bg-orange-100 text-orange-700" :
-              "bg-red-100 text-red-700"
-            }`}>{grant.complexityLabel}</span>
+            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${grant.matchScore >= 70 ? "bg-green-100 text-green-700" : grant.matchScore >= 40 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-600"}`}>{grant.matchScore}%</span>
           ) : <span className="text-gray-300 text-xs">—</span>}
         </td>
         <td className="px-3 py-3"><FitStars value={grant.fitScore} /></td>
-        <td className="px-3 py-3"><EffortBadge value={grant.submissionEffort as Effort | null} /></td>
         <td className="px-3 py-3"><DecisionBadge value={grant.decision as "Apply" | "Maybe" | "No" | "Rejected" | null} /></td>
         <td className="px-2 py-3">
-          <div className="flex items-center gap-1">
-            {grant.url && (
-              <a href={grant.url} target="_blank" rel="noopener noreferrer" title="Open URL"
-                className="rounded p-1 text-brand-400 hover:bg-brand-50 hover:text-brand-700">
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            )}
-            <button onClick={handleAnalyse} disabled={analysing} title="AI Fit Calculator"
-              className="rounded p-1 text-purple-400 hover:bg-purple-50 hover:text-purple-600 disabled:opacity-40">
-              {analysing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5" />}
+          <div className="relative" ref={actionsRef}>
+            <button onClick={() => setShowActions(v => !v)} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+              <MoreHorizontal className="h-4 w-4" />
             </button>
-            <button onClick={handleResearch} disabled={researching} title="AI Auto-fill"
-              className="rounded p-1 text-brand-400 hover:bg-brand-50 hover:text-brand-600 disabled:opacity-40">
-              {researching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            </button>
-            <button onClick={() => { setEditing(true); setExpanded(true); }} title="Edit"
-              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-brand-600">
-              <FileText className="h-3.5 w-3.5" />
-            </button>
-            <Link href={`/grants/builder?grantId=${grant.id}`} title="Write Application"
-              className="rounded p-1 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600">
-              <PenLine className="h-3.5 w-3.5" />
-            </Link>
-            {/* CRM button / menu */}
-            {inCrm ? (
-              <Link href="/grants/crm" title="View in CRM"
-                className="rounded p-1 text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600">
-                <KanbanSquare className="h-3.5 w-3.5" />
-              </Link>
-            ) : (
-              <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setShowCrmMenu(false); }}>
-                <button
-                  ref={crmBtnRef}
-                  onClick={() => {
-                    if (crmBtnRef.current) {
-                      const r = crmBtnRef.current.getBoundingClientRect();
-                      setCrmMenuPos({ top: r.bottom + 4, left: r.left });
-                    }
-                    setShowCrmMenu(v => !v);
-                  }}
-                  disabled={sendingToCrm}
-                  title="Add to CRM"
-                  className="rounded p-1 text-indigo-300 hover:bg-indigo-50 hover:text-indigo-500 disabled:opacity-40">
-                  {sendingToCrm ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ChevronsRight className="h-3.5 w-3.5" />}
+            {showActions && (
+              <div className="absolute right-0 top-8 z-[999] w-48 rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
+                {grant.url && (
+                  <a href={grant.url} target="_blank" rel="noopener noreferrer" onClick={() => setShowActions(false)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
+                    <ExternalLink className="h-3.5 w-3.5 text-brand-500" /> Open URL
+                  </a>
+                )}
+                <button onClick={() => { handleAnalyse(); setShowActions(false); }} disabled={analysing}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+                  {analysing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5 text-purple-500" />} AI Fit Analysis
                 </button>
-                {showCrmMenu && (
-                  <div
-                    className="fixed z-[999] w-36 rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
-                    style={{ top: crmMenuPos.top, left: crmMenuPos.left }}>
+                <button onClick={() => { handleResearch(); setShowActions(false); }} disabled={researching}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+                  {researching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-brand-500" />} AI Auto-fill
+                </button>
+                <button onClick={() => { setEditing(true); setExpanded(true); setShowActions(false); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
+                  <FileText className="h-3.5 w-3.5 text-gray-500" /> Edit Fields
+                </button>
+                <Link href={`/grants/builder?grantId=${grant.id}`} onClick={() => setShowActions(false)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
+                  <PenLine className="h-3.5 w-3.5 text-emerald-500" /> Write Application
+                </Link>
+                <div className="my-1 border-t border-gray-100" />
+                {inCrm ? (
+                  <Link href="/grants/crm" onClick={() => setShowActions(false)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
+                    <KanbanSquare className="h-3.5 w-3.5 text-indigo-500" /> View in CRM
+                  </Link>
+                ) : (
+                  <>
+                    <p className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Add to CRM</p>
                     {(["Researching", "Pipeline", "Active"] as const).map((s) => (
-                      <button key={s}
-                        onMouseDown={(e) => { e.preventDefault(); sendToCrm(s); }}
-                        className="w-full px-3 py-1.5 text-left text-xs font-medium text-gray-700 hover:bg-gray-50">
-                        → {s}
+                      <button key={s} onClick={() => { sendToCrm(s); setShowActions(false); }} disabled={sendingToCrm}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+                        <ChevronsRight className="h-3.5 w-3.5 text-indigo-400" /> {s}
                       </button>
                     ))}
-                  </div>
+                  </>
                 )}
+                <div className="my-1 border-t border-gray-100" />
+                <button onClick={() => { del(); setShowActions(false); }} disabled={deleting}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50 disabled:opacity-40">
+                  {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Delete
+                </button>
               </div>
             )}
-            <button onClick={del} disabled={deleting} title="Delete"
-              className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-40">
-              {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-            </button>
           </div>
         </td>
       </tr>
 
       {expanded && (
         <tr className="border-b border-gray-100 bg-gray-50">
-          <td colSpan={11} className="px-6 py-5">
+          <td colSpan={9} className="px-6 py-5">
             {saveError && <p className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700 font-medium">{saveError}</p>}
             {aiError && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{aiError}</p>}
             {researchMsg && <p className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{researchMsg}</p>}
@@ -285,6 +266,28 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
                     <p className="text-sm text-gray-400">No details yet — click <span className="text-brand-600">✦ Auto-fill</span> to let AI research this grant.</p>
                   )}
                 </div>
+                {/* Show complexity & effort in expanded view */}
+                {(grant.complexityLabel || grant.submissionEffort) && (
+                  <div className="lg:col-span-2 flex items-center gap-4 flex-wrap">
+                    {grant.complexityLabel && (
+                      <div>
+                        <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 mr-1.5">Complexity</span>
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                          grant.complexityLabel === "Low" ? "bg-green-100 text-green-700" :
+                          grant.complexityLabel === "Medium" ? "bg-yellow-100 text-yellow-700" :
+                          grant.complexityLabel === "High" ? "bg-orange-100 text-orange-700" :
+                          "bg-red-100 text-red-700"
+                        }`}>{grant.complexityLabel}</span>
+                      </div>
+                    )}
+                    {grant.submissionEffort && (
+                      <div>
+                        <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 mr-1.5">Effort</span>
+                        <EffortBadge value={grant.submissionEffort as Effort | null} />
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="lg:col-span-2 flex items-center gap-4 flex-wrap">
                   <span className="text-xs text-gray-400">
                     Added {new Date(grant.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}

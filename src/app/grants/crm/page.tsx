@@ -51,8 +51,8 @@ function GrantCrmCard({
   const saveNotes = async () => {
     setSavingNotes(true); setNoteError(null);
     try {
-      const result = await onUpdate(grant.id, { crmNotes: notes });
-      if (result && !result.success) setNoteError("Failed to save notes");
+      const result = await onUpdate(grant.id, { crmNotes: notes }) as { success?: boolean } | undefined;
+      if (result && result.success === false) setNoteError("Failed to save notes");
     } catch { setNoteError("Network error — notes not saved"); }
     finally { setSavingNotes(false); }
   };
