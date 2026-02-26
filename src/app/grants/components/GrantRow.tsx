@@ -80,7 +80,7 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
   };
 
   const sendToCrm = async (status: Grant["crmStatus"] = "Researching") => {
-    setSendingToCrm(true); setShowCrmMenu(false);
+    setSendingToCrm(true);
     try { await onUpdate(grant.id, { crmStatus: status }); }
     finally { setSendingToCrm(false); }
   };
