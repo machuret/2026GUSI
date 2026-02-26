@@ -7,7 +7,7 @@ import { handleOptions } from "@/lib/cors";
 
 
 const bodySchema = z.object({
-  companyDNA: z.string().min(20, "Company DNA is too short. Fill in your Company Info page first."),
+  companyDNA: z.string().min(20, "Company DNA is too short. Fill in your Grant Profile or Company Info first."),
   grant: z.object({
     id: z.string().optional(),
     name: z.string(),

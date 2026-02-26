@@ -62,15 +62,14 @@ function Section({ icon: Icon, title, children }: { icon: React.ElementType; tit
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) {
   return (
-    <label className="flex cursor-pointer items-center gap-3">
+    <button type="button" onClick={onChange} className="flex cursor-pointer items-center gap-3">
       <div
-        onClick={onChange}
-        className={`relative h-5 w-9 rounded-full transition-colors ${checked ? "bg-brand-600" : "bg-gray-300"}`}
+        className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${checked ? "bg-brand-600" : "bg-gray-300"}`}
       >
         <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"}`} />
       </div>
       <span className="text-sm text-gray-700">{label}</span>
-    </label>
+    </button>
   );
 }
 
@@ -79,6 +78,7 @@ export default function GrantProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     authFetch("/api/grant-profile")
@@ -111,6 +111,7 @@ export default function GrantProfilePage() {
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
+    setSaveError(null);
     try {
       const res = await authFetch("/api/grant-profile", {
         method: "PUT",
@@ -118,6 +119,12 @@ export default function GrantProfilePage() {
         body: JSON.stringify(profile),
       });
       if (res.ok) { setSaved(true); setTimeout(() => setSaved(false), 3000); }
+      else {
+        const data = await res.json().catch(() => ({}));
+        setSaveError(data.error || `Save failed (${res.status})`);
+      }
+    } catch {
+      setSaveError("Network error — changes were not saved.");
     } finally {
       setSaving(false);
     }
@@ -153,6 +160,10 @@ export default function GrantProfilePage() {
           <Rss className="h-3.5 w-3.5" /> Crawler
         </Link>
       </div>
+
+      {saveError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 font-medium">{saveError}</div>
+      )}
 
       <div className="mb-6 flex items-start justify-between">
         <div>

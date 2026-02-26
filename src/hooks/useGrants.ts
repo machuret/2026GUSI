@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { authFetch } from "@/lib/authFetch";
 
@@ -35,11 +35,14 @@ export interface Grant {
 export function useGrants() {
   const [grants, setGrants] = useState<Grant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [companyDNA, setCompanyDNA] = useState("");
+  const initialLoadDone = useRef(false);
 
   const fetchGrants = useCallback(async () => {
-    setLoading(true);
+    if (initialLoadDone.current) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     try {
       // TODO: replace DEMO_COMPANY_ID with session companyId when multi-tenancy lands
@@ -89,11 +92,13 @@ export function useGrants() {
         parts.push(...gpParts);
       }
 
-      if (parts.length > 0) setCompanyDNA(parts.join("\n").slice(0, 4000));
+      setCompanyDNA(parts.length > 0 ? parts.join("\n").slice(0, 4000) : "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load grants");
     } finally {
       setLoading(false);
+      setRefreshing(false);
+      initialLoadDone.current = true;
     }
   }, []);
 
@@ -125,5 +130,5 @@ export function useGrants() {
     setGrants((prev) => [grant, ...prev]);
   }, []);
 
-  return { grants, loading, error, companyDNA, fetchGrants, updateGrant, deleteGrant, addGrant };
+  return { grants, loading, refreshing, error, companyDNA, fetchGrants, updateGrant, deleteGrant, addGrant };
 }

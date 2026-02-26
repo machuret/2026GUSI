@@ -100,7 +100,7 @@ export default function GrantsPage() {
     setScoring(true);
     setActionMsg(null);
     try {
-      const ids = grants.map((g) => g.id);
+      const ids = selected.size > 0 ? Array.from(selected) : grants.map((g) => g.id);
       let scored = 0;
       for (let i = 0; i < ids.length; i += 20) {
         const batch = ids.slice(i, i + 20);
@@ -121,10 +121,11 @@ export default function GrantsPage() {
   const handleBulkAnalyse = async () => {
     const ids = selected.size > 0 ? Array.from(selected) : grants.map((g) => g.id);
     if (ids.length === 0) return;
-    if (!companyDNA) { setMsg("No company profile found — fill in Settings → Company Info first"); return; }
+    if (!companyDNA) { setMsg("No company profile found — fill in Grant Profile or Settings → Company Info first"); return; }
     if (!confirm(`Run AI Fit analysis on ${ids.length} grant${ids.length !== 1 ? "s" : ""}? This may take a while.`)) return;
     setBulkAnalysing(true); setActionMsg(null);
     let ok = 0;
+    let errors = 0;
     for (const id of ids) {
       try {
         const grant = grants.find((g) => g.id === id);
@@ -142,10 +143,11 @@ export default function GrantsPage() {
             : a.verdict === "Not Eligible" ? "No" : "Maybe";
           await updateGrantRaw(id, { fitScore, decision });
           ok++;
-        }
-      } catch { /* skip */ }
+        } else { errors++; }
+      } catch { errors++; }
     }
-    setMsg(`✓ AI Fit analysed ${ok} of ${ids.length} grants`);
+    await fetchGrants();
+    setMsg(ok > 0 ? `✓ AI Fit analysed ${ok} of ${ids.length} grants${errors > 0 ? ` (${errors} failed)` : ""}` : `Analysis failed for all ${ids.length} grants — check Company Info or Grant Profile`);
     setSelected(new Set());
     setBulkAnalysing(false);
   };
@@ -213,7 +215,7 @@ export default function GrantsPage() {
     Rejected: grants.filter(g => g.decision === "Rejected").length,
   };
 
-  const SortBtn = ({ field, label }: { field: typeof sortField; label: string }) => (
+  const renderSortBtn = (field: typeof sortField, label: string) => (
     <button onClick={() => toggleSort(field)} className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-800 uppercase tracking-wide">
       {label}{sortField === field ? (sortAsc ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : null}
     </button>
@@ -427,13 +429,13 @@ export default function GrantsPage() {
                   <input type="checkbox" checked={filtered.length > 0 && selected.size === filtered.length}
                     onChange={toggleSelectAll} className="h-3.5 w-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
                 </th>
-                <th className="px-3 py-3 text-left w-[28%]"><SortBtn field="name" label="Grant" /></th>
-                <th className="px-2 py-3 text-left w-[9%]"><SortBtn field="geographicScope" label="Country" /></th>
-                <th className="px-2 py-3 text-left w-[9%]"><SortBtn field="deadlineDate" label="Deadline" /></th>
-                <th className="px-2 py-3 text-left w-[9%]"><SortBtn field="amount" label="Amount" /></th>
-                <th className="px-2 py-3 text-left w-[7%]"><SortBtn field="matchScore" label="Match" /></th>
-                <th className="px-2 py-3 text-left w-[9%]"><SortBtn field="complexityScore" label="Complexity" /></th>
-                <th className="px-2 py-3 text-left w-[6%]"><SortBtn field="fitScore" label="Fit" /></th>
+                <th className="px-3 py-3 text-left w-[28%]">{renderSortBtn("name", "Grant")}</th>
+                <th className="px-2 py-3 text-left w-[9%]">{renderSortBtn("geographicScope", "Country")}</th>
+                <th className="px-2 py-3 text-left w-[9%]">{renderSortBtn("deadlineDate", "Deadline")}</th>
+                <th className="px-2 py-3 text-left w-[9%]">{renderSortBtn("amount", "Amount")}</th>
+                <th className="px-2 py-3 text-left w-[7%]">{renderSortBtn("matchScore", "Match")}</th>
+                <th className="px-2 py-3 text-left w-[9%]">{renderSortBtn("complexityScore", "Complexity")}</th>
+                <th className="px-2 py-3 text-left w-[6%]">{renderSortBtn("fitScore", "Fit")}</th>
                 <th className="px-2 py-3 text-left w-[7%] text-xs font-semibold uppercase tracking-wide text-gray-500">Effort</th>
                 <th className="px-2 py-3 text-left w-[8%] text-xs font-semibold uppercase tracking-wide text-gray-500">Decision</th>
                 <th className="px-2 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Actions</th>

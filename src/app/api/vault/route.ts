@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
         filename,
         content,
         fileType,
+        ...(sourceUrl ? { sourceUrl } : {}),
       })
       .select()
       .single();

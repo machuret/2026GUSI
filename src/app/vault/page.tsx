@@ -86,9 +86,18 @@ export default function VaultPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Remove this item from the vault?")) return;
-    setItems((prev) => prev.filter((i) => i.id !== id));
-    try { await authFetch(`/api/vault?id=${id}`, { method: "DELETE" }); }
-    catch { fetchItems(); }
+    const prev = items;
+    setItems((p) => p.filter((i) => i.id !== id));
+    try {
+      const res = await authFetch(`/api/vault?id=${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        setItems(prev);
+        showToast("Delete failed — item restored");
+      }
+    } catch {
+      setItems(prev);
+      showToast("Network error — item restored");
+    }
   };
 
   const totalChars = items.reduce((sum, i) => sum + (i.content?.length ?? 0), 0);
@@ -111,7 +120,8 @@ export default function VaultPage() {
     });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const safePage = Math.min(page, totalPages);
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -230,33 +240,33 @@ export default function VaultPage() {
               {totalPages > 1 && (
                 <div className="mt-4 flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5">
                   <p className="text-xs text-gray-500">
-                    {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+                    {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
                   </p>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => setPage(1)} disabled={page === 1}
+                    <button onClick={() => setPage(1)} disabled={safePage === 1}
                       className="rounded px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40">First</button>
-                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
                       className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-40">
                       <ChevronUp className="h-4 w-4 rotate-[-90deg]" />
                     </button>
                     {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
                       let pg: number;
                       if (totalPages <= 5) pg = i + 1;
-                      else if (page <= 3) pg = i + 1;
-                      else if (page >= totalPages - 2) pg = totalPages - 4 + i;
-                      else pg = page - 2 + i;
+                      else if (safePage <= 3) pg = i + 1;
+                      else if (safePage >= totalPages - 2) pg = totalPages - 4 + i;
+                      else pg = safePage - 2 + i;
                       return (
                         <button key={pg} onClick={() => setPage(pg)}
-                          className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${page === pg ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}>
+                          className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${safePage === pg ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}>
                           {pg}
                         </button>
                       );
                     })}
-                    <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                    <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}
                       className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-40">
                       <ChevronDown className="h-4 w-4 rotate-[-90deg]" />
                     </button>
-                    <button onClick={() => setPage(totalPages)} disabled={page === totalPages}
+                    <button onClick={() => setPage(totalPages)} disabled={safePage === totalPages}
                       className="rounded px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40">Last</button>
                   </div>
                 </div>

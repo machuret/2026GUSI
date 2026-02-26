@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     let totalPrompt = 0;
     let totalCompletion = 0;
 
-    // Batch grants in groups of 5 to reduce API calls
+    // Batch grants in groups of 3 to reduce API calls
     const BATCH_SIZE = 3;
     for (let i = 0; i < grants.length; i += BATCH_SIZE) {
       const batch = grants.slice(i, i + BATCH_SIZE);
@@ -75,7 +75,7 @@ Return ONLY valid JSON array, no markdown:
           systemPrompt,
           userPrompt,
           model: MODEL_CONFIG.grantsAnalyse,
-          maxTokens: 400,
+          maxTokens: 800,
           temperature: 0.1,
           jsonMode: true,
         });
@@ -110,6 +110,9 @@ Return ONLY valid JSON array, no markdown:
 
     await logActivity(authUser!.id, authUser!.email || "", "grants.rank", `Ranked ${results.length} grants`);
 
+    if (results.length === 0) {
+      return NextResponse.json({ error: "Ranking failed — AI could not score any grants. Try again later." }, { status: 500 });
+    }
     return NextResponse.json({ success: true, ranked: results.length, results });
   } catch (error) {
     return handleApiError(error, "Rank Grants");

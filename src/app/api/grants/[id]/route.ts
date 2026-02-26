@@ -18,6 +18,10 @@ const updateSchema = z.object({
   submissionEffort: z.enum(["Low", "Medium", "High"]).optional().nullable(),
   decision: z.enum(["Apply", "Maybe", "No", "Rejected"]).optional().nullable(),
   notes: z.string().optional().nullable(),
+  matchScore: z.number().int().min(0).max(100).optional().nullable(),
+  complexityScore: z.number().int().min(0).max(100).optional().nullable(),
+  complexityLabel: z.enum(["Low", "Medium", "High", "Very High"]).optional().nullable(),
+  complexityNotes: z.string().optional().nullable(),
   crmStatus: z.enum(["Researching", "Pipeline", "Active", "Submitted", "Won", "Lost"]).optional().nullable(),
   crmNotes: z.string().optional().nullable(),
 });
