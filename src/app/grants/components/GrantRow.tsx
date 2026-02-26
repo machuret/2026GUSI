@@ -37,6 +37,7 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
   const [researchMsg, setResearchMsg] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showActions, setShowActions] = useState(false);
+  const [sendCrmError, setSendCrmError] = useState<string | null>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const inCrm = !!grant.crmStatus;
   const set = (k: keyof Grant, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
@@ -81,8 +82,14 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
 
   const sendToCrm = async (status: Grant["crmStatus"] = "Researching") => {
     setSendingToCrm(true);
-    try { await onUpdate(grant.id, { crmStatus: status }); }
-    finally { setSendingToCrm(false); }
+    setSendCrmError(null);
+    try {
+      const res = await onUpdate(grant.id, { crmStatus: status });
+      if (!res.success) setSendCrmError("Failed to add to CRM — please try again.");
+      else setShowActions(false);
+    } catch {
+      setSendCrmError("Network error — could not add to CRM.");
+    } finally { setSendingToCrm(false); }
   };
 
   const handleAnalyse = async () => {
@@ -210,10 +217,11 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
                 ) : (
                   <>
                     <p className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Add to CRM</p>
+                    {sendCrmError && <p className="mx-3 mb-1 rounded bg-red-50 px-2 py-1 text-[10px] text-red-600">{sendCrmError}</p>}
                     {(["Researching", "Pipeline", "Active"] as const).map((s) => (
-                      <button key={s} onClick={() => { sendToCrm(s); setShowActions(false); }} disabled={sendingToCrm}
+                      <button key={s} onClick={() => sendToCrm(s)} disabled={sendingToCrm}
                         className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40">
-                        <ChevronsRight className="h-3.5 w-3.5 text-indigo-400" /> {s}
+                        {sendingToCrm ? <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" /> : <ChevronsRight className="h-3.5 w-3.5 text-indigo-400" />} {s}
                       </button>
                     ))}
                   </>

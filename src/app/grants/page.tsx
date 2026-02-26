@@ -50,7 +50,7 @@ export default function GrantsPage() {
         if (res.success) ok++;
       } catch { /* skip */ }
     }
-    setMsg(`✓ Moved ${ok} grant${ok !== 1 ? "s" : ""} to ${status}`);
+    setActionMsg(`✓ Moved ${ok} grant${ok !== 1 ? "s" : ""} to ${status}`);
     setSelected(new Set());
     setBulkBusy(false);
   };
