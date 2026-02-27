@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { handleApiError } from "@/lib/apiHelpers";
+import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { z } from "zod";
 
 const updateSchema = z.object({
@@ -30,7 +31,7 @@ const updateSchema = z.object({
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { response: authError } = await requireAuth();
+    const { error: authError } = await requireEdgeAuth(req);
     if (authError) return authError;
 
     const body = await req.json();
@@ -60,10 +61,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 // DELETE /api/grants/[id]
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { response: authError } = await requireAuth();
+    const { error: authError } = await requireEdgeAuth(req);
     if (authError) return authError;
 
     const { data: existing, error: fetchError } = await db
