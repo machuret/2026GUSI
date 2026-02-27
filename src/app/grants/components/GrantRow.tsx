@@ -257,7 +257,14 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
                 {analysing ? "AI is analysing your fit for this grant…" : "AI is researching and filling missing fields…"}
               </div>
             )}
-            {analysis && <AnalysisPanel analysis={analysis} onClose={() => setAnalysis(null)} />}
+            {analysis && (
+              <AnalysisPanel
+                analysis={analysis}
+                onClose={() => setAnalysis(null)}
+                onMarkNo={async () => { await onUpdate(grant.id, { decision: "No" }); }}
+                onAddToCrm={async () => { await onUpdate(grant.id, { crmStatus: "Researching" }); }}
+              />
+            )}
             {editing ? (
               <div>
                 <GrantFormFields form={form} set={set} onResearch={handleResearch} researching={researching} />
