@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { handleApiError } from "@/lib/apiHelpers";
+import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { logActivity } from "@/lib/activity";
 import { z } from "zod";
 
@@ -25,7 +26,7 @@ const grantSchema = z.object({
 // GET /api/grants?companyId=xxx
 export async function GET(req: NextRequest) {
   try {
-    const { response: authError } = await requireAuth();
+    const { error: authError } = await requireEdgeAuth(req);
     if (authError) return authError;
 
     const companyId = req.nextUrl.searchParams.get("companyId");
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
 // POST /api/grants
 export async function POST(req: NextRequest) {
   try {
-    const { user: authUser, response: authError } = await requireAuth();
+    const { error: authError } = await requireEdgeAuth(req);
     if (authError) return authError;
 
     const body = await req.json();
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error;
 
-    await logActivity(authUser.id, authUser.email || "", "grants.add", `Added: ${data.name.slice(0, 80)}`);
+    // logActivity omitted — no user object from requireEdgeAuth
 
     return NextResponse.json({ success: true, grant });
   } catch (error) {

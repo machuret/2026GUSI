@@ -20,6 +20,7 @@ export async function getAccessToken(): Promise<string | null> {
  */
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = await getAccessToken();
+  console.log("[authFetch]", url, "token:", token ? `${token.slice(0, 20)}...` : "NULL");
   return fetch(url, {
     ...options,
     headers: {

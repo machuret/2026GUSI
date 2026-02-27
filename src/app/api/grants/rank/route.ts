@@ -2,16 +2,16 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { handleApiError } from "@/lib/apiHelpers";
+import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
-import { logActivity } from "@/lib/activity";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 
 // POST /api/grants/rank — re-score all grants against the GrantProfile
 export async function POST(req: NextRequest) {
   try {
-    const { response: authError, user: authUser } = await requireAuth();
+    const { error: authError } = await requireEdgeAuth(req);
     if (authError) return authError;
 
     const [{ data: profile }, { data: grants }] = await Promise.all([
@@ -105,10 +105,7 @@ Return ONLY valid JSON array, no markdown:
       feature: "grants_rank",
       promptTokens: totalPrompt,
       completionTokens: totalCompletion,
-      userId: authUser?.id,
     });
-
-    await logActivity(authUser!.id, authUser!.email || "", "grants.rank", `Ranked ${results.length} grants`);
 
     if (results.length === 0) {
       return NextResponse.json({ error: "Ranking failed — AI could not score any grants. Try again later." }, { status: 500 });
