@@ -32,7 +32,9 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
   const [analysing, setAnalysing] = useState(false);
   const [researching, setResearching] = useState(false);
   const [sendingToCrm, setSendingToCrm] = useState(false);
-  const [analysis, setAnalysis] = useState<GrantAnalysis | null>(null);
+  const [analysis, setAnalysis] = useState<GrantAnalysis | null>(
+    grant.aiAnalysis ? (grant.aiAnalysis as unknown as GrantAnalysis) : null
+  );
   const [aiError, setAiError] = useState<string | null>(null);
   const [researchMsg, setResearchMsg] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -55,6 +57,7 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
   // Bug fix: sync form when grant prop updates (e.g. after save/update from parent)
   useEffect(() => {
     if (!editing) setForm({ ...grant });
+    if (grant.aiAnalysis && !analysis) setAnalysis(grant.aiAnalysis as unknown as GrantAnalysis);
   }, [grant, editing]);
 
   const save = async () => {
@@ -103,7 +106,6 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
       const data = await res.json();
       if (data.success && data.analysis) {
         setAnalysis(data.analysis);
-        // Bug fix: persist fitScore, submissionEffort, decision back to DB
         const a = data.analysis;
         const fitScore = typeof a.score === "number" ? Math.max(1, Math.min(5, Math.round(a.score / 20))) : undefined;
         const decision = a.verdict === "Strong Fit" || a.verdict === "Good Fit" ? "Apply"
@@ -111,6 +113,9 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
         await onUpdate(grant.id, {
           fitScore: fitScore ?? undefined,
           decision,
+          aiScore: a.score ?? undefined,
+          aiVerdict: a.verdict ?? undefined,
+          aiAnalysis: a,
         });
       } else setAiError(data.error || "Analysis failed");
     } catch { setAiError("Network error"); }
