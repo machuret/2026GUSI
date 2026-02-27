@@ -131,7 +131,7 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
       });
       const data = await res.json();
       if (data.success && data.filled) {
-        await onUpdate(grant.id, data.filled);
+        await onUpdate(grant.id, { ...data.filled, aiResearched: true });
         setForm((p) => ({ ...p, ...data.filled }));
         const count = Object.keys(data.filled).length;
         setResearchMsg(`✓ AI filled ${count} field${count !== 1 ? "s" : ""}`);
@@ -158,6 +158,12 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="font-medium text-gray-900 text-sm">{grant.name}</p>
+                {grant.aiAnalysis && (
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">✦ AI Fit</span>
+                )}
+                {grant.aiResearched && (
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">⬡ AI Filled</span>
+                )}
                 {grant.crmStatus && (
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                     grant.crmStatus === "Won"       ? "bg-green-100 text-green-700" :

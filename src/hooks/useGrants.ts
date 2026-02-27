@@ -23,6 +23,7 @@ export interface Grant {
   aiScore?: number | null;
   aiVerdict?: string | null;
   aiAnalysis?: Record<string, unknown> | null;
+  aiResearched?: boolean | null;
   matchScore?: number | null;
   complexityScore?: number | null;
   complexityLabel?: "Low" | "Medium" | "High" | "Very High" | null;

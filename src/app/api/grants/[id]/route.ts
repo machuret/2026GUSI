@@ -26,6 +26,7 @@ const updateSchema = z.object({
   crmStatus: z.enum(["Researching", "Pipeline", "Active", "Submitted", "Won", "Lost"]).optional().nullable(),
   crmNotes: z.string().optional().nullable(),
   aiAnalysis: z.record(z.unknown()).optional().nullable(),
+  aiResearched: z.boolean().optional().nullable(),
 });
 
 // PATCH /api/grants/[id]
