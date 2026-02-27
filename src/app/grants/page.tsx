@@ -44,13 +44,18 @@ export default function GrantsPage() {
     setBulkBusy(true);
     setActionMsg(null);
     let ok = 0;
+    let fail = 0;
     for (const id of Array.from(selected)) {
       try {
         const res = await updateGrantRaw(id, { crmStatus: "Researching" as Grant["crmStatus"] });
-        if (res.success) ok++;
-      } catch { /* skip */ }
+        if (res.success) ok++; else fail++;
+      } catch { fail++; }
     }
-    setMsg(`✓ Added ${ok} grant${ok !== 1 ? "s" : ""} to CRM`);
+    if (ok > 0) {
+      setMsg(`✓ Added ${ok} grant${ok !== 1 ? "s" : ""} to CRM${fail > 0 ? ` (${fail} failed)` : ""}`);
+    } else {
+      setMsg(`Failed to add grants to CRM — please try again or refresh the page`);
+    }
     setSelected(new Set());
     setBulkBusy(false);
   };

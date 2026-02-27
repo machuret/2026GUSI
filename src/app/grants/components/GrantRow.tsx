@@ -216,14 +216,11 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
                   </Link>
                 ) : (
                   <>
-                    <p className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Add to CRM</p>
                     {sendCrmError && <p className="mx-3 mb-1 rounded bg-red-50 px-2 py-1 text-[10px] text-red-600">{sendCrmError}</p>}
-                    {(["Researching", "Pipeline", "Active"] as const).map((s) => (
-                      <button key={s} onClick={() => sendToCrm(s)} disabled={sendingToCrm}
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40">
-                        {sendingToCrm ? <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" /> : <ChevronsRight className="h-3.5 w-3.5 text-indigo-400" />} {s}
-                      </button>
-                    ))}
+                    <button onClick={() => sendToCrm("Researching")} disabled={sendingToCrm}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+                      {sendingToCrm ? <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-400" /> : <ChevronsRight className="h-3.5 w-3.5 text-indigo-400" />} Add to CRM
+                    </button>
                   </>
                 )}
                 <div className="my-1 border-t border-gray-100" />
