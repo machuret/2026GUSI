@@ -165,14 +165,14 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
                   <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">⬡ AI Filled</span>
                 )}
                 {grant.crmStatus && (
-                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                    grant.crmStatus === "Won"       ? "bg-green-100 text-green-700" :
-                    grant.crmStatus === "Lost"      ? "bg-gray-100 text-gray-500" :
-                    grant.crmStatus === "Active"    ? "bg-brand-100 text-brand-700" :
-                    grant.crmStatus === "Submitted" ? "bg-orange-100 text-orange-700" :
-                    grant.crmStatus === "Pipeline"  ? "bg-purple-100 text-purple-700" :
-                    "bg-blue-100 text-blue-700"
-                  }`}>{grant.crmStatus}</span>
+                  <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+                    grant.crmStatus === "Won"       ? "bg-green-100 text-green-700 border-green-300" :
+                    grant.crmStatus === "Lost"      ? "bg-gray-100 text-gray-500 border-gray-300" :
+                    grant.crmStatus === "Active"    ? "bg-brand-100 text-brand-700 border-brand-300" :
+                    grant.crmStatus === "Submitted" ? "bg-orange-100 text-orange-700 border-orange-300" :
+                    grant.crmStatus === "Pipeline"  ? "bg-purple-100 text-purple-700 border-purple-300" :
+                    "bg-indigo-100 text-indigo-700 border-indigo-300"
+                  }`}>✓ CRM · {grant.crmStatus}</span>
                 )}
               </div>
               {grant.founder && <p className="text-xs text-gray-400 mt-0.5">{grant.founder}</p>}

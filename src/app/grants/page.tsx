@@ -27,6 +27,7 @@ export default function GrantsPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkAnalysing, setBulkAnalysing] = useState(false);
   const [deletingExpired, setDeletingExpired] = useState(false);
+  const [crmFilter, setCrmFilter] = useState<"all" | "in" | "out">("all");
   const [perPage, setPerPage] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -192,6 +193,7 @@ export default function GrantsPage() {
       const q = search.toLowerCase();
       const matchSearch = !search || g.name.toLowerCase().includes(q) || (g.founder ?? "").toLowerCase().includes(q) || (g.notes ?? "").toLowerCase().includes(q);
       const matchDecision = decisionFilter === "All" || g.decision === decisionFilter;
+      const matchCrm = crmFilter === "all" || (crmFilter === "in" ? !!g.crmStatus : !g.crmStatus);
       let matchDeadline = true;
       if (deadlineFilter === "active") {
         matchDeadline = !g.deadlineDate || new Date(g.deadlineDate).getTime() >= now;
@@ -202,7 +204,7 @@ export default function GrantsPage() {
       } else if (deadlineFilter !== "all" && !g.deadlineDate) {
         matchDeadline = false;
       }
-      return matchSearch && matchDecision && matchDeadline;
+      return matchSearch && matchDecision && matchDeadline && matchCrm;
     })
     .sort((a, b) => {
       let av: string | number = 0, bv: string | number = 0;
@@ -418,6 +420,19 @@ export default function GrantsPage() {
               Delete expired
             </button>
           )}
+        </div>
+        <div className="flex flex-shrink-0 gap-1.5 items-center">
+          <span className="text-xs text-gray-400 font-medium">CRM:</span>
+          {([["all", "All"], ["out", "Not in CRM"], ["in", "In CRM"]] as const).map(([val, label]) => (
+            <button key={val} onClick={() => { setCrmFilter(val); setCurrentPage(1); }}
+              className={`rounded-full px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
+                crmFilter === val
+                  ? val === "in" ? "bg-indigo-600 text-white" : val === "out" ? "bg-amber-500 text-white" : "bg-gray-600 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}>
+              {label}{val === "in" ? ` (${grants.filter(g => !!g.crmStatus).length})` : val === "out" ? ` (${grants.filter(g => !g.crmStatus).length})` : ""}
+            </button>
+          ))}
         </div>
       </div>
 
