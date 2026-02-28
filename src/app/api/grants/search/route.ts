@@ -1,4 +1,5 @@
 export const runtime = 'edge';
+export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { callOpenAIJson } from "@/lib/openai";
@@ -92,7 +93,7 @@ Be exhaustive — search your knowledge across government grants, foundations, c
 
     let result: Record<string, unknown>;
     try {
-      result = await callOpenAIJson({ systemPrompt, userPrompt, maxTokens: 6000, temperature: 0.2 });
+      result = await callOpenAIJson({ systemPrompt, userPrompt, maxTokens: 4000, temperature: 0.2 });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "AI failed";
       const isJsonErr = msg.toLowerCase().includes("json") || msg.toLowerCase().includes("token");

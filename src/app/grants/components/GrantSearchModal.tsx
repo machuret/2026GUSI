@@ -77,7 +77,13 @@ export function GrantSearchModal({ onClose, onAdded, companyDNA, existingNames }
         }),
       });
       setSearchPhase("Filtering results…");
-      const data = await res.json();
+      let data: Record<string, unknown>;
+      try {
+        data = await res.json();
+      } catch {
+        setError("The search took too long or returned an unexpected response — please try again with fewer filters.");
+        return;
+      }
       if (data.success) {
         const fresh = (data.results ?? []) as SearchResult[];
         if (isExtend) {

@@ -113,7 +113,6 @@ export function useGrants() {
       body: JSON.stringify(data),
     });
     const result = await res.json();
-    console.log("[updateGrant] status:", res.status, "result:", result);
     if (result.success) {
       setGrants((prev) => prev.map((g) => g.id === id ? { ...g, ...result.grant } : g));
     }
