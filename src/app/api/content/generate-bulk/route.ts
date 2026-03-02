@@ -55,47 +55,64 @@ export async function POST(req: NextRequest) {
       `Bulk ${catLabel}: ${data.topics.length} topics`
     );
 
-    // Generate all topics sequentially — each with a 30s timeout
-    const results: { topic: string; id: string; output: string; error?: string }[] = [];
-    const TOPIC_TIMEOUT_MS = 30_000;
+    // Stream results as NDJSON — each topic is flushed immediately on completion.
+    // This prevents Vercel's 60s response timeout from killing a large batch,
+    // since we're continuously writing to the stream rather than buffering everything.
+    const TOPIC_TIMEOUT_MS = 25_000;
+    const encoder = new TextEncoder();
 
-    for (const topic of data.topics) {
-      try {
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Topic timed out after 30s")), TOPIC_TIMEOUT_MS)
-        );
+    const stream = new ReadableStream({
+      async start(controller) {
+        let generated = 0;
+        let failed = 0;
 
-        const generatePromise = callOpenAIWithUsage({
-          systemPrompt,
-          userPrompt: topic,
-          model: MODEL_CONFIG.generateBulk,
-          maxTokens: 2500,
-          temperature: 0.65,
-          jsonMode: false,
-        });
+        for (const topic of data.topics) {
+          try {
+            const timeoutPromise = new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("Topic timed out after 25s")), TOPIC_TIMEOUT_MS)
+            );
 
-        const aiResult = await Promise.race([generatePromise, timeoutPromise]);
-        const output = stripMarkdown(aiResult.content);
+            const generatePromise = callOpenAIWithUsage({
+              systemPrompt,
+              userPrompt: topic,
+              model: MODEL_CONFIG.generateBulk,
+              maxTokens: 2500,
+              temperature: 0.65,
+              jsonMode: false,
+            });
 
-        const saved = await createContent(data.category, {
-          companyId: data.companyId,
-          userId: appUser.id,
-          prompt: topic,
-          output,
-        });
+            const aiResult = await Promise.race([generatePromise, timeoutPromise]);
+            const output = stripMarkdown(aiResult.content);
 
-        logAiUsage({ model: MODEL_CONFIG.generateBulk, feature: "generate_bulk", promptTokens: aiResult.promptTokens, completionTokens: aiResult.completionTokens, userId: authUser.id });
-        results.push({ topic, id: saved.id, output });
-      } catch (err) {
-        results.push({ topic, id: "", output: "", error: err instanceof Error ? err.message : "Failed" });
-      }
-    }
+            const saved = await createContent(data.category, {
+              companyId: data.companyId,
+              userId: appUser.id,
+              prompt: topic,
+              output,
+            });
 
-    return NextResponse.json({
-      success: true,
-      results,
-      generated: results.filter((r) => !r.error).length,
-      failed: results.filter((r) => r.error).length,
+            logAiUsage({ model: MODEL_CONFIG.generateBulk, feature: "generate_bulk", promptTokens: aiResult.promptTokens, completionTokens: aiResult.completionTokens, userId: authUser.id });
+
+            generated++;
+            controller.enqueue(encoder.encode(JSON.stringify({ topic, id: saved.id, output }) + "\n"));
+          } catch (err) {
+            failed++;
+            controller.enqueue(encoder.encode(JSON.stringify({ topic, id: "", output: "", error: err instanceof Error ? err.message : "Failed" }) + "\n"));
+          }
+        }
+
+        // Final summary line
+        controller.enqueue(encoder.encode(JSON.stringify({ __done: true, generated, failed }) + "\n"));
+        controller.close();
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "application/x-ndjson",
+        "Transfer-Encoding": "chunked",
+        "X-Content-Type-Options": "nosniff",
+      },
     });
   } catch (error) {
     return handleApiError(error, "Generate Bulk");

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard,
   Brain,
@@ -38,8 +38,28 @@ import {
   Star,
   Hash,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasRole } from "@/lib/auth";
+
+// Module-level dedup: all Sidebar instances share one in-flight /api/users/me promise.
+// Cleared after resolution so re-mounts (e.g. after login) still fetch fresh data.
+type MeData = { role: string | null; email: string | null; permissions: string[] | null };
+let _mePromise: Promise<MeData> | null = null;
+function fetchMe(): Promise<MeData> {
+  if (!_mePromise) {
+    _mePromise = fetch("/api/users/me")
+      .then((r) => r.json())
+      .then((d) => ({
+        role:        d.user?.role        ?? null,
+        email:       d.user?.email       ?? null,
+        permissions: d.user?.permissions ?? null,
+      }))
+      .catch(() => ({ role: null, email: null, permissions: null }))
+      .finally(() => { _mePromise = null; });
+  }
+  return _mePromise;
+}
 
 const mainNav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -106,17 +126,18 @@ export function Sidebar() {
   const [userEmail, setUserEmail]       = useState<string | null>(null);
   const [userPerms, setUserPerms]       = useState<string[] | null>(null);
   const [roleLoaded, setRoleLoaded]     = useState(false);
+  const mounted = useRef(true);
 
   useEffect(() => {
-    fetch("/api/users/me")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.user?.role)        setUserRole(d.user.role);
-        if (d.user?.email)       setUserEmail(d.user.email);
-        if (d.user?.permissions) setUserPerms(d.user.permissions);
-        setRoleLoaded(true);
-      })
-      .catch(() => { setRoleLoaded(true); });
+    mounted.current = true;
+    fetchMe().then((d) => {
+      if (!mounted.current) return;
+      if (d.role)        setUserRole(d.role);
+      if (d.email)       setUserEmail(d.email);
+      if (d.permissions) setUserPerms(d.permissions);
+      setRoleLoaded(true);
+    });
+    return () => { mounted.current = false; };
   }, []);
 
   // Effective section permissions: custom overrides take priority, else role defaults
@@ -135,7 +156,7 @@ export function Sidebar() {
     window.location.href = "/login";
   };
 
-  const navLink = (item: { href: string; label: string; icon: any }) => {
+  const navLink = (item: { href: string; label: string; icon: LucideIcon }) => {
     const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href + "/"));
     return (
       <Link
@@ -155,6 +176,17 @@ export function Sidebar() {
       </Link>
     );
   };
+
+  const navSkeleton = (n: number) => (
+    <>
+      {Array.from({ length: n }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-2">
+          <div className="h-4 w-4 shrink-0 animate-pulse rounded bg-gray-800" />
+          <div className="h-3 w-24 animate-pulse rounded bg-gray-800" />
+        </div>
+      ))}
+    </>
+  );
 
   const sectionLabel = (label: string) => (
     <p className="mb-1 mt-1 px-3 text-[10px] font-bold uppercase tracking-widest text-gray-600">
@@ -178,7 +210,16 @@ export function Sidebar() {
       <nav className="flex-1 space-y-0.5 overflow-y-auto pb-4">
         {mainNav.map(navLink)}
 
-        {canSection("content") && (
+        {!roleLoaded && (
+          <>
+            <div className="my-3 border-t border-gray-800" />
+            {navSkeleton(5)}
+            <div className="my-3 border-t border-gray-800" />
+            {navSkeleton(3)}
+          </>
+        )}
+
+        {roleLoaded && canSection("content") && (
           <>
             <div className="my-3 border-t border-gray-800" />
             {sectionLabel("Content")}
@@ -186,7 +227,7 @@ export function Sidebar() {
           </>
         )}
 
-        {canSection("mailchimp") && (
+        {roleLoaded && canSection("mailchimp") && (
           <>
             <div className="my-3 border-t border-gray-800" />
             {sectionLabel("Newsletter")}
@@ -194,7 +235,7 @@ export function Sidebar() {
           </>
         )}
 
-        {canSection("grants") && (
+        {roleLoaded && canSection("grants") && (
           <>
             <div className="my-3 border-t border-gray-800" />
             {sectionLabel("Grants")}
@@ -202,7 +243,7 @@ export function Sidebar() {
           </>
         )}
 
-        {canSection("leads") && (
+        {roleLoaded && canSection("leads") && (
           <>
             <div className="my-3 border-t border-gray-800" />
             {sectionLabel("Leads & Pipeline")}
@@ -210,7 +251,7 @@ export function Sidebar() {
           </>
         )}
 
-        {canAccessSettings && (
+        {roleLoaded && canAccessSettings && (
           <>
             <div className="my-3 border-t border-gray-800" />
             {sectionLabel("Settings")}

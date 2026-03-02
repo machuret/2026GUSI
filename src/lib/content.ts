@@ -69,20 +69,57 @@ export async function updateContent(category: string, id: string, data: Record<s
 export interface HistoryOptions {
   page?: number;
   limit?: number;
+  category?: string;
 }
 
 /**
- * Fetch history from ALL 9 tables for a company, merged & sorted by createdAt desc.
- * Uses DB-level LIMIT per table to avoid loading all rows into memory.
- * Each table fetches (page * limit) rows so we have enough to sort and slice correctly.
+ * Fetch history for a company.
+ *
+ * When `category` is provided: queries a single table with DB-level LIMIT+OFFSET
+ * — zero in-memory sorting needed, scales to any number of rows.
+ *
+ * When no category: queries all 9 tables with a per-table fetch cap of
+ * (page * limit) rows, merges in memory, then slices. This is acceptable
+ * for the first few pages; for deep pagination always pass a category filter.
  */
 export async function getAllHistory(
   companyId: string,
-  { page = 1, limit = 50 }: HistoryOptions = {}
+  { page = 1, limit = 50, category }: HistoryOptions = {}
 ): Promise<{ items: ContentWithMeta[]; total: number }> {
+  const offset = (page - 1) * limit;
+
+  // ── Single-category path: true DB pagination, no in-memory work ──────────
+  if (category) {
+    const cat = CATEGORIES.find((c) => c.key === category);
+    if (!cat) throw new Error(`Invalid content category: "${category}"`);
+
+    const [{ data: items }, { count }] = await Promise.all([
+      db
+        .from(cat.table)
+        .select("*, user:User(name, email)")
+        .eq("companyId", companyId)
+        .order("createdAt", { ascending: false })
+        .range(offset, offset + limit - 1),
+      db
+        .from(cat.table)
+        .select("id", { count: "exact", head: true })
+        .eq("companyId", companyId),
+    ]);
+
+    return {
+      items: (items ?? []).map((item) => ({
+        ...(item as ContentRecord),
+        category: cat.key,
+        categoryLabel: cat.label,
+      })),
+      total: count ?? 0,
+    };
+  }
+
+  // ── All-categories path: cap per-table fetch, merge, slice ───────────────
   // Fetch enough rows from each table to cover the requested page.
-  // We need page * limit rows per table to allow cross-table sorting and slicing.
-  const fetchLimit = page * limit;
+  // Hard cap at 500 per table to prevent accidental full-table scans.
+  const fetchLimit = Math.min(page * limit, 500);
 
   const [results, countResults] = await Promise.all([
     Promise.all(
@@ -101,7 +138,6 @@ export async function getAllHistory(
         }));
       })
     ),
-    // Count total across all tables in parallel
     Promise.all(
       CATEGORIES.map(async (cat) => {
         const { count } = await db
@@ -114,13 +150,11 @@ export async function getAllHistory(
   ]);
 
   const total = countResults.reduce((sum, c) => sum + c, 0);
-
   const all = results.flat().sort((a, b) =>
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 
-  const start = (page - 1) * limit;
-  return { items: all.slice(start, start + limit), total };
+  return { items: all.slice(offset, offset + limit), total };
 }
 
 export interface LibraryOptions {

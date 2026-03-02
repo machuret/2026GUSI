@@ -99,7 +99,7 @@ export function GrantSearchModal({ onClose, onAdded, companyDNA, existingNames }
           setResults(fresh);
           setNewCount(fresh.filter((r) => !fuzzyMatchesExisting(r.name, existingNames)).length);
         }
-      } else setError(data.error || "Search failed");
+      } else setError(String(data.error || "Search failed"));
     } catch (err) { setError(err instanceof Error ? err.message : "Network error"); }
     finally { setSearching(false); setExtending(false); setSearchPhase(""); }
   };

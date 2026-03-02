@@ -18,8 +18,9 @@ export async function GET(req: NextRequest) {
     const rawLimit = parseInt(searchParams.get("limit") ?? "50", 10);
     const page = Math.max(1, isNaN(rawPage) ? 1 : rawPage);
     const limit = Math.min(100, Math.max(1, isNaN(rawLimit) ? 50 : rawLimit));
+    const category = searchParams.get("category") ?? undefined;
 
-    const { items, total } = await getAllHistory(companyId, { page, limit });
+    const { items, total } = await getAllHistory(companyId, { page, limit, category });
 
     return NextResponse.json({ history: items, total, page, limit });
   } catch (error) {

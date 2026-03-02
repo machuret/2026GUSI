@@ -3,9 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { CATEGORIES } from "@/lib/content";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { statsCache } from "@/lib/cache";
+
+const STATUSES = ["PENDING", "APPROVED", "REJECTED", "REVISED", "PUBLISHED"] as const;
 
 // GET /api/content/stats?companyId=xxx
-// Returns status counts using DB COUNT queries — never transfers content bodies.
+// Uses DB-level COUNT per (table × status) — no row bodies transferred.
+// Results cached for 30s to avoid hammering the DB on every dashboard load.
 export async function GET(req: NextRequest) {
   try {
     const { response: authError } = await requireAuth();
@@ -17,39 +21,51 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
     }
 
-    // One query per table — fetch status column only, count client-side (9 queries instead of 45)
-    const statuses = ["PENDING", "APPROVED", "REJECTED", "REVISED", "PUBLISHED"] as const;
+    const cacheKey = `stats:${companyId}`;
+    const cached = statsCache.get(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
 
-    const allRows = await Promise.all(
+    // 9 tables × 5 statuses = 45 COUNT queries in parallel.
+    // Each query transfers ZERO rows — only a count integer comes back.
+    const countMatrix = await Promise.all(
       CATEGORIES.map(async (cat) => {
-        const { data: rows } = await db
-          .from(cat.table)
-          .select("status")
-          .eq("companyId", companyId)
-          .is("deletedAt", null);
-        return rows ?? [];
+        const counts = await Promise.all(
+          STATUSES.map(async (status) => {
+            const { count } = await db
+              .from(cat.table)
+              .select("id", { count: "exact", head: true })
+              .eq("companyId", companyId)
+              .eq("status", status)
+              .is("deletedAt", null);
+            return { status, count: count ?? 0 };
+          })
+        );
+        return counts;
       })
     );
 
-    const flat = allRows.flat();
-    const totals = statuses.reduce(
-      (acc, s) => {
-        acc[s] = flat.filter((r) => r.status === s).length;
-        return acc;
-      },
-      {} as Record<string, number>
-    );
+    const totals: Record<string, number> = Object.fromEntries(STATUSES.map((s) => [s, 0]));
+    let totalGenerated = 0;
+    for (const tableCounts of countMatrix) {
+      for (const { status, count } of tableCounts) {
+        totals[status] = (totals[status] ?? 0) + count;
+        totalGenerated += count;
+      }
+    }
 
-    const totalGenerated = flat.length;
-
-    return NextResponse.json({
+    const result = {
       totalGenerated,
       pendingReview: totals.PENDING,
       approved: totals.APPROVED,
       rejected: totals.REJECTED,
       revised: totals.REVISED,
       published: totals.PUBLISHED,
-    });
+    };
+
+    statsCache.set(cacheKey, result);
+    return NextResponse.json(result);
   } catch (error) {
     return handleApiError(error, "Stats");
   }

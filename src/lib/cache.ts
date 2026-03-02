@@ -49,3 +49,9 @@ export const generationContextCache = new TtlCache<unknown>(60_000);
 
 // 5-minute cache for company info used in health/settings pages
 export const companyCache = new TtlCache<unknown>(300_000);
+
+// 30-second cache for dashboard stats (avoids 45 DB queries per page load)
+export const statsCache = new TtlCache<unknown>(30_000);
+
+// 2-minute cache for /api/users/me (role + permissions — changes rarely)
+export const userCache = new TtlCache<unknown>(120_000);
