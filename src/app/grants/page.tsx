@@ -17,7 +17,7 @@ export default function GrantsPage() {
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
   const [decisionFilter, setDecisionFilter] = useState("All");
-  const [deadlineFilter, setDeadlineFilter] = useState<"all" | "active" | "7" | "14" | "30" | "expired">("all");
+  const [deadlineFilter, setDeadlineFilter] = useState<"all" | "active" | "7" | "14" | "30" | "expired">("active");
   const [sortField, setSortField] = useState<"deadlineDate" | "fitScore" | "matchScore" | "complexityScore" | "name" | "geographicScope" | "amount">("matchScore");
   const [sortAsc, setSortAsc] = useState(false);
   const [ranking, setRanking] = useState(false);
@@ -125,8 +125,15 @@ export default function GrantsPage() {
   };
 
   const handleBulkAnalyse = async () => {
-    const ids = selected.size > 0 ? Array.from(selected) : grants.map((g) => g.id);
-    if (ids.length === 0) return;
+    const nowMs = Date.now();
+    const allIds = selected.size > 0 ? Array.from(selected) : grants.map((g) => g.id);
+    // Skip expired grants — no point analysing fit for dead deadlines
+    const ids = allIds.filter(id => {
+      const g = grants.find(gr => gr.id === id);
+      if (!g) return false;
+      return !g.deadlineDate || new Date(g.deadlineDate).getTime() >= nowMs;
+    });
+    if (ids.length === 0) { setMsg("No active grants to analyse (all selected grants have expired deadlines)"); return; }
     if (!companyDNA) { setMsg("No company profile found — fill in Grant Profile or Settings → Company Info first"); return; }
     if (!confirm(`Run AI Fit analysis on ${ids.length} grant${ids.length !== 1 ? "s" : ""}? This may take a while.`)) return;
     setBulkAnalysing(true); setActionMsg(null);
@@ -159,11 +166,12 @@ export default function GrantsPage() {
   };
 
   const handleDeleteExpired = async () => {
+    const staleThreshold = Date.now() - (365 * 86400000);
     const expiredIds = grants
-      .filter(g => g.deadlineDate && new Date(g.deadlineDate).getTime() < Date.now())
+      .filter(g => g.deadlineDate && new Date(g.deadlineDate).getTime() < staleThreshold)
       .map(g => g.id);
-    if (expiredIds.length === 0) { setMsg("No expired grants found"); return; }
-    if (!confirm(`Permanently delete ${expiredIds.length} expired grant${expiredIds.length !== 1 ? "s" : ""}?`)) return;
+    if (expiredIds.length === 0) { setMsg("No stale grants found (expired > 12 months)"); return; }
+    if (!confirm(`Permanently delete ${expiredIds.length} grant${expiredIds.length !== 1 ? "s" : ""} expired over 12 months? Recently expired grants will be kept.`)) return;
     setDeletingExpired(true); setActionMsg(null);
     let ok = 0;
     let fail = 0;
@@ -180,12 +188,15 @@ export default function GrantsPage() {
   const now = Date.now();
   const DAY = 86400000;
 
+  const YEAR = 365 * DAY;
+
   const deadlineCounts = {
     active: grants.filter(g => !g.deadlineDate || new Date(g.deadlineDate).getTime() >= now).length,
     closing7: grants.filter(g => { if (!g.deadlineDate) return false; const d = new Date(g.deadlineDate).getTime() - now; return d >= 0 && d <= 7 * DAY; }).length,
     closing14: grants.filter(g => { if (!g.deadlineDate) return false; const d = new Date(g.deadlineDate).getTime() - now; return d >= 0 && d <= 14 * DAY; }).length,
     closing30: grants.filter(g => { if (!g.deadlineDate) return false; const d = new Date(g.deadlineDate).getTime() - now; return d >= 0 && d <= 30 * DAY; }).length,
     expired: grants.filter(g => { if (!g.deadlineDate) return false; return new Date(g.deadlineDate).getTime() < now; }).length,
+    stale: grants.filter(g => { if (!g.deadlineDate) return false; return (now - new Date(g.deadlineDate).getTime()) > YEAR; }).length,
   };
 
   const filtered = grants
@@ -409,15 +420,15 @@ export default function GrantsPage() {
               </button>
             );
           })}
-          {deadlineCounts.expired > 0 && (
+          {deadlineCounts.stale > 0 && (
             <button
               onClick={handleDeleteExpired}
               disabled={deletingExpired}
-              title="Delete all expired grants"
-              className="flex items-center gap-1.5 rounded-full border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 whitespace-nowrap"
+              title={`Delete ${deadlineCounts.stale} grant${deadlineCounts.stale !== 1 ? 's' : ''} expired over 12 months`}
+              className="flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50 whitespace-nowrap"
             >
               {deletingExpired ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-              Delete expired
+              Purge stale ({deadlineCounts.stale})
             </button>
           )}
         </div>

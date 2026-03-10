@@ -19,6 +19,32 @@ export function FitStars({ value, onChange }: { value?: number | null; onChange?
   );
 }
 
+export function FitBadge({ aiScore, aiVerdict, fitScore }: { aiScore?: number | null; aiVerdict?: string | null; fitScore?: number | null }) {
+  // If we have a rich AI score, show that
+  if (aiScore != null) {
+    const cls = aiScore >= 70 ? "bg-green-100 text-green-700 border-green-200"
+      : aiScore >= 50 ? "bg-yellow-100 text-yellow-700 border-yellow-200"
+      : aiScore >= 30 ? "bg-orange-100 text-orange-700 border-orange-200"
+      : "bg-red-100 text-red-600 border-red-200";
+    return (
+      <div className="flex flex-col items-start gap-0.5">
+        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${cls}`}
+          title={aiVerdict ? `${aiVerdict} — ${aiScore}%` : `${aiScore}%`}>
+          {aiScore}%
+        </span>
+        {aiVerdict && (
+          <span className="text-[10px] font-medium text-gray-400 leading-tight truncate max-w-[80px]" title={aiVerdict}>
+            {aiVerdict}
+          </span>
+        )}
+      </div>
+    );
+  }
+  // Fall back to star rating
+  if (fitScore != null) return <FitStars value={fitScore} />;
+  return <span className="text-xs text-gray-300">—</span>;
+}
+
 export function DecisionBadge({ value }: { value?: Decision | "Rejected" | null }) {
   if (!value) return <span className="text-xs text-gray-300">—</span>;
   return <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${DECISION_STYLES[value]}`}>{value}</span>;

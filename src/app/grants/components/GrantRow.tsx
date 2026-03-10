@@ -9,7 +9,7 @@ import {
 import { authFetch } from "@/lib/authFetch";
 import type { Grant } from "@/hooks/useGrants";
 import type { GrantAnalysis } from "./grantTypes";
-import { FitStars, DecisionBadge, EffortBadge, DeadlineBadge } from "./GrantBadges";
+import { FitBadge, DecisionBadge, EffortBadge, DeadlineBadge } from "./GrantBadges";
 import { GrantFormFields } from "./GrantFormFields";
 import { AnalysisPanel } from "./GrantAnalysisPanel";
 import type { Effort } from "./grantTypes";
@@ -188,7 +188,7 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
             <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${grant.matchScore >= 70 ? "bg-green-100 text-green-700" : grant.matchScore >= 40 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-600"}`}>{grant.matchScore}%</span>
           ) : <span className="text-gray-300 text-xs">—</span>}
         </td>
-        <td className="px-3 py-3"><FitStars value={grant.fitScore} /></td>
+        <td className="px-3 py-3"><FitBadge aiScore={grant.aiScore} aiVerdict={grant.aiVerdict} fitScore={grant.fitScore} /></td>
         <td className="px-3 py-3"><DecisionBadge value={grant.decision as "Apply" | "Maybe" | "No" | "Rejected" | null} /></td>
         <td className="px-2 py-3">
           <div className="relative" ref={actionsRef}>
