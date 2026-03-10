@@ -82,7 +82,8 @@ export default function LeftPanel({
             {grants
               .filter((g) => {
                 if (!g.deadlineDate) return true;
-                return new Date(g.deadlineDate).getTime() >= Date.now();
+                // Add 24h buffer so grants due today aren't filtered by timezone
+                return new Date(g.deadlineDate).getTime() + 86_400_000 >= Date.now();
               })
               .map((g) => (
               <option key={g.id} value={g.id}>
@@ -123,7 +124,7 @@ export default function LeftPanel({
             {selectedGrant.aiVerdict && (
               <p><span className="font-medium text-gray-700">AI Fit:</span> {selectedGrant.aiVerdict}</p>
             )}
-            {selectedGrant.deadlineDate && new Date(selectedGrant.deadlineDate).getTime() < Date.now() && (
+            {selectedGrant.deadlineDate && new Date(selectedGrant.deadlineDate).getTime() + 86_400_000 < Date.now() && (
               <p className="text-red-600 mt-1 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Deadline expired</p>
             )}
             {!selectedGrant.url && (
