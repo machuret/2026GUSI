@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useState } from "react";
-import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus } from "lucide-react";
+import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useGrants, type Grant } from "@/hooks/useGrants";
 import { authFetch } from "@/lib/authFetch";
@@ -151,10 +151,9 @@ export default function GrantsPage() {
         const data = await res.json();
         if (data.success && data.analysis) {
           const a = data.analysis;
-          const fitScore = typeof a.score === "number" ? Math.max(1, Math.min(5, Math.round(a.score / 20))) : undefined;
           const decision = a.verdict === "Strong Fit" || a.verdict === "Good Fit" ? "Apply"
             : a.verdict === "Not Eligible" ? "No" : "Maybe";
-          await updateGrantRaw(id, { fitScore, decision });
+          await updateGrantRaw(id, { decision });
           ok++;
         } else { errors++; }
       } catch { errors++; }
@@ -446,6 +445,43 @@ export default function GrantsPage() {
           ))}
         </div>
       </div>
+
+      {/* Expired batch action banner */}
+      {deadlineFilter === "expired" && filtered.length > 0 && (
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+          <p className="text-sm text-red-700 font-medium">
+            {filtered.length} expired grant{filtered.length !== 1 ? "s" : ""} shown
+          </p>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setSelected(new Set(filtered.map(g => g.id)))}
+              className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100"
+            >
+              Select all {filtered.length}
+            </button>
+            <button
+              onClick={async () => {
+                if (!confirm(`Permanently delete all ${filtered.length} expired grant${filtered.length !== 1 ? "s" : ""}?`)) return;
+                setBulkBusy(true); setActionMsg(null);
+                let ok = 0;
+                for (const g of filtered) {
+                  try { const r = await deleteGrant(g.id); if (r.success) ok++; } catch { /* skip */ }
+                }
+                setMsg(ok > 0 ? `✓ Deleted ${ok} expired grant${ok !== 1 ? "s" : ""}` : "Failed to delete — try again");
+                setSelected(new Set());
+                setBulkBusy(false);
+                if (ok > 0) setDeadlineFilter("active");
+              }}
+              disabled={bulkBusy}
+              className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {bulkBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+              Delete all expired
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       {loading ? (

@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   ArrowLeft, PenLine, Sparkles, ExternalLink, Loader2,
   ChevronDown, ChevronUp, StickyNote, FlaskConical, X,
-  Bell, LayoutList, Columns2,
+  Bell, LayoutList, Columns2, AlertTriangle,
 } from "lucide-react";
 import { useGrants } from "@/hooks/useGrants";
 import { authFetch } from "@/lib/authFetch";
@@ -124,9 +124,18 @@ function GrantCrmCard({
   const deadlineMs = grant.deadlineDate ? new Date(grant.deadlineDate).getTime() : null;
   const daysLeft = deadlineMs ? Math.ceil((deadlineMs - Date.now()) / 86_400_000) : null;
   const deadlineUrgent = daysLeft !== null && daysLeft <= 14;
+  const isExpired = daysLeft !== null && daysLeft < 0;
+  const isStaleAnalysis = isExpired && grant.aiScore != null;
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow">
+    <div className={`rounded-xl border shadow-sm hover:shadow-md transition-shadow ${isExpired ? "border-red-200 bg-red-50/30" : "border-gray-200 bg-white"}`}>
+      {/* Expired banner */}
+      {isExpired && (
+        <div className="flex items-center gap-1.5 rounded-t-xl bg-red-100 px-3 py-1.5 text-[11px] font-semibold text-red-700">
+          <AlertTriangle className="h-3 w-3" /> Deadline expired {Math.abs(daysLeft!)}d ago
+          {isStaleAnalysis && <span className="ml-auto text-[10px] font-medium text-red-500">⚠ Fit score may be stale</span>}
+        </div>
+      )}
       {/* Card header */}
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-start justify-between gap-2">

@@ -107,11 +107,9 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
       if (data.success && data.analysis) {
         setAnalysis(data.analysis);
         const a = data.analysis;
-        const fitScore = typeof a.score === "number" ? Math.max(1, Math.min(5, Math.round(a.score / 20))) : undefined;
         const decision = a.verdict === "Strong Fit" || a.verdict === "Good Fit" ? "Apply"
           : a.verdict === "Not Eligible" ? "No" : "Maybe";
         await onUpdate(grant.id, {
-          fitScore: fitScore ?? undefined,
           decision,
           aiScore: a.score ?? undefined,
           aiVerdict: a.verdict ?? undefined,
@@ -188,7 +186,7 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
             <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${grant.matchScore >= 70 ? "bg-green-100 text-green-700" : grant.matchScore >= 40 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-600"}`}>{grant.matchScore}%</span>
           ) : <span className="text-gray-300 text-xs">—</span>}
         </td>
-        <td className="px-3 py-3"><FitBadge aiScore={grant.aiScore} aiVerdict={grant.aiVerdict} fitScore={grant.fitScore} /></td>
+        <td className="px-3 py-3"><FitBadge aiScore={grant.aiScore} aiVerdict={grant.aiVerdict} fitScore={grant.fitScore} stale={!!(grant.deadlineDate && new Date(grant.deadlineDate).getTime() < Date.now() && grant.aiScore != null)} /></td>
         <td className="px-3 py-3"><DecisionBadge value={grant.decision as "Apply" | "Maybe" | "No" | "Rejected" | null} /></td>
         <td className="px-2 py-3">
           <div className="relative" ref={actionsRef}>

@@ -19,24 +19,31 @@ export function FitStars({ value, onChange }: { value?: number | null; onChange?
   );
 }
 
-export function FitBadge({ aiScore, aiVerdict, fitScore }: { aiScore?: number | null; aiVerdict?: string | null; fitScore?: number | null }) {
+export function FitBadge({ aiScore, aiVerdict, fitScore, stale }: { aiScore?: number | null; aiVerdict?: string | null; fitScore?: number | null; stale?: boolean }) {
   // If we have a rich AI score, show that
   if (aiScore != null) {
-    const cls = aiScore >= 70 ? "bg-green-100 text-green-700 border-green-200"
+    const cls = stale
+      ? "bg-gray-100 text-gray-400 border-gray-200 line-through"
+      : aiScore >= 70 ? "bg-green-100 text-green-700 border-green-200"
       : aiScore >= 50 ? "bg-yellow-100 text-yellow-700 border-yellow-200"
       : aiScore >= 30 ? "bg-orange-100 text-orange-700 border-orange-200"
       : "bg-red-100 text-red-600 border-red-200";
+    const title = stale
+      ? `Stale — scored ${aiScore}% (${aiVerdict ?? ""}) before deadline expired`
+      : aiVerdict ? `${aiVerdict} — ${aiScore}%` : `${aiScore}%`;
     return (
       <div className="flex flex-col items-start gap-0.5">
         <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${cls}`}
-          title={aiVerdict ? `${aiVerdict} — ${aiScore}%` : `${aiScore}%`}>
+          title={title}>
           {aiScore}%
         </span>
-        {aiVerdict && (
+        {stale ? (
+          <span className="text-[10px] font-medium text-red-400 leading-tight" title="Re-analyse recommended">stale</span>
+        ) : aiVerdict ? (
           <span className="text-[10px] font-medium text-gray-400 leading-tight truncate max-w-[80px]" title={aiVerdict}>
             {aiVerdict}
           </span>
-        )}
+        ) : null}
       </div>
     );
   }
