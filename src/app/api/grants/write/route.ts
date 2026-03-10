@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
-import { getCompanyContext, getVaultContext } from "@/lib/aiContext";
+import { getCompanyContext, getVaultContext, getLessonsContext } from "@/lib/aiContext";
 import { stripHtml } from "@/lib/htmlUtils";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
@@ -38,6 +38,8 @@ const sectionSchema = z.object({
   brief: z.record(z.unknown()),
   tone: z.enum(["first_person", "third_person"]).default("first_person"),
   length: z.enum(["concise", "standard", "detailed"]).default("standard"),
+  previousSections: z.record(z.string()).optional(),
+  customInstructions: z.string().optional(),
 });
 
 const bodySchema = z.discriminatedUnion("mode", [briefSchema, sectionSchema]);
@@ -46,6 +48,12 @@ const WORD_TARGETS: Record<string, number> = {
   concise: 150,
   standard: 300,
   detailed: 500,
+};
+
+const MAX_TOKEN_TARGETS: Record<string, number> = {
+  concise: 600,
+  standard: 1200,
+  detailed: 2000,
 };
 
 const SECTION_INSTRUCTIONS: Record<Section, string> = {
@@ -90,10 +98,29 @@ function buildGrantContext(grant: Record<string, unknown>): string {
     grant.projectDuration ? `Project Duration: ${grant.projectDuration}` : null,
     grant.notes ? `Notes: ${grant.notes}` : null,
     grant.aiVerdict ? `AI Fit Verdict: ${grant.aiVerdict}` : null,
-    grant.fitScore != null ? `Fit Score: ${grant.fitScore}/5` : null,
+    grant.aiScore != null ? `AI Score: ${grant.aiScore}/100` : null,
     grant.matchScore != null ? `Profile Match Score: ${grant.matchScore}/100` : null,
     grant.complexityLabel ? `Application Complexity: ${grant.complexityLabel}` : null,
+    grant.deadlineDate ? `Deadline: ${grant.deadlineDate}` : null,
   ].filter(Boolean);
+
+  // Include AI analysis strengths/gaps if available
+  const analysis = grant.aiAnalysis as Record<string, unknown> | null | undefined;
+  if (analysis) {
+    if (Array.isArray(analysis.strengths) && analysis.strengths.length > 0) {
+      lines.push(`\nAI-Identified Strengths:\n${(analysis.strengths as string[]).map((s: string) => `- ${s}`).join("\n")}`);
+    }
+    if (Array.isArray(analysis.gaps) && analysis.gaps.length > 0) {
+      lines.push(`\nAI-Identified Gaps/Risks:\n${(analysis.gaps as string[]).map((g: string) => `- ${g}`).join("\n")}`);
+    }
+    if (analysis.recommendation) {
+      lines.push(`\nAI Recommendation: ${analysis.recommendation}`);
+    }
+    if (analysis.summary) {
+      lines.push(`\nAI Summary: ${analysis.summary}`);
+    }
+  }
+
   return `## GRANT DETAILS\n${lines.join("\n")}`;
 }
 
@@ -139,12 +166,14 @@ export async function POST(req: NextRequest) {
       company,
       vault,
       { data: allExamples },
+      lessons,
     ] = await Promise.all([
       db.from("Grant").select("*").eq("id", grantId).maybeSingle(),
       db.from("GrantProfile").select("*").eq("companyId", DEMO_COMPANY_ID).maybeSingle(),
       getCompanyContext(DEMO_COMPANY_ID),
       getVaultContext(DEMO_COMPANY_ID),
       db.from("GrantExample").select("*").eq("companyId", DEMO_COMPANY_ID).order("updatedAt", { ascending: false }).limit(20),
+      getLessonsContext({ companyId: DEMO_COMPANY_ID, contentType: "grant" }),
     ]);
 
     if (grantErr || !grant) {
@@ -189,6 +218,7 @@ export async function POST(req: NextRequest) {
       profile ? buildProfileContext(profile as Record<string, unknown>) : "",
       company.block,
       vault.block,
+      lessons.block,
       crawledContent
         ? `## LIVE GRANT PAGE CONTENT (crawled from ${grant.url})\nUse this to understand the funder's current language, priorities, and criteria:\n\n${crawledContent}`
         : "",
@@ -213,7 +243,16 @@ Return ONLY valid JSON — no markdown, no explanation:
   "keywordsToUse": ["<funder keyword 1>", "<funder keyword 2>", "<funder keyword 3>"]
 }`;
 
-      const userPrompt = `Analyse this grant opportunity and organisation profile, then produce the strategic writing brief.\n\n${masterContext}${examplesBlock ? `\n\n${examplesBlock}` : ""}`;
+      // Add deadline context to brief
+      const deadlineStr = grant.deadlineDate ? (() => {
+        const d = new Date(grant.deadlineDate as string);
+        const days = Math.ceil((d.getTime() - Date.now()) / 86400000);
+        if (days < 0) return `EXPIRED (${Math.abs(days)} days ago)`;
+        if (days === 0) return "Due TODAY";
+        return `${days} days remaining (${d.toLocaleDateString("en-AU")})`;
+      })() : "No deadline specified";
+
+      const userPrompt = `Analyse this grant opportunity and organisation profile, then produce the strategic writing brief.\n\nDEADLINE: ${deadlineStr}\n\n${masterContext}${examplesBlock ? `\n\n${examplesBlock}` : ""}`;
 
       const result = await callOpenAIWithUsage({
         systemPrompt,
@@ -243,7 +282,7 @@ Return ONLY valid JSON — no markdown, no explanation:
     }
 
     // ── MODE: section ──────────────────────────────────────────────────────
-    const { section, brief, tone, length } = parsed.data as z.infer<typeof sectionSchema>;
+    const { section, brief, tone, length, previousSections, customInstructions } = parsed.data as z.infer<typeof sectionSchema>;
     const wordTarget = WORD_TARGETS[length];
     const toneInstruction = tone === "first_person"
       ? 'Write in first person ("We are…", "Our organisation…", "We will…")'
@@ -269,7 +308,18 @@ WRITING RULES:
 - Every claim must be grounded in the data provided
 - Do NOT use generic grant-writing clichés ("passionate about", "committed to excellence")
 - Write flowing prose, not bullet points (unless the section calls for a list)
-- This section will be read by a grant assessor — make it easy to assess against criteria${sectionExamplesBlock ? "\n- Study the REFERENCE EXAMPLES provided — match their quality, specificity, and professional tone. Do NOT copy them directly, but learn from their structure and approach." : ""}`;
+- This section will be read by a grant assessor — make it easy to assess against criteria${sectionExamplesBlock ? "\n- Study the REFERENCE EXAMPLES provided — match their quality, specificity, and professional tone. Do NOT copy them directly, but learn from their structure and approach." : ""}${customInstructions ? `\n\nUSER INSTRUCTIONS FOR THIS SECTION (follow these closely):\n${customInstructions}` : ""}`;
+
+    // Build previousSections context block
+    let prevSectionsBlock = "";
+    if (previousSections && Object.keys(previousSections).length > 0) {
+      const entries = Object.entries(previousSections).map(([name, text]) => {
+        const words = text.trim().split(/\s+/).length;
+        const preview = text.slice(0, 300).trim();
+        return `### ${name} (${words} words)\n${preview}${text.length > 300 ? "…" : ""}`;
+      });
+      prevSectionsBlock = `\n\n## PREVIOUSLY WRITTEN SECTIONS (maintain consistency — do not repeat the same phrases or examples)\n${entries.join("\n\n")}`;
+    }
 
     const userPrompt = `Write the "${section}" section of this grant application.
 
@@ -281,13 +331,13 @@ ${briefBlock}
 FULL CONTEXT:
 ${masterContext}
 
-Write only the section content — no heading, no preamble, no "Here is the section:" intro. Just the prose.${sectionExamplesBlock ? `\n\n${sectionExamplesBlock}` : ""}`;
+Write only the section content — no heading, no preamble, no "Here is the section:" intro. Just the prose.${sectionExamplesBlock ? `\n\n${sectionExamplesBlock}` : ""}${prevSectionsBlock}`;
 
     const result = await callOpenAIWithUsage({
       systemPrompt,
       userPrompt,
       model: MODEL_CONFIG.grantsWrite,
-      maxTokens: 1200,
+      maxTokens: MAX_TOKEN_TARGETS[length] ?? 1200,
       temperature: 0.45,
       jsonMode: false,
     });

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import {
   Sparkles, Loader2, RefreshCw, CheckCircle, AlertCircle,
-  ChevronDown, ChevronUp, Lightbulb, Target,
+  ChevronDown, ChevronUp, Lightbulb, Target, MessageSquarePlus, AlertTriangle,
 } from "lucide-react";
 import {
   ALL_SECTIONS, SECTION_META, SectionName, Grant, WritingBrief, Tone, Length,
@@ -35,6 +36,8 @@ interface Props {
   onGenerateAll: () => void;
   onStopGeneration: () => void;
   doneCount: number;
+  customInstructions: Record<string, string>;
+  onCustomInstructions: (v: Record<string, string>) => void;
 }
 
 const inputCls =
@@ -47,7 +50,9 @@ export default function LeftPanel({
   brief, briefLoading, briefError, briefExpanded, onToggleBriefExpanded, onRunBrief,
   sections, generating, generatingSection, progress, enabledList, genError,
   onGenerateAll, onStopGeneration, doneCount,
+  customInstructions, onCustomInstructions,
 }: Props) {
+  const [ciOpen, setCiOpen] = useState<string | null>(null);
   const selectedGrant = grants.find((g) => g.id === selectedGrantId) ?? null;
 
   return (
@@ -74,7 +79,12 @@ export default function LeftPanel({
             className={inputCls}
           >
             <option value="">Select a grant…</option>
-            {grants.map((g) => (
+            {grants
+              .filter((g) => {
+                if (!g.deadlineDate) return true;
+                return new Date(g.deadlineDate).getTime() >= Date.now();
+              })
+              .map((g) => (
               <option key={g.id} value={g.id}>
                 {g.crmStatus ? `[${g.crmStatus}] ` : ""}{g.name}
                 {g.amount ? ` — ${g.amount}` : ""}
@@ -112,6 +122,9 @@ export default function LeftPanel({
             )}
             {selectedGrant.aiVerdict && (
               <p><span className="font-medium text-gray-700">AI Fit:</span> {selectedGrant.aiVerdict}</p>
+            )}
+            {selectedGrant.deadlineDate && new Date(selectedGrant.deadlineDate).getTime() < Date.now() && (
+              <p className="text-red-600 mt-1 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Deadline expired</p>
             )}
             {!selectedGrant.url && (
               <p className="text-amber-600 mt-1">⚠ No URL — live crawl unavailable</p>
@@ -214,23 +227,46 @@ export default function LeftPanel({
         </div>
         <div className="space-y-2">
           {ALL_SECTIONS.map((s) => (
-            <label key={s} className="flex items-start gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={enabledSections.has(s)}
-                onChange={(e) => onToggleSection(s, e.target.checked)}
-                className="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-brand-600 shrink-0"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-gray-700 leading-tight">
-                  {SECTION_META[s].icon} {s}
-                </p>
-                <p className="text-xs text-gray-400 leading-tight mt-0.5">{SECTION_META[s].hint}</p>
-              </div>
-              {sections[s] && (
-                <CheckCircle className="h-3.5 w-3.5 text-green-500 ml-auto shrink-0 mt-0.5" />
+            <div key={s}>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enabledSections.has(s)}
+                  onChange={(e) => onToggleSection(s, e.target.checked)}
+                  className="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-brand-600 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-gray-700 leading-tight">
+                    {SECTION_META[s].icon} {s}
+                  </p>
+                  <p className="text-xs text-gray-400 leading-tight mt-0.5">{SECTION_META[s].hint}</p>
+                </div>
+                <div className="ml-auto flex items-center gap-1 shrink-0">
+                  {sections[s] && (
+                    <CheckCircle className="h-3.5 w-3.5 text-green-500 mt-0.5" />
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); setCiOpen(ciOpen === s ? null : s); }}
+                    title="Custom instructions for this section"
+                    className={`rounded p-0.5 transition-colors mt-0.5 ${customInstructions[s]?.trim() ? "text-brand-600" : "text-gray-300 hover:text-gray-500"}`}
+                  >
+                    <MessageSquarePlus className="h-3 w-3" />
+                  </button>
+                </div>
+              </label>
+              {ciOpen === s && (
+                <div className="ml-5 mt-1 mb-1">
+                  <textarea
+                    value={customInstructions[s] ?? ""}
+                    onChange={(e) => onCustomInstructions({ ...customInstructions, [s]: e.target.value })}
+                    placeholder="e.g. Mention our partnership with UQ, emphasize rural health…"
+                    rows={2}
+                    className="w-full rounded-md border border-brand-200 bg-brand-50 px-2 py-1.5 text-xs text-gray-700 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400 resize-y placeholder:text-gray-400"
+                  />
+                </div>
               )}
-            </label>
+            </div>
           ))}
         </div>
       </div>

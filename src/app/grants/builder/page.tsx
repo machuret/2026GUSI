@@ -29,6 +29,7 @@ export default function GrantBuilderPage() {
   const [enabledSections, setEnabledSections] = useState<Set<SectionName>>(new Set(ALL_SECTIONS));
   const [tone,   setTone]   = useState<Tone>("first_person");
   const [length, setLength] = useState<Length>("standard");
+  const [customInstructions, setCustomInstructions] = useState<Record<string, string>>({});
 
   // ── Brief ──────────────────────────────────────────────────────────────────
   const [brief,          setBrief]          = useState<WritingBrief | null>(null);
@@ -56,6 +57,15 @@ export default function GrantBuilderPage() {
   const doneCount     = enabledList.filter((s) => sections[s]).length;
   const totalWords    = Object.values(sections).reduce((sum, t) => sum + wordCount(t), 0);
   const hasSections   = Object.values(sections).some((v) => v.length > 0);
+
+  // ── Unsaved changes warning ────────────────────────────────────────────────
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    if (!hasSections || saved) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasSections, saved]);
 
   // ── Load grants + drafts ───────────────────────────────────────────────────
   useEffect(() => {
@@ -108,20 +118,33 @@ export default function GrantBuilderPage() {
     setGenError(null);
     abortRef.current = false;
     setProgress(0);
+    // Track sections as they're generated for coherence
+    const currentSections: Record<string, string> = { ...sections };
 
     for (let i = 0; i < enabledList.length; i++) {
       if (abortRef.current) break;
       const section = enabledList[i];
       setGeneratingSection(section);
       try {
+        // Build previousSections from what's already been generated
+        const prev: Record<string, string> = {};
+        for (let j = 0; j < i; j++) {
+          const prevSection = enabledList[j];
+          const prevText = currentSections[prevSection];
+          if (prevText) prev[prevSection] = prevText;
+        }
+        const ci = customInstructions[section]?.trim() || undefined;
         const res  = await authFetch("/api/grants/write", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ grantId: selectedGrantId, mode: "section", section, brief, tone, length }),
+          body: JSON.stringify({ grantId: selectedGrantId, mode: "section", section, brief, tone, length, previousSections: prev, customInstructions: ci }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Section failed");
-        setSections((prev) => ({ ...prev, [section]: data.content }));
+        const content = data.content;
+        currentSections[section] = content;
+        setSections((p) => ({ ...p, [section]: content }));
+        setSaved(false);
       } catch (err) {
         setGenError(`Failed on "${section}": ${err instanceof Error ? err.message : "Error"}`);
         break;
@@ -131,27 +154,34 @@ export default function GrantBuilderPage() {
 
     setGeneratingSection(null);
     setGenerating(false);
-  }, [selectedGrantId, brief, enabledList, tone, length]);
+  }, [selectedGrantId, brief, enabledList, tone, length, customInstructions]);
 
   // ── Regen single section ───────────────────────────────────────────────────
   const regenSection = useCallback(async (section: SectionName) => {
     if (!selectedGrantId || !brief) return;
     setGeneratingSection(section);
     try {
+      // Pass all other completed sections as context for coherence
+      const prev: Record<string, string> = {};
+      for (const s of enabledList) {
+        if (s !== section && sections[s]) prev[s] = sections[s];
+      }
+      const ci = customInstructions[section]?.trim() || undefined;
       const res  = await authFetch("/api/grants/write", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ grantId: selectedGrantId, mode: "section", section, brief, tone, length }),
+        body: JSON.stringify({ grantId: selectedGrantId, mode: "section", section, brief, tone, length, previousSections: prev, customInstructions: ci }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
       setSections((prev) => ({ ...prev, [section]: data.content }));
+      setSaved(false);
     } catch (err) {
       setGenError(`Regen failed: ${err instanceof Error ? err.message : "Error"}`);
     } finally {
       setGeneratingSection(null);
     }
-  }, [selectedGrantId, brief, tone, length]);
+  }, [selectedGrantId, brief, tone, length, sections, enabledList, customInstructions]);
 
   // ── Save draft ─────────────────────────────────────────────────────────────
   const saveDraft = useCallback(async () => {
@@ -171,6 +201,7 @@ export default function GrantBuilderPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
       setSaveMsg("✓ Draft saved");
+      setSaved(true);
       const dRes = await authFetch("/api/grants/drafts");
       setDrafts((await dRes.json()).drafts ?? []);
     } catch (err) {
@@ -192,6 +223,8 @@ export default function GrantBuilderPage() {
     setBrief(d.brief ?? null);
     setTone(d.tone ?? "first_person");
     setLength(d.length ?? "standard");
+    setCustomInstructions({});
+    setSaved(true);
     setActiveTab("builder");
   }, []);
 
@@ -224,6 +257,7 @@ export default function GrantBuilderPage() {
     setSelectedGrantId(id);
     setBrief(null);
     setSections({});
+    setCustomInstructions({});
     setGenError(null);
     setProgress(0);
   }, []);
@@ -312,6 +346,8 @@ export default function GrantBuilderPage() {
             onGenerateAll={generateAll}
             onStopGeneration={() => { abortRef.current = true; }}
             doneCount={doneCount}
+            customInstructions={customInstructions}
+            onCustomInstructions={setCustomInstructions}
           />
 
           <DocumentPanel
@@ -327,7 +363,7 @@ export default function GrantBuilderPage() {
             onCopySection={copySection}
             onCopyAll={copyAll}
             onRegenSection={regenSection}
-            onEditSection={(s, val) => setSections((prev) => ({ ...prev, [s]: val }))}
+            onEditSection={(s, val) => { setSections((prev) => ({ ...prev, [s]: val })); setSaved(false); }}
             onDownload={() => downloadTxt(selectedGrant?.name ?? "grant", sections, enabledList)}
             onSaveDraft={saveDraft}
             hasSections={hasSections}
