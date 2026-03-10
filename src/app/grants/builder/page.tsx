@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { FileText, BookOpen, PenLine } from "lucide-react";
+import Link from "next/link";
+import { FileText, BookOpen, PenLine, Trophy } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import {
@@ -267,6 +268,9 @@ export default function GrantBuilderPage() {
               )}
             </button>
           ))}
+          <Link href="/grants/examples" className="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 transition-colors">
+            <Trophy className="inline h-4 w-4 mr-1.5 -mt-0.5" />Examples
+          </Link>
         </div>
       </div>
 

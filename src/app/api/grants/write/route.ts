@@ -138,11 +138,13 @@ export async function POST(req: NextRequest) {
       { data: profile },
       company,
       vault,
+      { data: allExamples },
     ] = await Promise.all([
       db.from("Grant").select("*").eq("id", grantId).maybeSingle(),
       db.from("GrantProfile").select("*").eq("companyId", DEMO_COMPANY_ID).maybeSingle(),
       getCompanyContext(DEMO_COMPANY_ID),
       getVaultContext(DEMO_COMPANY_ID),
+      db.from("GrantExample").select("*").eq("companyId", DEMO_COMPANY_ID).order("updatedAt", { ascending: false }).limit(20),
     ]);
 
     if (grantErr || !grant) {
@@ -153,6 +155,32 @@ export async function POST(req: NextRequest) {
     let crawledContent = "";
     if (grant.url) {
       crawledContent = await crawlGrantUrl(grant.url as string);
+    }
+
+    // ── Build examples context ──────────────────────────────────────────────
+    const examples: Record<string, unknown>[] = allExamples ?? [];
+
+    const buildExamplesContext = (sectionFilter?: string): string => {
+      if (examples.length === 0) return "";
+      // Prioritise examples matching the current section, then "Won" outcomes, then most recent
+      let relevant = sectionFilter
+        ? examples.filter((e) => e.section === sectionFilter || e.section === "Full Application")
+        : examples;
+      // If no section-specific examples, fall back to all
+      if (relevant.length === 0) relevant = examples;
+      // Limit to top 3 to avoid bloating context
+      const top = relevant.slice(0, 3);
+      const blocks = top.map((e, i) => {
+        const header = [`EXAMPLE ${i + 1}: ${e.title}`];
+        if (e.grantName) header.push(`Grant: ${e.grantName}`);
+        if (e.funder) header.push(`Funder: ${e.funder}`);
+        if (e.outcome) header.push(`Outcome: ${e.outcome}`);
+        if (e.notes) header.push(`Why it worked: ${e.notes}`);
+        // Limit content to ~2000 chars per example to manage token usage
+        const content = typeof e.content === "string" ? (e.content as string).slice(0, 2000) : "";
+        return `${header.join(" | ")}\n${content}`;
+      });
+      return `## REFERENCE EXAMPLES (real grant applications — study the tone, structure, and specificity)\n\n${blocks.join("\n\n---\n\n")}`;
     }
 
     // ── Assemble master context block ──────────────────────────────────────
@@ -170,7 +198,8 @@ export async function POST(req: NextRequest) {
 
     // ── MODE: brief ────────────────────────────────────────────────────────
     if (mode === "brief") {
-      const systemPrompt = `You are a senior grant writing strategist. Analyse the grant and organisation data provided and produce a strategic writing brief that will guide the entire application.
+      const examplesBlock = buildExamplesContext();
+      const systemPrompt = `You are a senior grant writing strategist. Analyse the grant and organisation data provided and produce a strategic writing brief that will guide the entire application.${examplesBlock ? "\n\nYou have been given reference examples of real grant applications. Study their tone, structure, and specificity to inform your strategic brief." : ""}
 
 Return ONLY valid JSON — no markdown, no explanation:
 {
@@ -184,7 +213,7 @@ Return ONLY valid JSON — no markdown, no explanation:
   "keywordsToUse": ["<funder keyword 1>", "<funder keyword 2>", "<funder keyword 3>"]
 }`;
 
-      const userPrompt = `Analyse this grant opportunity and organisation profile, then produce the strategic writing brief.\n\n${masterContext}`;
+      const userPrompt = `Analyse this grant opportunity and organisation profile, then produce the strategic writing brief.\n\n${masterContext}${examplesBlock ? `\n\n${examplesBlock}` : ""}`;
 
       const result = await callOpenAIWithUsage({
         systemPrompt,
@@ -228,6 +257,8 @@ Keywords to use: ${(brief.keywordsToUse as string[] | undefined)?.join(", ") ?? 
 Eligibility Strengths: ${(brief.eligibilityStrengths as string[] | undefined)?.join(", ") ?? "N/A"}
 Eligibility Risks to address: ${(brief.eligibilityRisks as string[] | undefined)?.join(", ") ?? "N/A"}`;
 
+    const sectionExamplesBlock = buildExamplesContext(section);
+
     const systemPrompt = `You are a professional grant writer with 15 years of experience winning competitive grants. You write compelling, specific, evidence-based applications that speak directly to funders' priorities.
 
 WRITING RULES:
@@ -238,7 +269,7 @@ WRITING RULES:
 - Every claim must be grounded in the data provided
 - Do NOT use generic grant-writing clichés ("passionate about", "committed to excellence")
 - Write flowing prose, not bullet points (unless the section calls for a list)
-- This section will be read by a grant assessor — make it easy to assess against criteria`;
+- This section will be read by a grant assessor — make it easy to assess against criteria${sectionExamplesBlock ? "\n- Study the REFERENCE EXAMPLES provided — match their quality, specificity, and professional tone. Do NOT copy them directly, but learn from their structure and approach." : ""}`;
 
     const userPrompt = `Write the "${section}" section of this grant application.
 
@@ -250,7 +281,7 @@ ${briefBlock}
 FULL CONTEXT:
 ${masterContext}
 
-Write only the section content — no heading, no preamble, no "Here is the section:" intro. Just the prose.`;
+Write only the section content — no heading, no preamble, no "Here is the section:" intro. Just the prose.${sectionExamplesBlock ? `\n\n${sectionExamplesBlock}` : ""}`;
 
     const result = await callOpenAIWithUsage({
       systemPrompt,

@@ -326,6 +326,9 @@ export default function GrantsPage() {
         <Link href="/grants/crm" className="flex items-center gap-2 rounded-lg border border-indigo-300 bg-white px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50">
           <KanbanSquare className="h-4 w-4" /> Grants CRM
         </Link>
+        <Link href="/grants/examples" className="flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
+          <Trophy className="h-4 w-4" /> Examples
+        </Link>
         <button
           onClick={handleRank}
           disabled={ranking || grants.length === 0}
