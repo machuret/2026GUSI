@@ -1,70 +1,128 @@
-export const runtime = 'edge';
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { callOpenAIJson } from "@/lib/openai";
-import { requireEdgeAuth } from "@/lib/edgeAuth";
-import { handleOptions } from "@/lib/cors";
-
+import { db } from "@/lib/db";
+import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
+import { logAiUsage } from "@/lib/aiUsage";
+import { getCompanyContext, getVaultContext } from "@/lib/aiContext";
+import { stripHtml } from "@/lib/htmlUtils";
+import { DEMO_COMPANY_ID } from "@/lib/constants";
 
 const bodySchema = z.object({
-  companyDNA: z.string().min(20, "Company DNA is too short. Fill in your Grant Profile or Company Info first."),
-  grant: z.object({
-    id: z.string().optional(),
-    name: z.string(),
-    founder: z.string().optional().nullable(),
-    geographicScope: z.string().optional().nullable(),
-    eligibility: z.string().optional().nullable(),
-    amount: z.string().optional().nullable(),
-    projectDuration: z.string().optional().nullable(),
-    howToApply: z.string().optional().nullable(),
-    notes: z.string().optional().nullable(),
-    deadlineDate: z.string().optional().nullable(),
-  }),
+  grantId: z.string().min(1),
 });
 
-async function persistScore(grantId: string, score: number, verdict: string) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return;
+async function crawlGrantUrl(url: string): Promise<string> {
   try {
-    await fetch(`${supabaseUrl}/rest/v1/Grant?id=eq.${grantId}`, {
-      method: "PATCH",
+    const res = await fetch(url, {
       headers: {
-        "Content-Type": "application/json",
-        apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
-        Prefer: "return=minimal",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
       },
-      body: JSON.stringify({ aiScore: score, aiVerdict: verdict }),
+      signal: AbortSignal.timeout(10000),
     });
+    if (!res.ok) return "";
+    const html = await res.text();
+    return stripHtml(html).slice(0, 8000);
   } catch {
-    // non-fatal — analysis still returns even if persist fails
+    return "";
   }
 }
 
-export async function OPTIONS() { return handleOptions(); }
-
 export async function POST(req: NextRequest) {
   try {
-    const { error: authError } = await requireEdgeAuth(req);
+    const { user: authUser, response: authError } = await requireAuth();
     if (authError) return authError;
 
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
     }
-    const { grant, companyDNA } = parsed.data;
+    const { grantId } = parsed.data;
 
-    // Calculate days until deadline for context
+    // ── Parallel data fetch ────────────────────────────────────────────────
+    const [
+      { data: grant, error: grantErr },
+      { data: profile },
+      company,
+      vault,
+    ] = await Promise.all([
+      db.from("Grant").select("*").eq("id", grantId).maybeSingle(),
+      db.from("GrantProfile").select("*").eq("companyId", DEMO_COMPANY_ID).maybeSingle(),
+      getCompanyContext(DEMO_COMPANY_ID),
+      getVaultContext(DEMO_COMPANY_ID),
+    ]);
+
+    if (grantErr || !grant) {
+      return NextResponse.json({ error: "Grant not found" }, { status: 404 });
+    }
+
+    // ── Crawl grant URL if available ───────────────────────────────────────
+    let crawledContent = "";
+    if (grant.url) {
+      crawledContent = await crawlGrantUrl(grant.url as string);
+    }
+
+    // ── Build grant details block ─────────────────────────────────────────
+    const grantLines = [
+      `Grant Name: ${grant.name}`,
+      grant.founder ? `Funder / Organisation: ${grant.founder}` : null,
+      grant.amount ? `Funding Amount: ${grant.amount}` : null,
+      grant.geographicScope ? `Geographic Scope: ${grant.geographicScope}` : null,
+      grant.eligibility ? `Eligibility: ${grant.eligibility}` : null,
+      grant.howToApply ? `How to Apply: ${grant.howToApply}` : null,
+      grant.projectDuration ? `Project Duration: ${grant.projectDuration}` : null,
+      grant.notes ? `Notes: ${grant.notes}` : null,
+    ].filter(Boolean);
+
+    // ── Build profile block ───────────────────────────────────────────────
+    const profileLines = profile ? [
+      profile.orgType ? `Organisation Type: ${profile.orgType}` : null,
+      profile.sector ? `Sector: ${profile.sector}${profile.subSector ? ` / ${profile.subSector}` : ""}` : null,
+      profile.location ? `Location: ${profile.location}, ${profile.country ?? "Australia"}` : null,
+      profile.stage ? `Stage: ${profile.stage}` : null,
+      profile.teamSize ? `Team Size: ${profile.teamSize}` : null,
+      profile.annualRevenue ? `Annual Revenue: ${profile.annualRevenue}` : null,
+      (profile.focusAreas as string[] | null)?.length ? `Focus Areas: ${(profile.focusAreas as string[]).join(", ")}` : null,
+      profile.targetFundingMin != null || profile.targetFundingMax != null
+        ? `Target Funding: $${profile.targetFundingMin ?? 0} – $${profile.targetFundingMax ?? "Any"}` : null,
+      profile.preferredDuration ? `Preferred Duration: ${profile.preferredDuration}` : null,
+      profile.isRegisteredCharity ? "Registered Charity: Yes" : null,
+      profile.indigenousOwned ? "Indigenous-owned: Yes" : null,
+      profile.womanOwned ? "Woman-owned: Yes" : null,
+      profile.regionalOrRural ? "Regional/Rural: Yes" : null,
+      profile.missionStatement ? `\nMission Statement:\n${profile.missionStatement}` : null,
+      profile.keyActivities ? `\nKey Activities:\n${profile.keyActivities}` : null,
+      profile.uniqueStrengths ? `\nUnique Strengths:\n${profile.uniqueStrengths}` : null,
+      profile.pastGrantsWon ? `\nPast Grants Won:\n${profile.pastGrantsWon}` : null,
+    ].filter(Boolean) : [];
+
+    // ── Deadline context ──────────────────────────────────────────────────
     const deadlineStr = grant.deadlineDate ? (() => {
-      const d = new Date(grant.deadlineDate);
+      const d = new Date(grant.deadlineDate as string);
       const days = Math.ceil((d.getTime() - Date.now()) / 86400000);
       if (days < 0) return `EXPIRED (${Math.abs(days)} days ago)`;
       if (days === 0) return "Due TODAY";
       return `${days} days remaining (${d.toLocaleDateString("en-AU")})`;
     })() : "No deadline specified";
 
-    const systemPrompt = `You are a grant eligibility analyst. You will be given a company's profile (DNA) and a grant opportunity. Your job is to assess how likely this company is to successfully win this grant.
+    // ── Assemble context ─────────────────────────────────────────────────
+    const contextParts: string[] = [
+      `## GRANT DETAILS\n${grantLines.join("\n")}\nDeadline: ${deadlineStr}`,
+      profileLines.length > 0 ? `## GRANT PROFILE\n${profileLines.join("\n")}` : "",
+      company.block,
+      vault.block,
+      crawledContent
+        ? `## LIVE GRANT PAGE CONTENT (crawled from ${grant.url})\nUse this to verify eligibility criteria, funder priorities, and application requirements:\n\n${crawledContent}`
+        : "",
+    ].filter(Boolean);
+
+    const masterContext = contextParts.join("\n\n");
+
+    // ── Prompt ────────────────────────────────────────────────────────────
+    const systemPrompt = `You are a grant eligibility analyst. You will be given a company's full profile and a grant opportunity with rich context (including the funder's own website content when available). Your job is to assess how likely this company is to successfully win this grant.
 
 Analyse the following dimensions (each scored roughly equally):
 1. Mission/purpose alignment — does the company's work match what the grant funds?
@@ -79,6 +137,8 @@ Important rules:
 - If the grant deadline has EXPIRED, automatically set verdict to "Not Eligible" and score to 0, noting the deadline has passed.
 - If the deadline is within 7 days, factor in whether a quality application is realistically achievable.
 - Be specific about WHY something is a strength or gap — generic advice is not useful.
+- If live grant page content is provided, use it as the PRIMARY source for eligibility criteria and funder priorities — it is more current than our stored data.
+- Cite specific evidence from the company profile, vault documents, or grant page to support your assessment.
 
 Return ONLY valid JSON in this exact format, no markdown, no explanation:
 {
@@ -90,21 +150,48 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation:
   "recommendation": "<one concrete, actionable step to improve chances of winning>"
 }`;
 
-    const userPrompt = `COMPANY DNA:\n${companyDNA}\n\nGRANT DETAILS:\nName: ${grant.name}\nFounder/Organisation: ${grant.founder ?? "Unknown"}\nGeographic Scope: ${grant.geographicScope ?? "Not specified"}\nEligibility: ${grant.eligibility ?? "Not specified"}\nAmount: ${grant.amount ?? "Not specified"}\nProject Duration: ${grant.projectDuration ?? "Not specified"}\nHow to Apply: ${grant.howToApply ?? "Not specified"}\nDeadline: ${deadlineStr}\nNotes: ${grant.notes ?? "None"}\n\nAssess the likelihood of this company winning this grant.`;
+    const userPrompt = `Assess this company's likelihood of winning this grant.\n\n${masterContext}`;
 
-    let result: Record<string, unknown>;
+    const result = await callOpenAIWithUsage({
+      systemPrompt,
+      userPrompt,
+      model: MODEL_CONFIG.grantsAnalyse,
+      maxTokens: 800,
+      temperature: 0.3,
+      jsonMode: true,
+    });
+
+    logAiUsage({
+      model: MODEL_CONFIG.grantsAnalyse,
+      feature: "grants_analyse",
+      promptTokens: result.promptTokens,
+      completionTokens: result.completionTokens,
+      userId: authUser?.id,
+    });
+
+    let analysis: Record<string, unknown>;
     try {
-      result = await callOpenAIJson({ systemPrompt, userPrompt, maxTokens: 600, temperature: 0.3 });
-    } catch (err) {
-      return NextResponse.json({ error: err instanceof Error ? err.message : "AI failed" }, { status: 500 });
+      analysis = JSON.parse(result.content);
+    } catch {
+      return NextResponse.json({ error: "AI returned invalid JSON" }, { status: 500 });
     }
 
-    if (grant.id && typeof result.score === "number") {
-      await persistScore(grant.id, result.score, typeof result.verdict === "string" ? result.verdict : "");
-    }
+    // ── Persist full analysis to Grant record ─────────────────────────────
+    const score = typeof analysis.score === "number" ? Math.min(100, Math.max(0, Math.round(analysis.score))) : null;
+    const verdict = typeof analysis.verdict === "string" ? analysis.verdict : null;
+    const decision = verdict === "Strong Fit" || verdict === "Good Fit" ? "Apply"
+      : verdict === "Not Eligible" ? "No" : "Maybe";
 
-    return NextResponse.json({ success: true, analysis: result });
+    await db.from("Grant").update({
+      aiScore: score,
+      aiVerdict: verdict,
+      aiAnalysis: analysis,
+      decision,
+      updatedAt: new Date().toISOString(),
+    }).eq("id", grantId);
+
+    return NextResponse.json({ success: true, analysis, decision });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });
+    return handleApiError(err, "Grant Analyse");
   }
 }

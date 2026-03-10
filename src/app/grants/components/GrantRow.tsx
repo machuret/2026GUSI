@@ -18,7 +18,7 @@ interface Props {
   grant: Grant;
   onUpdate: (id: string, d: Partial<Grant>) => Promise<{ success: boolean; grant?: Grant }>;
   onDelete: (id: string) => Promise<{ success: boolean }>;
-  companyDNA: string;
+  companyDNA?: string;
   selected?: boolean;
   onToggleSelect?: () => void;
 }
@@ -96,25 +96,18 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
   };
 
   const handleAnalyse = async () => {
-    if (!companyDNA) { setAiError("No company info found — please fill in Settings → Company Info first."); setExpanded(true); return; }
     setAnalysing(true); setAiError(null); setAnalysis(null); setExpanded(true);
     try {
       const res = await authFetch("/api/grants/analyse", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ grant, companyDNA }),
+        body: JSON.stringify({ grantId: grant.id }),
       });
       const data = await res.json();
       if (data.success && data.analysis) {
         setAnalysis(data.analysis);
-        const a = data.analysis;
-        const decision = a.verdict === "Strong Fit" || a.verdict === "Good Fit" ? "Apply"
-          : a.verdict === "Not Eligible" ? "No" : "Maybe";
-        await onUpdate(grant.id, {
-          decision,
-          aiScore: a.score ?? undefined,
-          aiVerdict: a.verdict ?? undefined,
-          aiAnalysis: a,
-        });
+        // Route persists aiScore, aiVerdict, aiAnalysis, decision server-side
+        // Just refresh the grant in parent to pick up new values
+        await onUpdate(grant.id, {});
       } else setAiError(data.error || "Analysis failed");
     } catch { setAiError("Network error"); }
     finally { setAnalysing(false); }

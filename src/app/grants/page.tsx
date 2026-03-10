@@ -134,28 +134,19 @@ export default function GrantsPage() {
       return !g.deadlineDate || new Date(g.deadlineDate).getTime() >= nowMs;
     });
     if (ids.length === 0) { setMsg("No active grants to analyse (all selected grants have expired deadlines)"); return; }
-    if (!companyDNA) { setMsg("No company profile found — fill in Grant Profile or Settings → Company Info first"); return; }
     if (!confirm(`Run AI Fit analysis on ${ids.length} grant${ids.length !== 1 ? "s" : ""}? This may take a while.`)) return;
     setBulkAnalysing(true); setActionMsg(null);
     let ok = 0;
     let errors = 0;
     for (const id of ids) {
       try {
-        const grant = grants.find((g) => g.id === id);
-        if (!grant) continue;
         const res = await authFetch("/api/grants/analyse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ grant, companyDNA }),
+          body: JSON.stringify({ grantId: id }),
         });
         const data = await res.json();
-        if (data.success && data.analysis) {
-          const a = data.analysis;
-          const decision = a.verdict === "Strong Fit" || a.verdict === "Good Fit" ? "Apply"
-            : a.verdict === "Not Eligible" ? "No" : "Maybe";
-          await updateGrantRaw(id, { decision });
-          ok++;
-        } else { errors++; }
+        if (data.success) { ok++; } else { errors++; }
       } catch { errors++; }
     }
     await fetchGrants();
