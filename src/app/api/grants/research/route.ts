@@ -1,18 +1,21 @@
-export const runtime = 'edge';
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { callOpenAIJson } from "@/lib/openai";
+import { db } from "@/lib/db";
+import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
+import { logAiUsage } from "@/lib/aiUsage";
 import { stripHtml } from "@/lib/htmlUtils";
-import { requireEdgeAuth } from "@/lib/edgeAuth";
-import { handleOptions } from "@/lib/cors";
 import { isPrivateUrl } from "@/lib/urlValidation";
 
 const bodySchema = z.object({
+  grantId: z.string().optional(),
   name: z.string().optional(),
   url: z.string().optional(),
   founder: z.string().optional(),
   existingData: z.record(z.any()).optional(),
-}).refine((d) => d.name || d.url, { message: "name or url required" });
+}).refine((d) => d.grantId || d.name || d.url, { message: "grantId, name, or url required" });
 
 async function crawlUrl(url: string): Promise<string> {
   if (isPrivateUrl(url)) return "";
@@ -32,18 +35,39 @@ async function crawlUrl(url: string): Promise<string> {
   }
 }
 
-export async function OPTIONS() { return handleOptions(); }
-
 export async function POST(req: NextRequest) {
   try {
-    const { error: authError } = await requireEdgeAuth(req);
-    if (authError) return authError;
+    // Allow service-role key auth for internal/webhook calls
+    const authHeader = req.headers.get("authorization") ?? "";
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const isServiceCall = serviceKey && authHeader === `Bearer ${serviceKey}`;
+
+    let authUser: { id: string } | null = null;
+    if (!isServiceCall) {
+      const { user, response: authError } = await requireAuth();
+      if (authError) return authError;
+      authUser = user;
+    }
 
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
     }
-    const { name, url, founder, existingData } = parsed.data;
+
+    let { name, url, founder, existingData } = parsed.data;
+    const { grantId } = parsed.data;
+
+    // If grantId provided, fetch the grant from DB
+    let grant: Record<string, unknown> | null = null;
+    if (grantId) {
+      const { data } = await db.from("Grant").select("*").eq("id", grantId).maybeSingle();
+      if (!data) return NextResponse.json({ error: "Grant not found" }, { status: 404 });
+      grant = data;
+      name = name ?? (data.name as string);
+      url = url ?? (data.url as string | undefined);
+      founder = founder ?? (data.founder as string | undefined);
+      existingData = existingData ?? data;
+    }
 
     // Crawl the grant URL for real page content
     let crawledContent = "";
@@ -84,11 +108,28 @@ ${JSON.stringify(existingData ?? {}, null, 2)}${crawlBlock}
 
 Fill in as many fields as you can.`;
 
+    const aiResult = await callOpenAIWithUsage({
+      systemPrompt,
+      userPrompt,
+      model: MODEL_CONFIG.grantsAnalyse,
+      maxTokens: 800,
+      temperature: 0.2,
+      jsonMode: true,
+    });
+
+    logAiUsage({
+      model: MODEL_CONFIG.grantsAnalyse,
+      feature: "grants_research",
+      promptTokens: aiResult.promptTokens,
+      completionTokens: aiResult.completionTokens,
+      userId: authUser?.id,
+    });
+
     let result: Record<string, unknown>;
     try {
-      result = await callOpenAIJson({ systemPrompt, userPrompt, maxTokens: 800, temperature: 0.2 });
-    } catch (err) {
-      return NextResponse.json({ error: err instanceof Error ? err.message : "AI failed" }, { status: 500 });
+      result = JSON.parse(aiResult.content);
+    } catch {
+      return NextResponse.json({ error: "AI returned invalid JSON" }, { status: 500 });
     }
 
     // Whitelist only known grant fields — AI can return arbitrary keys
@@ -103,8 +144,17 @@ Fill in as many fields as you can.`;
       }
     }
 
+    // If grantId provided, persist filled fields to Grant record
+    if (grantId && Object.keys(filled).length > 0) {
+      await db.from("Grant").update({
+        ...filled,
+        aiResearched: true,
+        updatedAt: new Date().toISOString(),
+      }).eq("id", grantId);
+    }
+
     return NextResponse.json({ success: true, filled });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });
+    return handleApiError(err, "Grant Research");
   }
 }
