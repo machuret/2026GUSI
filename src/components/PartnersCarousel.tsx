@@ -60,18 +60,18 @@ export function PartnersCarousel() {
         </div>
       </div>
 
-      <style jsx>{`
-        @keyframes scroll {
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes partner-scroll {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
         }
         .animate-scroll {
-          animation: scroll ${partners.length * 3}s linear infinite;
+          animation: partner-scroll ${partners.length * 3}s linear infinite;
         }
         .animate-scroll:hover {
           animation-play-state: paused;
         }
-      `}</style>
+      ` }} />
     </section>
   );
 }

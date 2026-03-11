@@ -21,7 +21,8 @@ export async function GET(req: NextRequest) {
     const showAll = req.nextUrl.searchParams.get("all") === "true";
 
     if (showAll) {
-      const { response: authError } = await requireAuth();
+      // Admin view — requires admin role
+      const { response: authError } = await requireAdminAuth();
       if (authError) return authError;
 
       const { data, error } = await db
