@@ -74,13 +74,71 @@ export async function getCompanyContext(companyId?: string): Promise<CompanyCont
 // ── Vault context ─────────────────────────────────────────────────────────────
 
 const VAULT_BUDGET_CHARS = 12_000; // ~3k tokens — keeps context window safe
+const EMBEDDING_MODEL = "text-embedding-3-small";
+
+async function embedText(text: string): Promise<number[] | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const res = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: EMBEDDING_MODEL, input: text }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.data[0].embedding;
+  } catch { return null; }
+}
 
 /**
  * Loads vault documents for a companyId and returns a budget-capped prompt block.
+ * When `taskHint` is provided, uses semantic search (pgvector) to find the most
+ * relevant chunks instead of just grabbing the 10 most recent docs.
  */
-export async function getVaultContext(companyId?: string): Promise<VaultContext> {
+export async function getVaultContext(companyId?: string, taskHint?: string): Promise<VaultContext> {
   const id = companyId ?? DEMO_COMPANY_ID;
 
+  // Try semantic retrieval if a task hint is given
+  if (taskHint) {
+    const embedding = await embedText(taskHint);
+    if (embedding) {
+      const { data: semanticChunks } = await db.rpc("match_document_chunks", {
+        query_embedding: embedding as unknown as string,
+        match_company_id: id,
+        match_threshold: 0.6,
+        match_count: 12,
+      } as Record<string, unknown>);
+
+      if (semanticChunks && semanticChunks.length > 0) {
+        // Fetch filenames for matched chunks
+        const docIds = Array.from(new Set(semanticChunks.map((c: { documentId: string }) => c.documentId))) as string[];
+        const { data: docNames } = await db.from("Document").select("id, filename").in("id", docIds);
+        const nameMap = new Map((docNames ?? []).map((d: { id: string; filename: string }) => [d.id, d.filename]));
+
+        let budget = VAULT_BUDGET_CHARS;
+        const parts: string[] = [];
+        const docSet: { filename: string; content: string }[] = [];
+
+        for (const chunk of semanticChunks) {
+          if (budget <= 0) break;
+          const fname = nameMap.get(chunk.documentId) ?? "Document";
+          const text = (chunk.content as string).slice(0, Math.min(2000, budget));
+          budget -= text.length;
+          parts.push(`--- ${fname} (relevance: ${((chunk.similarity as number) * 100).toFixed(0)}%) ---\n${text}`);
+          docSet.push({ filename: fname, content: chunk.content as string });
+        }
+
+        const block = parts.length > 0
+          ? `## KNOWLEDGE VAULT (semantically matched)\nThe following excerpts are the most relevant to the current task:\n\n${parts.join("\n\n")}`
+          : "";
+
+        return { docs: docSet, block };
+      }
+    }
+  }
+
+  // Fallback: recent documents (original behaviour)
   const { data: docs } = await db
     .from("Document")
     .select("filename, content")

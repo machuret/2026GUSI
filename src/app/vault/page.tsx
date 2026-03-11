@@ -9,6 +9,7 @@ import { PasteTab } from "./components/PasteTab";
 import { FileTab } from "./components/FileTab";
 import { CsvTab } from "./components/CsvTab";
 import { UrlTab } from "./components/UrlTab";
+import { AskVault } from "./components/AskVault";
 import { VAULT_CATEGORIES, getItemCategory, type VaultItem } from "./components/vaultTypes";
 
 type Tab = "paste" | "file" | "csv" | "url";
@@ -150,9 +151,9 @@ export default function VaultPage() {
       </div>
 
       <div className="flex gap-6 items-start">
-        {/* LEFT: Input panel */}
-        <div className="w-[420px] shrink-0">
-          <div className="sticky top-4 rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+        {/* LEFT: Input panel + Ask Vault */}
+        <div className="w-[420px] shrink-0 space-y-4">
+          <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
             <div className="flex border-b border-gray-200 overflow-x-auto">
               {TABS.map((t) => (
                 <button
@@ -174,6 +175,11 @@ export default function VaultPage() {
               {activeTab === "csv"   && <CsvTab   onSaved={handleSaved} onError={setActionError} />}
               {activeTab === "url"   && <UrlTab   onSaved={handleSaved} onError={setActionError} checkDuplicate={checkDuplicate} />}
             </div>
+          </div>
+
+          {/* Ask Vault panel */}
+          <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+            <AskVault />
           </div>
         </div>
 
