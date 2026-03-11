@@ -77,7 +77,6 @@ export default function AmbassadorsPage() {
                       width={144}
                       height={144}
                       className="h-full w-full object-cover"
-                      unoptimized
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center bg-brand-50">

@@ -10,21 +10,13 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.id);
-
-    // Try by slug first; if it looks like a UUID, also try by id
-    let query = db
+    // Try by slug first, then by id
+    const { data, error } = await db
       .from("Ambassador")
       .select("*")
-      .eq("companyId", DEMO_COMPANY_ID);
-
-    if (isUuid) {
-      query = query.or(`slug.eq.${params.id},id.eq.${params.id}`);
-    } else {
-      query = query.eq("slug", params.id);
-    }
-
-    const { data, error } = await query.maybeSingle();
+      .eq("companyId", DEMO_COMPANY_ID)
+      .or(`slug.eq.${params.id},id.eq.${params.id}`)
+      .maybeSingle();
 
     if (error) throw error;
     if (!data) {

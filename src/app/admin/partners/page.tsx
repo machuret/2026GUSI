@@ -151,7 +151,7 @@ function PartnerRow({ partner: p, onUpdate, onDelete }: {
   const handleDelete = async () => {
     if (!confirm(`Delete "${p.name}"? This cannot be undone.`)) return;
     setDeleting(true);
-    try { await onDelete(p.id); } finally { setDeleting(false); }
+    try { onDelete(p.id); } finally { setDeleting(false); }
   };
 
   const handleToggleActive = async () => {

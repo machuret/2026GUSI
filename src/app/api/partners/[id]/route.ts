@@ -10,20 +10,12 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.id);
-
-    let query = db
+    const { data, error } = await db
       .from("Partner")
       .select("*")
-      .eq("companyId", DEMO_COMPANY_ID);
-
-    if (isUuid) {
-      query = query.or(`slug.eq.${params.id},id.eq.${params.id}`);
-    } else {
-      query = query.eq("slug", params.id);
-    }
-
-    const { data, error } = await query.maybeSingle();
+      .eq("companyId", DEMO_COMPANY_ID)
+      .or(`slug.eq.${params.id},id.eq.${params.id}`)
+      .maybeSingle();
 
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "Partner not found" }, { status: 404 });

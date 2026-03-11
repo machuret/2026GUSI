@@ -204,7 +204,7 @@ function AmbassadorRow({
     if (!confirm(`Delete "${a.name}"? This cannot be undone.`)) return;
     setDeleting(true);
     try {
-      await onDelete(a.id);
+      onDelete(a.id);
     } finally {
       setDeleting(false);
     }
