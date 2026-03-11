@@ -17,7 +17,10 @@ BEGIN
 
   PERFORM net.http_post(
     url := 'https://lciaprvesogbwolaowsj.supabase.co/functions/v1/auto-enrich-hospital',
-    headers := '{"Content-Type": "application/json"}'::jsonb,
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+    ),
     body := jsonb_build_object(
       'type', 'INSERT',
       'table', 'HospitalLead',
@@ -50,7 +53,10 @@ BEGIN
   THEN
     PERFORM net.http_post(
       url := 'https://lciaprvesogbwolaowsj.supabase.co/functions/v1/auto-find-director',
-      headers := '{"Content-Type": "application/json"}'::jsonb,
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+      ),
       body := jsonb_build_object(
         'type', 'UPDATE',
         'table', 'HospitalLead',
@@ -81,7 +87,10 @@ BEGIN
   IF NEW.source IN ('residency_director', 'hospital', 'manual') THEN
     PERFORM net.http_post(
       url := 'https://lciaprvesogbwolaowsj.supabase.co/functions/v1/auto-enrich-lead',
-      headers := '{"Content-Type": "application/json"}'::jsonb,
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+      ),
       body := jsonb_build_object(
         'type', 'INSERT',
         'table', 'Lead',
@@ -117,7 +126,10 @@ BEGIN
     IF NEW.status NOT IN ('qualified', 'contacted', 'converted', 'archived') THEN
       PERFORM net.http_post(
         url := 'https://lciaprvesogbwolaowsj.supabase.co/functions/v1/auto-qualify-lead',
-        headers := '{"Content-Type": "application/json"}'::jsonb,
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+        ),
         body := jsonb_build_object(
           'type', 'UPDATE',
           'table', 'Lead',
@@ -150,7 +162,10 @@ BEGIN
   THEN
     PERFORM net.http_post(
       url := 'https://lciaprvesogbwolaowsj.supabase.co/functions/v1/auto-enrich-hospital',
-      headers := '{"Content-Type": "application/json"}'::jsonb,
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+      ),
       body := jsonb_build_object(
         'type', 'INSERT',
         'table', 'HospitalLead',
@@ -182,7 +197,10 @@ SELECT cron.schedule(
   -- Re-enrich leads missing email, created > 7 days ago, not updated recently
   SELECT net.http_post(
     url := 'https://lciaprvesogbwolaowsj.supabase.co/functions/v1/auto-enrich-lead',
-    headers := '{"Content-Type": "application/json"}'::jsonb,
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+    ),
     body := jsonb_build_object(
       'type', 'INSERT',
       'table', 'Lead',
@@ -220,7 +238,10 @@ SELECT cron.schedule(
   $$
   SELECT net.http_post(
     url := 'https://lciaprvesogbwolaowsj.supabase.co/functions/v1/auto-enrich-hospital',
-    headers := '{"Content-Type": "application/json"}'::jsonb,
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+    ),
     body := jsonb_build_object(
       'type', 'INSERT',
       'table', 'HospitalLead',

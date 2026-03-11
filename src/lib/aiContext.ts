@@ -99,42 +99,46 @@ async function embedText(text: string): Promise<number[] | null> {
 export async function getVaultContext(companyId?: string, taskHint?: string): Promise<VaultContext> {
   const id = companyId ?? DEMO_COMPANY_ID;
 
-  // Try semantic retrieval if a task hint is given
+  // Try semantic retrieval if a task hint is given — gracefully falls back on any error
   if (taskHint) {
-    const embedding = await embedText(taskHint);
-    if (embedding) {
-      const { data: semanticChunks } = await db.rpc("match_document_chunks", {
-        query_embedding: embedding as unknown as string,
-        match_company_id: id,
-        match_threshold: 0.6,
-        match_count: 12,
-      } as Record<string, unknown>);
+    try {
+      const embedding = await embedText(taskHint);
+      if (embedding) {
+        const { data: semanticChunks, error: rpcErr } = await db.rpc("match_document_chunks", {
+          query_embedding: embedding as unknown as string,
+          match_company_id: id,
+          match_threshold: 0.6,
+          match_count: 12,
+        } as Record<string, unknown>);
 
-      if (semanticChunks && semanticChunks.length > 0) {
-        // Fetch filenames for matched chunks
-        const docIds = Array.from(new Set(semanticChunks.map((c: { documentId: string }) => c.documentId))) as string[];
-        const { data: docNames } = await db.from("Document").select("id, filename").in("id", docIds);
-        const nameMap = new Map((docNames ?? []).map((d: { id: string; filename: string }) => [d.id, d.filename]));
+        if (!rpcErr && semanticChunks && semanticChunks.length > 0) {
+          // Fetch filenames for matched chunks
+          const docIds = Array.from(new Set(semanticChunks.map((c: { documentId: string }) => c.documentId))) as string[];
+          const { data: docNames } = await db.from("Document").select("id, filename").in("id", docIds);
+          const nameMap = new Map((docNames ?? []).map((d: { id: string; filename: string }) => [d.id, d.filename]));
 
-        let budget = VAULT_BUDGET_CHARS;
-        const parts: string[] = [];
-        const docSet: { filename: string; content: string }[] = [];
+          let budget = VAULT_BUDGET_CHARS;
+          const parts: string[] = [];
+          const docSet: { filename: string; content: string }[] = [];
 
-        for (const chunk of semanticChunks) {
-          if (budget <= 0) break;
-          const fname = nameMap.get(chunk.documentId) ?? "Document";
-          const text = (chunk.content as string).slice(0, Math.min(2000, budget));
-          budget -= text.length;
-          parts.push(`--- ${fname} (relevance: ${((chunk.similarity as number) * 100).toFixed(0)}%) ---\n${text}`);
-          docSet.push({ filename: fname, content: chunk.content as string });
+          for (const chunk of semanticChunks) {
+            if (budget <= 0) break;
+            const fname = nameMap.get(chunk.documentId) ?? "Document";
+            const text = (chunk.content as string).slice(0, Math.min(2000, budget));
+            budget -= text.length;
+            parts.push(`--- ${fname} (relevance: ${((chunk.similarity as number) * 100).toFixed(0)}%) ---\n${text}`);
+            docSet.push({ filename: fname, content: chunk.content as string });
+          }
+
+          const block = parts.length > 0
+            ? `## KNOWLEDGE VAULT (semantically matched)\nThe following excerpts are the most relevant to the current task:\n\n${parts.join("\n\n")}`
+            : "";
+
+          return { docs: docSet, block };
         }
-
-        const block = parts.length > 0
-          ? `## KNOWLEDGE VAULT (semantically matched)\nThe following excerpts are the most relevant to the current task:\n\n${parts.join("\n\n")}`
-          : "";
-
-        return { docs: docSet, block };
       }
+    } catch {
+      // Semantic search unavailable (migration not run, etc.) — fall through to recent docs
     }
   }
 

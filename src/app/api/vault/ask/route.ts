@@ -44,8 +44,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Question is required (min 3 chars)" }, { status: 400 });
     }
 
-    // 1. Embed the question
-    const queryEmbedding = await embedQuery(question.trim());
+    // 1. Embed the question (truncate to ~6000 chars to stay under embedding token limit)
+    const trimmedQuestion = question.trim().slice(0, 6000);
+    const queryEmbedding = await embedQuery(trimmedQuestion);
 
     // 2. Semantic search via pgvector
     const { data: chunks, error: searchErr } = await db.rpc("match_document_chunks", {
@@ -103,13 +104,13 @@ Rules:
     const result = await callOpenAIWithUsage({
       systemPrompt,
       userPrompt,
-      model: MODEL_CONFIG.grantsAnalyse,
+      model: MODEL_CONFIG.vaultAsk,
       maxTokens: 1500,
       temperature: 0.1,
     });
 
     logAiUsage({
-      model: MODEL_CONFIG.grantsAnalyse,
+      model: MODEL_CONFIG.vaultAsk,
       feature: "vault_ask",
       promptTokens: result.promptTokens,
       completionTokens: result.completionTokens,

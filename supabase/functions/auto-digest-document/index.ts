@@ -154,6 +154,7 @@ async function supabaseFetch(path: string, opts: RequestInit = {}) {
 // ── Main handler ────────────────────────────────────────────────────────────
 
 serve(async (req: Request) => {
+  let payload: WebhookPayload | null = null;
   try {
     if (req.method !== "POST") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -170,7 +171,21 @@ serve(async (req: Request) => {
       });
     }
 
-    const payload: WebhookPayload = await req.json();
+    try {
+      payload = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (!payload) {
+      return new Response(JSON.stringify({ error: "No payload" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
 
     if (payload.type !== "INSERT") {
       return new Response(JSON.stringify({ skipped: true, reason: "Not INSERT" }), {
@@ -303,14 +318,11 @@ serve(async (req: Request) => {
   } catch (err) {
     console.error("auto-digest-document error:", err);
 
-    // Try to mark as failed
+    // Try to mark as failed (payload is from outer scope)
     try {
-      const payload = await (async () => {
-        try { return JSON.parse(await new Response(req.body).text()); }
-        catch { return null; }
-      })();
-      if (payload?.record?.id) {
-        await supabaseFetch(`Document?id=eq.${payload.record.id}`, {
+      const failId = payload?.record?.id;
+      if (failId) {
+        await supabaseFetch(`Document?id=eq.${failId}`, {
           method: "PATCH",
           headers: { Prefer: "return=minimal" },
           body: JSON.stringify({ embeddingStatus: "failed" }),

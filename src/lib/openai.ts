@@ -10,6 +10,7 @@ export const MODEL_CONFIG = {
   voiceGenerate:   "gpt-4o",
   styleAnalyse:    "gpt-4o-mini",
   vaultCrawl:      "gpt-4o-mini",
+  vaultAsk:        "gpt-4o-mini",
   grantsAnalyse:   "gpt-4o",
   grantsWrite:     "gpt-4o",
   companyResearch: "gpt-4o-mini",

@@ -78,7 +78,10 @@ AS $$
 BEGIN
   PERFORM net.http_post(
     url := 'https://lciaprvesogbwolaowsj.supabase.co/functions/v1/auto-digest-document',
-    headers := '{"Content-Type": "application/json"}'::jsonb,
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+    ),
     body := jsonb_build_object(
       'type', 'INSERT',
       'table', 'Document',

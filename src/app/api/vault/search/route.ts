@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Query is required" }, { status: 400 });
     }
 
-    const queryEmbedding = await embedQuery(query.trim());
+    const queryEmbedding = await embedQuery(query.trim().slice(0, 6000));
 
     const { data: chunks, error: searchErr } = await db.rpc("match_document_chunks", {
       query_embedding: queryEmbedding as unknown as string,
