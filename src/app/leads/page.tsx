@@ -53,18 +53,22 @@ export default function LeadsPage() {
   // ── Single-lead enrich ───────────────────────────────────────────────────
   const handleEnrich = useCallback(async (id: string) => {
     setBulkMsg(null);
-    const res = await authFetch("/api/leads/enrich", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ leadIds: [id] }),
-    });
-    const data = await res.json();
-    if (res.ok && data.updatedCount > 0) {
-      await fetchLeads();
-      setBulkMsg(`✓ Lead re-enriched`);
-    } else {
-      const err = data.enriched?.[0]?.error ?? data.error ?? "Enrichment failed";
-      setBulkMsg(`⚠ ${err}`);
+    try {
+      const res = await authFetch("/api/leads/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds: [id] }),
+      });
+      const data = await res.json();
+      if (res.ok && data.updatedCount > 0) {
+        await fetchLeads();
+        setBulkMsg(`✓ Lead re-enriched`);
+      } else {
+        const err = data.enriched?.[0]?.error ?? data.error ?? "Enrichment failed";
+        setBulkMsg(`⚠ ${err}`);
+      }
+    } catch (err) {
+      setBulkMsg(`⚠ ${err instanceof Error ? err.message : "Network error — check your connection"}`);
     }
   }, [fetchLeads]);
 

@@ -248,11 +248,13 @@ export async function POST(req: NextRequest) {
     const enriched: { id: string; updated: boolean; error?: string }[] = [];
 
     // Separate leads into AI-enrichable and Apify-enrichable
+    // Leads without a profile URL fall back to AI enrichment regardless of source
     const aiLeads: typeof leads = [];
     const apifyBySource: Record<string, typeof leads> = {};
     for (const lead of leads) {
       const src = lead.source as string;
-      if (AI_ENRICH_SOURCES.has(src)) {
+      const hasProfileUrl = !!(lead.profileUrl || lead.linkedinUrl);
+      if (AI_ENRICH_SOURCES.has(src) || !hasProfileUrl || !SOURCE_ACTORS[src]) {
         aiLeads.push(lead);
       } else {
         if (!apifyBySource[src]) apifyBySource[src] = [];
