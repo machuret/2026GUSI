@@ -33,8 +33,17 @@ async function crawlGrantUrl(url: string): Promise<string> {
 
 export async function POST(req: NextRequest) {
   try {
-    const { user: authUser, response: authError } = await requireAuth();
-    if (authError) return authError;
+    // Allow service-role key auth for internal/webhook calls (Supabase Edge Function)
+    const authHeader = req.headers.get("authorization") ?? "";
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const isServiceCall = serviceKey && authHeader === `Bearer ${serviceKey}`;
+
+    let authUser: { id: string } | null = null;
+    if (!isServiceCall) {
+      const { user, response: authError } = await requireAuth();
+      if (authError) return authError;
+      authUser = user;
+    }
 
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
