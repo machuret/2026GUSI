@@ -212,8 +212,17 @@ Search thoroughly. Find everything you can about this person in academic medicin
 // Re-fetches each lead's profile URL via its source actor (Apify) or deep AI enrichment (OpenAI).
 export async function POST(req: NextRequest) {
   try {
-    const { user: authUser, response: authError } = await requireAuth();
-    if (authError) return authError;
+    // Allow service-role key auth for internal/webhook calls
+    const authHeader = req.headers.get("authorization") ?? "";
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const isServiceCall = serviceKey && authHeader === `Bearer ${serviceKey}`;
+
+    let authUser: { id: string } | null = null;
+    if (!isServiceCall) {
+      const { user, response: authError } = await requireAuth();
+      if (authError) return authError;
+      authUser = user;
+    }
 
     const body = await req.json();
     const leadIds: string[] = Array.isArray(body.leadIds) ? body.leadIds : [];

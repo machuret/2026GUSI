@@ -38,6 +38,7 @@ export function ScraperModal({ onClose, onImported }: Props) {
   const [backgroundRunId, setBackgroundRunId] = useState<string | null>(null);
   const [backgroundDatasetId, setBackgroundDatasetId] = useState<string | null>(null);
   const [backgroundSourceId, setBackgroundSourceId] = useState<string | null>(null);
+  const [bgSent, setBgSent] = useState(false);
 
   const setField = (key: string, value: unknown) => setFields((p) => ({ ...p, [key]: value }));
 
@@ -81,7 +82,7 @@ export function ScraperModal({ onClose, onImported }: Props) {
   };
 
   const handleRun = async () => {
-    setRunning(true); setError(null); setResults([]); setImported(false);
+    setRunning(true); setError(null); setResults([]); setImported(false); setBgSent(false);
     setRunPhase("starting"); setElapsed(0); setPartialCount(0);
     const timer = setInterval(() => setElapsed((e) => e + 1), 1000);
     try {
@@ -103,6 +104,25 @@ export function ScraperModal({ onClose, onImported }: Props) {
       setError(err instanceof Error ? err.message : "Network error — could not reach server");
     } finally {
       clearInterval(timer);
+      setRunning(false);
+    }
+  };
+
+  // Background mode: start scrape and immediately return — webhook imports leads automatically
+  const handleRunBackground = async () => {
+    setRunning(true); setError(null); setResults([]); setImported(false); setBgSent(false);
+    try {
+      const startRes = await authFetch("/api/leads/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceId: selectedSource.id, inputFields: fields, backgroundMode: true }),
+      });
+      const startData = await startRes.json();
+      if (startData.error) { setError(startData.error); return; }
+      setBgSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error — could not reach server");
+    } finally {
       setRunning(false);
     }
   };
@@ -247,12 +267,31 @@ export function ScraperModal({ onClose, onImported }: Props) {
             </div>
           )}
 
-          {runPhase !== "done" && (
-            <button onClick={handleRun} disabled={running}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
-              {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-              {running ? "Scraping…" : "Run Scraper"}
-            </button>
+          {bgSent && (
+            <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 space-y-1">
+              <p className="text-sm font-medium text-green-800 flex items-center gap-2">
+                <Zap className="h-4 w-4" /> Scraping in background
+              </p>
+              <p className="text-xs text-green-600">
+                Leads will be imported and enriched automatically. You can close this modal — check the Leads page in a few minutes.
+              </p>
+            </div>
+          )}
+
+          {runPhase !== "done" && !bgSent && (
+            <div className="flex gap-2">
+              <button onClick={handleRun} disabled={running}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+                {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                {running ? "Scraping…" : "Run Scraper"}
+              </button>
+              <button onClick={handleRunBackground} disabled={running}
+                className="flex items-center gap-2 rounded-lg border border-brand-300 bg-brand-50 px-4 py-2.5 text-sm font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-50"
+                title="Start scrape and close — leads import automatically via webhook">
+                <Globe className="h-4 w-4" />
+                Background
+              </button>
+            </div>
           )}
 
           {error && (

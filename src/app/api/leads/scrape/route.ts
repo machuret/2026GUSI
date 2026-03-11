@@ -5,6 +5,7 @@ import { SCRAPE_SOURCES } from "@/lib/leadSources";
 import { normalise } from "@/lib/leadNormalisers";
 import { requireAuth } from "@/lib/apiHelpers";
 import { getEnv } from "@/lib/env";
+import { DEMO_COMPANY_ID } from "@/lib/constants";
 
 const APIFY_BASE = "https://api.apify.com/v2";
 
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
     const { APIFY_API_TOKEN } = getEnv();
     if (!APIFY_API_TOKEN) return NextResponse.json({ error: "Apify token not configured" }, { status: 500 });
 
-    const { sourceId, inputFields } = await req.json();
+    const { sourceId, inputFields, backgroundMode } = await req.json();
 
     const source = SCRAPE_SOURCES.find((s) => s.id === sourceId);
     if (!source) {
@@ -26,12 +27,32 @@ export async function POST(req: NextRequest) {
 
     const actorInput = source.buildInput(inputFields ?? {});
 
+    // Build Apify webhook config for background mode
+    const SUPABASE_PROJECT_REF = "lciaprvesogbwolaowsj";
+    const webhookUrl = `https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/apify-scrape-webhook`;
+    const webhooks = backgroundMode
+      ? [{
+          eventTypes: ["ACTOR.RUN.SUCCEEDED"],
+          requestUrl: webhookUrl,
+          payloadTemplate: JSON.stringify({
+            resource: { id: "{{resource.id}}", actId: "{{resource.actId}}", defaultDatasetId: "{{resource.defaultDatasetId}}", status: "{{resource.status}}" },
+            eventType: "{{eventType}}",
+            sourceId,
+            companyId: DEMO_COMPANY_ID,
+            apifyToken: APIFY_API_TOKEN,
+          }),
+        }]
+      : undefined;
+
+    const runBody: Record<string, unknown> = { ...actorInput };
+    if (webhooks) runBody.webhooks = webhooks;
+
     const runRes = await fetch(
       `${APIFY_BASE}/acts/${encodeURIComponent(source.actorId)}/runs?token=${APIFY_API_TOKEN}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(actorInput),
+        body: JSON.stringify(runBody),
       }
     );
 
@@ -49,7 +70,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Return immediately — client polls GET /api/leads/scrape?runId=xxx
-    return NextResponse.json({ started: true, runId, datasetId, sourceId });
+    return NextResponse.json({ started: true, runId, datasetId, sourceId, backgroundMode: !!backgroundMode });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed" },

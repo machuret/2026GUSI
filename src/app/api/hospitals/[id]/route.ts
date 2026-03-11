@@ -9,8 +9,15 @@ import { DEMO_COMPANY_ID } from "@/lib/constants";
 // PATCH /api/hospitals/[id] — update hospital fields
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { response: authError } = await requireAuth();
-    if (authError) return authError;
+    // Allow service-role key auth for internal/webhook calls
+    const authHeader = req.headers.get("authorization") ?? "";
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const isServiceCall = serviceKey && authHeader === `Bearer ${serviceKey}`;
+
+    if (!isServiceCall) {
+      const { response: authError } = await requireAuth();
+      if (authError) return authError;
+    }
 
     const body = await req.json();
 
@@ -25,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
       if (!hospital) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-      const { user: authUser } = await requireAuth();
+      const authUser = isServiceCall ? null : (await requireAuth()).user;
 
       const systemPrompt = `You are a US healthcare data researcher. Given a hospital name, state, and any existing data, provide enriched information.
 
@@ -101,7 +108,7 @@ Be accurate — do not fabricate information.`;
 
       if (!hospital) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-      const { user: authUser } = await requireAuth();
+      const authUser = isServiceCall ? null : (await requireAuth()).user;
 
       // Optional residency specialty category
       const category: string = body.residencyCategory ?? "";
