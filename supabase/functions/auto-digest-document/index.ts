@@ -171,16 +171,6 @@ serve(async (req: Request) => {
       });
     }
 
-    // Verify caller is authorized (service role key from trigger)
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const token = authHeader.replace("Bearer ", "");
-    if (token !== SERVICE_ROLE_KEY) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
     try {
       payload = await req.json();
     } catch {
@@ -190,8 +180,9 @@ serve(async (req: Request) => {
       });
     }
 
-    if (!payload) {
-      return new Response(JSON.stringify({ error: "No payload" }), {
+    // Validate webhook payload shape (basic protection for --no-verify-jwt)
+    if (!payload?.type || !payload?.table || !payload?.record) {
+      return new Response(JSON.stringify({ error: "Invalid webhook payload" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });

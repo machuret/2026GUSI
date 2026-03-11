@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   ChevronDown, ChevronUp, Linkedin, Globe, Save, Trash2, Loader2,
   Mail, Phone, Building2, MapPin, Tag, Code2, User, ExternalLink,
-  RefreshCw, Clock, Flag,
+  RefreshCw, Clock, Flag, CheckCircle2, XCircle,
 } from "lucide-react";
 import { type Lead, LEAD_STATUSES, STATUS_STYLES, SOURCE_STYLES } from "@/hooks/useLeads";
 
@@ -128,6 +128,15 @@ export function LeadRow({ lead, selected, onSelect, onUpdate, onDelete, onEnrich
           <div className="flex items-center gap-1.5">
             {lead.linkedinUrl && <a href={lead.linkedinUrl} target="_blank" rel="noopener noreferrer" title="LinkedIn" className="text-blue-400 hover:text-blue-600"><Linkedin className="h-4 w-4" /></a>}
             {lead.profileUrl && !lead.linkedinUrl && <a href={lead.profileUrl} target="_blank" rel="noopener noreferrer" title="Profile" className="text-brand-400 hover:text-brand-600"><Globe className="h-4 w-4" /></a>}
+            {lead.enrichmentStatus === "processing" && !enriching && (
+              <span title="Enriching..."><Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" /></span>
+            )}
+            {lead.enrichmentStatus === "done" && (
+              <span title="Enriched"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /></span>
+            )}
+            {lead.enrichmentStatus === "failed" && (
+              <span title="Enrichment failed"><XCircle className="h-3.5 w-3.5 text-red-400" /></span>
+            )}
             <button onClick={handleEnrich} disabled={enriching} title="Re-enrich this lead" className="text-gray-400 hover:text-emerald-600 disabled:opacity-40">
               {enriching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             </button>

@@ -31,6 +31,13 @@ serve(async (req: Request) => {
 
     const payload: WebhookPayload = await req.json();
 
+    // Validate webhook payload shape (basic protection for --no-verify-jwt)
+    if (!payload?.type || !payload?.table || !payload?.record) {
+      return new Response(JSON.stringify({ error: "Invalid webhook payload" }), {
+        status: 400, headers: { "Content-Type": "application/json" },
+      });
+    }
+
     if (payload.type !== "UPDATE") {
       return new Response(JSON.stringify({ skipped: true, reason: "Not UPDATE" }), {
         status: 200, headers: { "Content-Type": "application/json" },

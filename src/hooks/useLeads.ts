@@ -31,6 +31,7 @@ export interface Lead {
   tags?: string[] | null;
   rating?: number | null;
   rawData?: Record<string, unknown> | null;
+  enrichmentStatus?: string | null;
   createdAt: string;
   updatedAt: string;
 }

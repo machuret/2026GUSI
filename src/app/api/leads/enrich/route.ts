@@ -151,14 +151,14 @@ Search thoroughly. Find everything you can about this person in academic medicin
     const aiResult = await callOpenAIWithUsage({
       systemPrompt,
       userPrompt,
-      model: MODEL_CONFIG.generate,
+      model: MODEL_CONFIG.vaultCrawl,
       maxTokens: 2000,
       temperature: 0.15,
       jsonMode: true,
     });
 
     logAiUsage({
-      model: MODEL_CONFIG.generate,
+      model: MODEL_CONFIG.vaultCrawl,
       feature: "leads.deepEnrich",
       promptTokens: aiResult.promptTokens,
       completionTokens: aiResult.completionTokens,
@@ -262,15 +262,19 @@ export async function POST(req: NextRequest) {
 
     // ── Deep AI enrichment for residency_director / hospital / manual leads ──
     for (const lead of aiLeads) {
+      await db.from("Lead").update({ enrichmentStatus: "processing" }).eq("id", lead.id);
       const { updates, error: aiErr } = await deepAIEnrich(lead, authUser?.id);
       if (aiErr) {
+        await db.from("Lead").update({ enrichmentStatus: "failed" }).eq("id", lead.id);
         enriched.push({ id: lead.id, updated: false, error: aiErr });
         continue;
       }
       if (Object.keys(updates).length <= 1) { // only updatedAt
+        await db.from("Lead").update({ enrichmentStatus: "done" }).eq("id", lead.id);
         enriched.push({ id: lead.id, updated: false, error: "No new data found" });
         continue;
       }
+      updates.enrichmentStatus = "done";
       const { error: updateErr } = await db.from("Lead").update(updates).eq("id", lead.id);
       enriched.push({ id: lead.id, updated: !updateErr, error: updateErr?.message });
     }
@@ -377,6 +381,7 @@ export async function POST(req: NextRequest) {
           if (v !== undefined && v !== null && v !== "") updates[f] = v;
         }
 
+        updates.enrichmentStatus = "done";
         const { error: updateErr } = await db.from("Lead").update(updates).eq("id", lead.id);
         enriched.push({ id: lead.id, updated: !updateErr, error: updateErr?.message });
       }
