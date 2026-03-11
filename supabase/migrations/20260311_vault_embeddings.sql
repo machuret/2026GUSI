@@ -9,7 +9,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- DocumentChunk: stores chunked + embedded document fragments
 CREATE TABLE IF NOT EXISTS "DocumentChunk" (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  "documentId" uuid NOT NULL REFERENCES "Document"(id) ON DELETE CASCADE,
+  "documentId" text NOT NULL REFERENCES "Document"(id) ON DELETE CASCADE,
   "companyId" text NOT NULL,
   content text NOT NULL,
   embedding vector(1536),  -- OpenAI text-embedding-3-small dimension
@@ -42,7 +42,7 @@ CREATE OR REPLACE FUNCTION match_document_chunks(
 )
 RETURNS TABLE (
   id uuid,
-  "documentId" uuid,
+  "documentId" text,
   content text,
   "chunkIndex" integer,
   metadata jsonb,
