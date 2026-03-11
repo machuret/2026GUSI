@@ -226,6 +226,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const leadIds: string[] = Array.isArray(body.leadIds) ? body.leadIds : [];
+    const forceAI: boolean = body.forceAI === true;
     if (leadIds.length === 0) {
       return NextResponse.json({ error: "No lead IDs provided" }, { status: 400 });
     }
@@ -245,16 +246,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No matching leads found" }, { status: 404 });
     }
 
-    const enriched: { id: string; updated: boolean; error?: string }[] = [];
+    const enriched: { id: string; updated: boolean; error?: string; fieldsUpdated?: number }[] = [];
 
     // Separate leads into AI-enrichable and Apify-enrichable
-    // Leads without a profile URL fall back to AI enrichment regardless of source
+    // forceAI=true (from UI clicks) skips Apify entirely for fast enrichment
     const aiLeads: typeof leads = [];
     const apifyBySource: Record<string, typeof leads> = {};
     for (const lead of leads) {
       const src = lead.source as string;
       const hasProfileUrl = !!(lead.profileUrl || lead.linkedinUrl);
-      if (AI_ENRICH_SOURCES.has(src) || !hasProfileUrl || !SOURCE_ACTORS[src]) {
+      if (forceAI || AI_ENRICH_SOURCES.has(src) || !hasProfileUrl || !SOURCE_ACTORS[src]) {
         aiLeads.push(lead);
       } else {
         if (!apifyBySource[src]) apifyBySource[src] = [];
@@ -277,8 +278,9 @@ export async function POST(req: NextRequest) {
         continue;
       }
       updates.enrichmentStatus = "done";
+      const fieldCount = Object.keys(updates).length - 2; // minus updatedAt + enrichmentStatus
       const { error: updateErr } = await db.from("Lead").update(updates).eq("id", lead.id);
-      enriched.push({ id: lead.id, updated: !updateErr, error: updateErr?.message });
+      enriched.push({ id: lead.id, updated: !updateErr, error: updateErr?.message, fieldsUpdated: fieldCount });
     }
 
     // ── Apify enrichment for linkedin/webmd/doctolib leads ──

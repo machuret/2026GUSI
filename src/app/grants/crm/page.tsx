@@ -20,11 +20,10 @@ const COLUMNS: { status: CrmStatus; label: string; color: string; bg: string; bo
   { status: "Pipeline",    label: "📋 Pipeline",     color: "text-purple-700", bg: "bg-purple-50", border: "border-purple-200" },
   { status: "Active",      label: "✍️ Active",       color: "text-brand-700",  bg: "bg-brand-50",  border: "border-brand-200" },
   { status: "Submitted",   label: "📤 Submitted",    color: "text-orange-700", bg: "bg-orange-50", border: "border-orange-200" },
-  { status: "Won",         label: "🏆 Won",          color: "text-green-700",  bg: "bg-green-50",  border: "border-green-200" },
   { status: "Lost",        label: "❌ Lost",         color: "text-gray-500",   bg: "bg-gray-50",   border: "border-gray-200" },
 ];
 
-const STATUS_OPTIONS: CrmStatus[] = ["Researching", "Pipeline", "Active", "Submitted", "Won", "Lost"];
+const STATUS_OPTIONS: CrmStatus[] = ["Researching", "Pipeline", "Active", "Submitted", "Lost"];
 
 function parseAmount(raw?: string | null): number | null {
   if (!raw) return null;
@@ -185,6 +184,10 @@ function GrantCrmCard({
           </select>
         </div>
 
+        {/* Research feedback (always visible) */}
+        {researchMsg && <p className="mt-2 rounded-lg bg-green-50 border border-green-200 px-3 py-1.5 text-xs text-green-700">{researchMsg}</p>}
+        {researchErr && <p className="mt-2 rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-xs text-red-700">{researchErr}</p>}
+
         {/* Action buttons */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {grant.url && (
@@ -196,7 +199,7 @@ function GrantCrmCard({
           <button onClick={handleResearch} disabled={researching} title="AI Research"
             className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:text-brand-600 hover:border-brand-300 disabled:opacity-40">
             {researching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-            Research
+            {researching ? "Researching…" : "Research"}
           </button>
           <Link href={`/grants/builder?grantId=${grant.id}`}
             className="flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100">
@@ -293,14 +296,14 @@ export default function GrantsCrmPage() {
   }, [grants, updateGrant]);
 
   const totalInCrm = crmGrants.length;
-  const wonCount = crmGrants.filter((g) => g.crmStatus === "Won").length;
+  const submittedCount = crmGrants.filter((g) => g.crmStatus === "Submitted").length;
   const activeCount = crmGrants.filter((g) => g.crmStatus === "Active" || g.crmStatus === "Submitted").length;
   const researchingCount = crmGrants.filter((g) => g.crmStatus === "Researching" || g.crmStatus === "Pipeline").length;
 
   // Total pipeline value (exclude Won/Lost from "pipeline" figure)
   const pipelineGrants = crmGrants.filter((g) => g.crmStatus !== "Won" && g.crmStatus !== "Lost");
   const pipelineValue = pipelineGrants.reduce((sum, g) => sum + (parseAmount(g.amount) ?? 0), 0);
-  const wonValue = crmGrants.filter((g) => g.crmStatus === "Won").reduce((sum, g) => sum + (parseAmount(g.amount) ?? 0), 0);
+  const lostCount = crmGrants.filter((g) => g.crmStatus === "Lost").length;
 
   // Deadline alerts: grants due within 7 days across all active stages
   const urgentGrants = crmGrants.filter((g) => {
@@ -362,9 +365,9 @@ export default function GrantsCrmPage() {
           <p className="text-xs text-purple-600">Pipeline Value</p>
           <p className="text-2xl font-bold text-purple-800">{pipelineValue > 0 ? formatCurrency(pipelineValue) : "—"}</p>
         </div>
-        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3">
-          <p className="text-xs text-green-600">Won {wonValue > 0 ? `· ${formatCurrency(wonValue)}` : ""}</p>
-          <p className="text-2xl font-bold text-green-800">{wonCount}</p>
+        <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+          <p className="text-xs text-orange-600">Submitted</p>
+          <p className="text-2xl font-bold text-orange-800">{submittedCount}</p>
         </div>
       </div>
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   Sparkles, Loader2, RefreshCw, CheckCircle, AlertCircle,
-  ChevronDown, ChevronUp, Lightbulb, Target, MessageSquarePlus, AlertTriangle,
+  ChevronDown, ChevronUp, Lightbulb, Target, MessageSquarePlus, AlertTriangle, Filter,
 } from "lucide-react";
 import {
   ALL_SECTIONS, SECTION_META, SectionName, Grant, WritingBrief, Tone, Length,
@@ -53,16 +53,90 @@ export default function LeftPanel({
   customInstructions, onCustomInstructions,
 }: Props) {
   const [ciOpen, setCiOpen] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [fCountry, setFCountry] = useState("");
+  const [fDifficulty, setFDifficulty] = useState("");
+  const [fMinFit, setFMinFit] = useState("");
+  const [fDecision, setFDecision] = useState("");
   const selectedGrant = grants.find((g) => g.id === selectedGrantId) ?? null;
+
+  // Derive unique countries from grants
+  const countries = Array.from(new Set(grants.map(g => g.geographicScope).filter(Boolean))) as string[];
+
+  // Filter grants
+  const filteredGrants = grants.filter(g => {
+    if (fCountry && g.geographicScope !== fCountry) return false;
+    if (fDifficulty && g.complexityLabel !== fDifficulty) return false;
+    if (fMinFit && (g.matchScore ?? g.fitScore ?? 0) < Number(fMinFit)) return false;
+    if (fDecision && g.decision !== fDecision) return false;
+    if (!g.deadlineDate) return true;
+    return new Date(g.deadlineDate).getTime() + 86_400_000 >= Date.now();
+  });
+  const hasActiveFilters = !!(fCountry || fDifficulty || fMinFit || fDecision);
 
   return (
     <div className="w-80 shrink-0 space-y-4">
 
       {/* Grant selector */}
       <div className="rounded-xl border border-gray-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-gray-800 flex items-center gap-2">
-          <Target className="h-4 w-4 text-brand-600" /> Select Grant
-        </h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+            <Target className="h-4 w-4 text-brand-600" /> Select Grant
+          </h2>
+          <button
+            onClick={() => setShowFilters(v => !v)}
+            className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+              hasActiveFilters ? "bg-brand-100 text-brand-700" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            <Filter className="h-3 w-3" />{hasActiveFilters ? "Filtered" : "Filter"}
+          </button>
+        </div>
+        {showFilters && (
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Country / Scope</label>
+              <select value={fCountry} onChange={e => setFCountry(e.target.value)} className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs">
+                <option value="">All</option>
+                {countries.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Difficulty</label>
+              <select value={fDifficulty} onChange={e => setFDifficulty(e.target.value)} className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs">
+                <option value="">All</option>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Very High">Very High</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Min Fit %</label>
+              <select value={fMinFit} onChange={e => setFMinFit(e.target.value)} className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs">
+                <option value="">Any</option>
+                <option value="50">50%+</option>
+                <option value="70">70%+</option>
+                <option value="80">80%+</option>
+                <option value="90">90%+</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Decision</label>
+              <select value={fDecision} onChange={e => setFDecision(e.target.value)} className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs">
+                <option value="">All</option>
+                <option value="Apply">Apply</option>
+                <option value="Maybe">Maybe</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+            {hasActiveFilters && (
+              <button onClick={() => { setFCountry(""); setFDifficulty(""); setFMinFit(""); setFDecision(""); }} className="col-span-2 text-[10px] text-brand-600 hover:underline">
+                Clear all filters
+              </button>
+            )}
+          </div>
+        )}
         {loadingGrants ? (
           <div className="flex items-center gap-2 text-sm text-gray-400">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
@@ -78,14 +152,8 @@ export default function LeftPanel({
             onChange={(e) => onSelectGrant(e.target.value)}
             className={inputCls}
           >
-            <option value="">Select a grant…</option>
-            {grants
-              .filter((g) => {
-                if (!g.deadlineDate) return true;
-                // Add 24h buffer so grants due today aren't filtered by timezone
-                return new Date(g.deadlineDate).getTime() + 86_400_000 >= Date.now();
-              })
-              .map((g) => (
+            <option value="">Select a grant… ({filteredGrants.length})</option>
+            {filteredGrants.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.crmStatus ? `[${g.crmStatus}] ` : ""}{g.name}
                 {g.amount ? ` — ${g.amount}` : ""}

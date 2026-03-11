@@ -53,16 +53,19 @@ export default function LeadsPage() {
   // ── Single-lead enrich ───────────────────────────────────────────────────
   const handleEnrich = useCallback(async (id: string) => {
     setBulkMsg(null);
+    setBulkMsg("⏳ Enriching lead with AI… this takes ~10 seconds");
     try {
       const res = await authFetch("/api/leads/enrich", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadIds: [id] }),
+        body: JSON.stringify({ leadIds: [id], forceAI: true }),
       });
       const data = await res.json();
       if (res.ok && data.updatedCount > 0) {
         await fetchLeads();
-        setBulkMsg(`✓ Lead re-enriched`);
+        const result = data.enriched?.[0];
+        const fields = result?.fieldsUpdated ?? "several";
+        setBulkMsg(`✓ Lead enriched — ${fields} fields updated`);
       } else {
         const err = data.enriched?.[0]?.error ?? data.error ?? "Enrichment failed";
         setBulkMsg(`⚠ ${err}`);
@@ -78,15 +81,16 @@ export default function LeadsPage() {
     setBulkEnriching(true);
     setBulkMsg(null);
     try {
+      setBulkMsg(`⏳ Enriching ${selectedIds.size} leads with AI… this may take a minute`);
       const res = await authFetch("/api/leads/enrich", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadIds: Array.from(selectedIds) }),
+        body: JSON.stringify({ leadIds: Array.from(selectedIds), forceAI: true }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Enrichment failed");
       await fetchLeads();
-      setBulkMsg(`✓ ${data.updatedCount} of ${data.total} leads re-enriched`);
+      setBulkMsg(`✓ ${data.updatedCount} of ${data.total} leads enriched`);
       setSelectedIds(new Set());
     } catch (err) {
       setBulkMsg(`⚠ ${err instanceof Error ? err.message : "Enrichment failed"}`);
@@ -227,7 +231,9 @@ export default function LeadsPage() {
       {/* Bulk action feedback */}
       {bulkMsg && (
         <div className={`mb-3 flex items-center justify-between rounded-xl border px-4 py-2.5 text-sm ${
-          bulkMsg.startsWith("✓") ? "border-green-200 bg-green-50 text-green-800" : "border-amber-200 bg-amber-50 text-amber-800"
+          bulkMsg.startsWith("✓") ? "border-green-200 bg-green-50 text-green-800"
+            : bulkMsg.startsWith("⏳") ? "border-blue-200 bg-blue-50 text-blue-800"
+            : "border-amber-200 bg-amber-50 text-amber-800"
         }`}>
           {bulkMsg}
           <button onClick={() => setBulkMsg(null)}><X className="h-4 w-4" /></button>

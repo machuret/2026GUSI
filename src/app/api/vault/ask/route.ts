@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     const { user: authUser, response: authError } = await requireAuth();
     if (authError) return authError;
 
-    const { question, topK = 8, threshold = 0.65 } = await req.json();
+    const { question, topK = 8, threshold = 0.35 } = await req.json();
 
     if (!question || typeof question !== "string" || question.trim().length < 3) {
       return NextResponse.json({ error: "Question is required (min 3 chars)" }, { status: 400 });
@@ -48,7 +48,14 @@ export async function POST(req: NextRequest) {
     const trimmedQuestion = question.trim().slice(0, 6000);
     const queryEmbedding = await embedQuery(trimmedQuestion);
 
-    // 2. Semantic search via pgvector
+    // 2. Fetch company context for general questions
+    const { data: companyRow } = await db
+      .from("Company")
+      .select("name, dna, industry, website, description")
+      .eq("id", DEMO_COMPANY_ID)
+      .single();
+
+    // 3. Semantic search via pgvector
     const { data: chunks, error: searchErr } = await db.rpc("match_document_chunks", {
       query_embedding: queryEmbedding as unknown as string,
       match_company_id: DEMO_COMPANY_ID,
@@ -58,7 +65,18 @@ export async function POST(req: NextRequest) {
 
     if (searchErr) throw searchErr;
 
-    if (!chunks || chunks.length === 0) {
+    // Build company context snippet if available
+    const companyContext = companyRow
+      ? [`[Company Profile]`,
+         companyRow.name ? `Company Name: ${companyRow.name}` : "",
+         companyRow.industry ? `Industry: ${companyRow.industry}` : "",
+         companyRow.website ? `Website: ${companyRow.website}` : "",
+         companyRow.description ? `Description: ${companyRow.description}` : "",
+         companyRow.dna ? `Company DNA:\n${companyRow.dna}` : "",
+        ].filter(Boolean).join("\n")
+      : null;
+
+    if ((!chunks || chunks.length === 0) && !companyContext) {
       return NextResponse.json({
         answer: "I couldn't find any relevant information in the vault for that question. Try uploading more documents or rephrasing your question.",
         sources: [],
@@ -66,28 +84,39 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Fetch document filenames for citations
-    const docIds = Array.from(new Set(chunks.map((c: { documentId: string }) => c.documentId))) as string[];
-    const { data: docNames } = await db
-      .from("Document")
-      .select("id, filename")
-      .in("id", docIds);
+    // 5. Fetch document filenames for citations
+    const docIds = chunks && chunks.length > 0
+      ? Array.from(new Set(chunks.map((c: { documentId: string }) => c.documentId))) as string[]
+      : [];
+    let nameMap = new Map<string, string>();
+    if (docIds.length > 0) {
+      const { data: docNames } = await db
+        .from("Document")
+        .select("id, filename")
+        .in("id", docIds);
+      nameMap = new Map(
+        (docNames ?? []).map((d: { id: string; filename: string }) => [d.id, d.filename])
+      );
+    }
 
-    const nameMap = new Map(
-      (docNames ?? []).map((d: { id: string; filename: string }) => [d.id, d.filename])
-    );
+    // 4. Build context from matched chunks + company data
+    const contextParts: string[] = [];
 
-    // 4. Build context from matched chunks
-    const contextParts = chunks.map(
-      (c: { documentId: string; content: string; similarity: number; chunkIndex: number }, i: number) => {
+    if (companyContext) {
+      contextParts.push(companyContext);
+    }
+
+    if (chunks && chunks.length > 0) {
+      for (let i = 0; i < chunks.length; i++) {
+        const c = chunks[i] as { documentId: string; content: string; similarity: number; chunkIndex: number };
         const filename = nameMap.get(c.documentId) ?? "Unknown";
-        return `[Source ${i + 1}: "${filename}" (relevance: ${(c.similarity * 100).toFixed(0)}%)]\n${c.content}`;
+        contextParts.push(`[Source ${i + 1}: "${filename}" (relevance: ${(c.similarity * 100).toFixed(0)}%)]\n${c.content}`);
       }
-    );
+    }
 
     const context = contextParts.join("\n\n---\n\n");
 
-    // 5. GPT answer with sources
+    // 6. GPT answer with sources
     const systemPrompt = `You are a knowledgeable assistant with access to the company's document vault. Answer the user's question using ONLY the provided source documents. Be thorough, specific, and cite your sources.
 
 Rules:
@@ -118,7 +147,7 @@ Rules:
     });
 
     // Build source citations
-    const sources = chunks.map(
+    const sources = (chunks ?? []).map(
       (c: { documentId: string; similarity: number; chunkIndex: number }) => ({
         documentId: c.documentId,
         filename: nameMap.get(c.documentId) ?? "Unknown",
