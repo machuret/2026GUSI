@@ -6,6 +6,7 @@ import { SetupChecklist } from "@/components/dashboard/SetupChecklist";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import type { DashboardStats } from "@/components/dashboard/types";
+import { PartnersCarousel } from "@/components/PartnersCarousel";
 
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 
@@ -83,6 +84,8 @@ export default function DashboardPage() {
           <QuickActions stats={stats} />
         </div>
       </div>
+
+      <PartnersCarousel />
     </div>
   );
 }
