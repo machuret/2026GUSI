@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Send, Loader2, MessageSquare, FileText, Sparkles, X } from "lucide-react";
+import { Send, Loader2, MessageSquare, FileText, Sparkles, X, Trash2 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 
 interface Source {
@@ -80,10 +80,19 @@ export function AskVault() {
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-gray-200 px-4 py-3">
         <Sparkles className="h-5 w-5 text-brand-600" />
-        <div>
+        <div className="flex-1">
           <h3 className="text-sm font-bold text-gray-900">Ask the Vault</h3>
           <p className="text-xs text-gray-400">Ask any question about your documents</p>
         </div>
+        {messages.length > 0 && (
+          <button
+            onClick={() => { setMessages([]); setError(null); }}
+            className="rounded-lg p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+            title="Clear conversation"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Messages */}

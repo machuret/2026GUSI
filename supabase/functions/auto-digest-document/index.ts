@@ -171,6 +171,16 @@ serve(async (req: Request) => {
       });
     }
 
+    // Verify caller is authorized (service role key from trigger)
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace("Bearer ", "");
+    if (token !== SERVICE_ROLE_KEY) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     try {
       payload = await req.json();
     } catch {
