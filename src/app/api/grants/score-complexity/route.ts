@@ -2,8 +2,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { handleApiError } from "@/lib/apiHelpers";
-import { requireEdgeAuth } from "@/lib/edgeAuth";
+import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
@@ -16,8 +15,15 @@ const bodySchema = z.object({
 // POST /api/grants/score-complexity — batch score complexity for up to 20 grants
 export async function POST(req: NextRequest) {
   try {
-    const { error: authError } = await requireEdgeAuth(req);
-    if (authError) return authError;
+    // Allow service-role key auth for internal/webhook calls
+    const authHeader = req.headers.get("authorization") ?? "";
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const isServiceCall = serviceKey && authHeader === `Bearer ${serviceKey}`;
+
+    if (!isServiceCall) {
+      const { response: authError } = await requireAuth();
+      if (authError) return authError;
+    }
 
     const body = await req.json();
     const { grantIds } = bodySchema.parse(body);

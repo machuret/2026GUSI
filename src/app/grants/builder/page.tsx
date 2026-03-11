@@ -95,6 +95,15 @@ export default function GrantBuilderPage() {
     setBriefError(null);
     setBrief(null);
     try {
+      // Check if this grant already has a pre-generated brief
+      const grant = grants.find((g) => g.id === selectedGrantId);
+      if (grant?.aiBrief && typeof grant.aiBrief === "object") {
+        setBrief(grant.aiBrief as unknown as WritingBrief);
+        setBriefExpanded(true);
+        setBriefLoading(false);
+        return;
+      }
+
       const res  = await authFetch("/api/grants/write", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -109,7 +118,7 @@ export default function GrantBuilderPage() {
     } finally {
       setBriefLoading(false);
     }
-  }, [selectedGrantId]);
+  }, [selectedGrantId, grants]);
 
   // ── Generate all ───────────────────────────────────────────────────────────
   const generateAll = useCallback(async () => {

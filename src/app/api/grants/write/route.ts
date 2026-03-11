@@ -148,8 +148,17 @@ function buildProfileContext(profile: Record<string, unknown>): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const { user: authUser, response: authError } = await requireAuth();
-    if (authError) return authError;
+    // Allow service-role key auth for internal/webhook calls
+    const authHeader = req.headers.get("authorization") ?? "";
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const isServiceCall = serviceKey && authHeader === `Bearer ${serviceKey}`;
+
+    let authUser: { id: string } | null = null;
+    if (!isServiceCall) {
+      const { user, response: authError } = await requireAuth();
+      if (authError) return authError;
+      authUser = user;
+    }
 
     const body = await req.json();
     const parsed = bodySchema.safeParse(body);
@@ -276,6 +285,14 @@ Return ONLY valid JSON — no markdown, no explanation:
         brief = JSON.parse(result.content);
       } catch {
         return NextResponse.json({ error: "AI returned invalid brief JSON" }, { status: 500 });
+      }
+
+      // If service call, persist brief to Grant record
+      if (isServiceCall) {
+        await db.from("Grant").update({
+          aiBrief: brief,
+          updatedAt: new Date().toISOString(),
+        }).eq("id", grantId);
       }
 
       return NextResponse.json({ success: true, brief, grantName: grant.name });
