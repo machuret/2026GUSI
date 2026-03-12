@@ -37,6 +37,7 @@ import {
   ShieldCheck,
   Star,
   Hash,
+  PlayCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -84,6 +85,10 @@ const contentNav = [
 
 const newsletterNav = [
   { href: "/mailchimp", label: "Mailchimp",  icon: Mail },
+];
+
+const videosNav = [
+  { href: "/videos", label: "Videos", icon: PlayCircle },
 ];
 
 const grantsNav = [
@@ -232,6 +237,14 @@ export function Sidebar() {
             <div className="my-3 border-t border-gray-800" />
             {sectionLabel("Newsletter")}
             {newsletterNav.map(navLink)}
+          </>
+        )}
+
+        {roleLoaded && canSection("content") && (
+          <>
+            <div className="my-3 border-t border-gray-800" />
+            {sectionLabel("Videos")}
+            {videosNav.map(navLink)}
           </>
         )}
 

@@ -17,6 +17,7 @@ const ROUTE_LABELS: Record<string, { title: string; section?: string }> = {
   "/history":             { title: "History",           section: "Content" },
   "/calendar":            { title: "Calendar",          section: "Content" },
   "/mailchimp":           { title: "Mailchimp",         section: "Content" },
+  "/videos":              { title: "Videos",             section: "Videos" },
   "/grants":              { title: "Grants",            section: "Grants" },
   "/grants/crm":          { title: "Grants CRM",        section: "Grants" },
   "/grants/builder":      { title: "Grant Builder",     section: "Grants" },

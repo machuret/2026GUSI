@@ -1,7 +1,7 @@
 -- Grant Examples table: stores example grant applications for use as AI writing references
 CREATE TABLE IF NOT EXISTS "GrantExample" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  "companyId" UUID NOT NULL,
+  "companyId" TEXT NOT NULL,
   "title" TEXT NOT NULL,
   "grantName" TEXT NOT NULL DEFAULT '',
   "funder" TEXT NOT NULL DEFAULT '',
