@@ -47,17 +47,19 @@ export async function POST(req: NextRequest) {
     const synced = rows.filter((r) => !existingSet.has(r.vimeoId)).length;
     const updated = rows.filter((r) => existingSet.has(r.vimeoId)).length;
 
-    // Batch upsert — single DB call for the whole page
-    // ignoreDuplicates: false means it will update on conflict
-    // onConflict targets the unique constraint (companyId, vimeoId)
-    const { error } = await db
-      .from("Video")
-      .upsert(rows, {
-        onConflict: "companyId,vimeoId",
-        ignoreDuplicates: false,
-      });
-
-    if (error) throw error;
+    // Auto-save every 10 videos — upsert in small chunks so progress
+    // is committed incrementally and survives interruptions.
+    const CHUNK_SIZE = 10;
+    for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+      const chunk = rows.slice(i, i + CHUNK_SIZE);
+      const { error } = await db
+        .from("Video")
+        .upsert(chunk, {
+          onConflict: "companyId,vimeoId",
+          ignoreDuplicates: false,
+        });
+      if (error) throw error;
+    }
 
     return NextResponse.json({
       success: true,

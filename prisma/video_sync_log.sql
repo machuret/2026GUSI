@@ -16,5 +16,7 @@ CREATE INDEX IF NOT EXISTS "VideoSyncLog_companyId_idx" ON "VideoSyncLog" ("comp
 CREATE INDEX IF NOT EXISTS "VideoSyncLog_type_idx" ON "VideoSyncLog" ("type");
 
 ALTER TABLE "VideoSyncLog" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "video_sync_log_select" ON "VideoSyncLog";
+DROP POLICY IF EXISTS "video_sync_log_insert" ON "VideoSyncLog";
 CREATE POLICY "video_sync_log_select" ON "VideoSyncLog" FOR SELECT USING (true);
 CREATE POLICY "video_sync_log_insert" ON "VideoSyncLog" FOR INSERT WITH CHECK (true);
