@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Play, RefreshCw, Loader2, Plus, X, Save, Trash2,
-  FolderOpen, Tag, Clock, Search, ChevronDown, ChevronUp,
-  ExternalLink, Grid3X3, List, Palette, GripVertical,
+  Play, RefreshCw, Loader2, X, Save, Trash2,
+  FolderOpen, Tag, Clock, Search,
+  ExternalLink, Grid3X3, List, Palette,
   FileText, MessageSquareText,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
@@ -108,6 +108,7 @@ export default function VideosPage() {
     let page = 1;
     let totalSynced = 0;
     let totalUpdated = 0;
+    let totalVimeo = 0;
 
     try {
       while (true) {
@@ -117,13 +118,14 @@ export default function VideosPage() {
 
         totalSynced += data.synced;
         totalUpdated += data.updated;
+        totalVimeo = data.total;
         setSyncProgress({ page: data.page, totalPages: data.totalPages, synced: totalSynced, updated: totalUpdated, total: data.total });
 
         if (!data.hasMore) break;
         page++;
       }
 
-      setSyncMsg(`Done! ${totalSynced} new, ${totalUpdated} updated (${syncProgress?.total ?? 0} total from Vimeo)`);
+      setSyncMsg(`Done! ${totalSynced} new, ${totalUpdated} updated (${totalVimeo} total from Vimeo)`);
       setSyncProgress(null);
       setTimeout(() => setSyncMsg(null), 8000);
       await fetchData();
