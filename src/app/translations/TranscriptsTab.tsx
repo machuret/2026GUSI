@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Search, X, Loader2, ChevronDown, CheckSquare, Square,
-  Sparkles, Play, Clock, FileText, Check, Languages,
+  Play, Clock, FileText, Check, Languages, Ban,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
-import { LANGUAGES, type Translation } from "./types";
+import { LANGUAGES, CONTENT_CATEGORIES, type Translation } from "./types";
 
 interface TranscriptVideo {
   id: string;
@@ -63,9 +63,11 @@ export function TranscriptsTab({ buildCombinedRules, onSaved, onError, onNavigat
 
   // Bulk translate
   const [targetLanguage, setTargetLanguage] = useState("Spanish");
+  const [category, setCategory] = useState("Course Content");
   const [translating, setTranslating] = useState(false);
   const [translateProgress, setTranslateProgress] = useState<{ current: number; total: number; saved: number } | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const cancelRef = useRef(false);
 
   // Debounce search
   useEffect(() => {
@@ -129,11 +131,13 @@ export function TranscriptsTab({ buildCombinedRules, onSaved, onError, onNavigat
   // Bulk translate selected transcripts
   const handleBulkTranslate = async () => {
     if (selectedVideos.length === 0) return;
+    cancelRef.current = false;
     setTranslating(true);
     setTranslateProgress({ current: 0, total: selectedVideos.length, saved: 0 });
 
     let saved = 0;
     for (let i = 0; i < selectedVideos.length; i++) {
+      if (cancelRef.current) break;
       const video = selectedVideos[i];
       setTranslateProgress({ current: i + 1, total: selectedVideos.length, saved });
 
@@ -145,7 +149,7 @@ export function TranscriptsTab({ buildCombinedRules, onSaved, onError, onNavigat
           body: JSON.stringify({
             text: video.transcript,
             targetLanguage,
-            category: "Course Content",
+            category,
             rules: buildCombinedRules(targetLanguage),
           }),
         });
@@ -154,6 +158,8 @@ export function TranscriptsTab({ buildCombinedRules, onSaved, onError, onNavigat
           onError(`Failed to translate "${video.title}": ${translateData.error || "Unknown error"}`);
           continue;
         }
+
+        if (cancelRef.current) break;
 
         // Step 2: Save to Translation library
         const saveRes = await authFetch("/api/translations", {
@@ -164,7 +170,7 @@ export function TranscriptsTab({ buildCombinedRules, onSaved, onError, onNavigat
             originalText: video.transcript,
             translatedText: translateData.translated,
             language: targetLanguage,
-            category: "Course Content",
+            category,
             publishedAt: video.publishedAt || new Date().toISOString(),
           }),
         });
@@ -179,13 +185,16 @@ export function TranscriptsTab({ buildCombinedRules, onSaved, onError, onNavigat
       }
     }
 
-    setTranslateProgress({ current: selectedVideos.length, total: selectedVideos.length, saved });
+    const wasCancelled = cancelRef.current;
+    setTranslateProgress({ current: wasCancelled ? saved : selectedVideos.length, total: selectedVideos.length, saved });
     setTranslating(false);
     setSelected(new Set());
 
     // Keep the progress message visible for a bit
     setTimeout(() => setTranslateProgress(null), 8000);
   };
+
+  const handleCancel = () => { cancelRef.current = true; };
 
   return (
     <div>
@@ -208,6 +217,10 @@ export function TranscriptsTab({ buildCombinedRules, onSaved, onError, onNavigat
             <select value={targetLanguage} onChange={(e) => setTargetLanguage(e.target.value)}
               className="rounded-lg border border-brand-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none">
               {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+            <select value={category} onChange={(e) => setCategory(e.target.value)}
+              className="rounded-lg border border-brand-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none">
+              {CONTENT_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
             <button onClick={handleBulkTranslate}
               className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 shadow-sm">
@@ -240,7 +253,13 @@ export function TranscriptsTab({ buildCombinedRules, onSaved, onError, onNavigat
               style={{ width: `${Math.round((translateProgress.current / translateProgress.total) * 100)}%` }} />
           </div>
           {translating && (
-            <p className="mt-1 text-xs text-indigo-500">{translateProgress.saved} saved so far · each is saved immediately</p>
+            <div className="mt-1.5 flex items-center justify-between">
+              <p className="text-xs text-indigo-500">{translateProgress.saved} saved so far · each is saved immediately</p>
+              <button onClick={handleCancel}
+                className="flex items-center gap-1 rounded-lg border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50">
+                <Ban className="h-3 w-3" /> Cancel
+              </button>
+            </div>
           )}
         </div>
       )}

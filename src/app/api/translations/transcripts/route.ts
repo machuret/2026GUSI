@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
       .from("Video")
       .select("id", { count: "exact", head: true })
       .eq("companyId", DEMO_COMPANY_ID)
-      .neq("transcript", null)
+      .not("transcript", "is", null)
       .neq("transcript", "");
 
     // Data query — select fields needed for the transcript library
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       .from("Video")
       .select("id, vimeoId, title, description, thumbnailUrl, duration, transcript, categoryId, publishedAt, createdAt")
       .eq("companyId", DEMO_COMPANY_ID)
-      .neq("transcript", null)
+      .not("transcript", "is", null)
       .neq("transcript", "")
       .order("publishedAt", { ascending: false, nullsFirst: false })
       .range(offset, offset + limit - 1);
