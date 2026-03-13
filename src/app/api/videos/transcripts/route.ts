@@ -44,7 +44,6 @@ export async function POST(req: NextRequest) {
     let noTrack = 0;
     let errors = 0;
     const now = new Date().toISOString();
-    const noTrackIds: string[] = [];
 
     for (const video of videos ?? []) {
       try {
@@ -57,13 +56,18 @@ export async function POST(req: NextRequest) {
           tracks[0];
 
         if (!track?.link) {
-          noTrackIds.push(video.id);
+          // Save immediately — marks as "" so it won't be retried
+          await db
+            .from("Video")
+            .update({ transcript: "", updatedAt: now })
+            .eq("id", video.id);
           noTrack++;
         } else {
           await sleep(RATE_LIMIT_MS); // rate-limit before download
           const raw = await fetchTranscriptContent(track.link);
           const text = parseTranscriptToText(raw);
 
+          // Save immediately — each transcript committed to DB right away
           await db
             .from("Video")
             .update({ transcript: text, updatedAt: now })
@@ -73,18 +77,15 @@ export async function POST(req: NextRequest) {
 
         await sleep(RATE_LIMIT_MS); // rate-limit between texttracks calls
       } catch {
-        // Mark failed videos so we don't retry endlessly
-        noTrackIds.push(video.id);
+        // Save immediately — mark failed so we don't retry endlessly
+        try {
+          await db
+            .from("Video")
+            .update({ transcript: "", updatedAt: now })
+            .eq("id", video.id);
+        } catch { /* best-effort mark */ }
         errors++;
       }
-    }
-
-    // Batch update all no-track/failed videos in one DB call
-    if (noTrackIds.length > 0) {
-      await db
-        .from("Video")
-        .update({ transcript: "", updatedAt: now })
-        .in("id", noTrackIds);
     }
 
     const processed = (videos ?? []).length;

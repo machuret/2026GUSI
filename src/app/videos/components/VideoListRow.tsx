@@ -27,9 +27,17 @@ export function VideoListRow({ video: v, categories, assigningId, onSelect, onAs
         </span>
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-semibold text-gray-900 truncate cursor-pointer hover:text-indigo-600" onClick={() => onSelect(v)}>
-          {v.title}
-        </h3>
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className="text-sm font-semibold text-gray-900 truncate cursor-pointer hover:text-indigo-600" onClick={() => onSelect(v)}>
+            {v.title}
+          </h3>
+          {cat && (
+            <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+              style={{ backgroundColor: cat.color }}>
+              {cat.name}
+            </span>
+          )}
+        </div>
         {v.description && <p className="text-xs text-gray-400 truncate mt-0.5">{v.description}</p>}
         <div className="flex items-center gap-3 mt-1">
           {v.publishedAt && (

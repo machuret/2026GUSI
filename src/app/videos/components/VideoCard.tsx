@@ -28,6 +28,12 @@ export function VideoCard({ video: v, categories, assigningId, onSelect, onAssig
         <span className="absolute bottom-2 right-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-mono text-white">
           {formatDuration(v.duration)}
         </span>
+        {cat && (
+          <span className="absolute top-2 left-2 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm"
+            style={{ backgroundColor: cat.color }}>
+            {cat.name}
+          </span>
+        )}
       </div>
       <div className="p-3">
         <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 mb-1 cursor-pointer hover:text-indigo-600" onClick={() => onSelect(v)}>
