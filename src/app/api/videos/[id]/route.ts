@@ -10,6 +10,7 @@ const updateSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  transcript: z.string().optional(),
 });
 
 // GET /api/videos/[id] — single video with all fields including transcript
