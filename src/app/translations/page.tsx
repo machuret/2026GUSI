@@ -1,21 +1,23 @@
 ﻿"use client";
 
 import { useState } from "react";
-import { Languages, Settings, Sparkles, Upload, BookOpen } from "lucide-react";
+import { Languages, Settings, Sparkles, Upload, BookOpen, FileText } from "lucide-react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { RulesPanel } from "./RulesPanel";
 import { LibraryTab } from "./LibraryTab";
 import { BulkUploadTab } from "./BulkUploadTab";
 import { TranslateTab } from "./TranslateTab";
+import { TranscriptsTab } from "./TranscriptsTab";
 import { useTranslations } from "./hooks/useTranslations";
 import { useRules } from "./hooks/useRules";
 
-type PageTab = "translate" | "bulk" | "library";
+type PageTab = "translate" | "transcripts" | "bulk" | "library";
 
 const TABS: { id: PageTab; label: string; Icon: React.ElementType }[] = [
-  { id: "translate", label: "Translate", Icon: Sparkles },
-  { id: "bulk",      label: "Bulk Upload", Icon: Upload },
-  { id: "library",   label: "Library", Icon: BookOpen },
+  { id: "translate",   label: "Translate", Icon: Sparkles },
+  { id: "transcripts", label: "Transcripts", Icon: FileText },
+  { id: "bulk",        label: "Bulk Upload", Icon: Upload },
+  { id: "library",     label: "Library", Icon: BookOpen },
 ];
 
 export default function TranslationsPage() {
@@ -98,6 +100,15 @@ export default function TranslationsPage() {
           allRules={allRules}
           buildCombinedRules={buildCombinedRules}
           getLangRules={getLangRules}
+          onSaved={addTranslation}
+          onError={setActionError}
+          onNavigateToLibrary={() => setPageTab("library")}
+        />
+      )}
+
+      {pageTab === "transcripts" && (
+        <TranscriptsTab
+          buildCombinedRules={buildCombinedRules}
           onSaved={addTranslation}
           onError={setActionError}
           onNavigateToLibrary={() => setPageTab("library")}
