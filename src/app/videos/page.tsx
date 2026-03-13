@@ -5,6 +5,7 @@ import {
   Play, RefreshCw, Loader2, Plus, X, Save, Trash2,
   FolderOpen, Tag, Clock, Search, ChevronDown, ChevronUp,
   ExternalLink, Grid3X3, List, Palette, GripVertical,
+  FileText, MessageSquareText,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 
@@ -33,6 +34,7 @@ interface Video {
   height: number;
   status: string;
   tags: string[];
+  transcript: string | null;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -59,8 +61,13 @@ export default function VideosPage() {
   const [categories, setCategories] = useState<VideoCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ page: number; totalPages: number; synced: number; updated: number; total: number } | null>(null);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Transcript sync
+  const [syncingTranscripts, setSyncingTranscripts] = useState(false);
+  const [transcriptMsg, setTranscriptMsg] = useState<string | null>(null);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -95,19 +102,62 @@ export default function VideosPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  /* ── Sync from Vimeo ── */
+  /* ── Paginated Sync from Vimeo ── */
   const handleSync = async () => {
     setSyncing(true); setSyncMsg(null); setError(null);
+    let page = 1;
+    let totalSynced = 0;
+    let totalUpdated = 0;
+
     try {
-      const res = await authFetch("/api/videos/sync", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Sync failed");
-      setSyncMsg(`Synced ${data.synced} new, updated ${data.updated} existing (${data.total} total from Vimeo)`);
-      setTimeout(() => setSyncMsg(null), 6000);
+      while (true) {
+        const res = await authFetch(`/api/videos/sync?page=${page}`, { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Sync failed");
+
+        totalSynced += data.synced;
+        totalUpdated += data.updated;
+        setSyncProgress({ page: data.page, totalPages: data.totalPages, synced: totalSynced, updated: totalUpdated, total: data.total });
+
+        if (!data.hasMore) break;
+        page++;
+      }
+
+      setSyncMsg(`Done! ${totalSynced} new, ${totalUpdated} updated (${syncProgress?.total ?? 0} total from Vimeo)`);
+      setSyncProgress(null);
+      setTimeout(() => setSyncMsg(null), 8000);
       await fetchData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");
+      setSyncProgress(null);
     } finally { setSyncing(false); }
+  };
+
+  /* ── Transcript Sync ── */
+  const handleTranscriptSync = async () => {
+    setSyncingTranscripts(true); setTranscriptMsg(null); setError(null);
+    let totalFetched = 0;
+    let totalNoTrack = 0;
+
+    try {
+      while (true) {
+        const res = await authFetch("/api/videos/transcripts?batch=10&offset=0", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Transcript sync failed");
+
+        totalFetched += data.fetched;
+        totalNoTrack += data.noTrack;
+        setTranscriptMsg(`Fetching transcripts… ${totalFetched} found, ${totalNoTrack} no track, ${data.remaining} remaining`);
+
+        if (!data.hasMore) break;
+      }
+
+      setTranscriptMsg(`Transcripts done! ${totalFetched} fetched, ${totalNoTrack} videos had no captions`);
+      setTimeout(() => setTranscriptMsg(null), 8000);
+      await fetchData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Transcript sync failed");
+    } finally { setSyncingTranscripts(false); }
   };
 
   /* ── Category CRUD ── */
@@ -204,8 +254,16 @@ export default function VideosPage() {
             <FolderOpen className="h-4 w-4" /> Add Category
           </button>
           <button
+            onClick={handleTranscriptSync}
+            disabled={syncingTranscripts || syncing}
+            className="flex items-center gap-2 rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+          >
+            {syncingTranscripts ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareText className="h-4 w-4" />}
+            {syncingTranscripts ? "Fetching…" : "Fetch Transcripts"}
+          </button>
+          <button
             onClick={handleSync}
-            disabled={syncing}
+            disabled={syncing || syncingTranscripts}
             className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
           >
             {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -214,11 +272,37 @@ export default function VideosPage() {
         </div>
       </div>
 
+      {/* Sync progress bar */}
+      {syncProgress && (
+        <div className="mb-4 rounded-lg bg-indigo-50 border border-indigo-200 px-4 py-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-sm font-medium text-indigo-700">
+              Syncing page {syncProgress.page} of {syncProgress.totalPages} ({syncProgress.total} videos)
+            </span>
+            <span className="text-xs text-indigo-500">
+              {syncProgress.synced} new, {syncProgress.updated} updated
+            </span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-indigo-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-indigo-600 transition-all duration-300"
+              style={{ width: `${Math.round((syncProgress.page / syncProgress.totalPages) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
       {syncMsg && (
         <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-2 text-sm text-green-700 font-medium flex items-center justify-between">
           {syncMsg}
           <button onClick={() => setSyncMsg(null)} className="text-green-400 hover:text-green-600"><X className="h-4 w-4" /></button>
+        </div>
+      )}
+      {transcriptMsg && (
+        <div className="mb-4 rounded-lg bg-purple-50 border border-purple-200 px-4 py-2 text-sm text-purple-700 font-medium flex items-center justify-between">
+          {transcriptMsg}
+          <button onClick={() => setTranscriptMsg(null)} className="text-purple-400 hover:text-purple-600"><X className="h-4 w-4" /></button>
         </div>
       )}
       {error && (
@@ -545,6 +629,21 @@ export default function VideosPage() {
                 </select>
                 {assigningId === selectedVideo.id && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
               </div>
+              {/* Transcript */}
+              {selectedVideo.transcript ? (
+                <div className="mt-4">
+                  <h3 className="text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5" /> Transcript
+                  </h3>
+                  <div className="max-h-48 overflow-y-auto rounded-lg bg-gray-50 border border-gray-200 p-3 text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">
+                    {selectedVideo.transcript}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-4 text-xs text-gray-400 flex items-center gap-1">
+                  <FileText className="h-3 w-3" /> No transcript available
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -556,6 +655,7 @@ export default function VideosPage() {
           <span>{videos.length} videos</span>
           <span>{categories.length} categories</span>
           <span>{uncategorizedCount} uncategorized</span>
+          <span>{videos.filter((v) => v.transcript).length} with transcripts</span>
         </div>
       )}
     </div>

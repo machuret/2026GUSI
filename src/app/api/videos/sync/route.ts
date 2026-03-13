@@ -1,20 +1,23 @@
 export const dynamic = "force-dynamic";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
-import { fetchAllVimeoVideos, extractVimeoId, getBestThumbnail } from "@/lib/vimeo";
+import { fetchVimeoPage, extractVimeoId, getBestThumbnail } from "@/lib/vimeo";
 
-// POST /api/videos/sync — pull all videos from Vimeo and upsert into DB
-export async function POST() {
+// POST /api/videos/sync?page=1 — sync one page of videos from Vimeo (100 per page)
+// Frontend loops page by page until done, preventing Vercel timeout.
+export async function POST(req: NextRequest) {
   try {
     const { response: authError } = await requireAuth();
     if (authError) return authError;
 
-    const vimeoVideos = await fetchAllVimeoVideos();
+    const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
+
+    const { videos: vimeoVideos, total, totalPages, hasMore } = await fetchVimeoPage(page);
 
     let synced = 0;
-    let skipped = 0;
+    let updated = 0;
 
     for (const v of vimeoVideos) {
       const vimeoId = extractVimeoId(v.uri);
@@ -37,7 +40,6 @@ export async function POST() {
         updatedAt: new Date().toISOString(),
       };
 
-      // Check if video already exists
       const { data: existing } = await db
         .from("Video")
         .select("id")
@@ -46,7 +48,6 @@ export async function POST() {
         .maybeSingle();
 
       if (existing) {
-        // Update metadata but preserve categoryId
         const { error } = await db
           .from("Video")
           .update({
@@ -65,7 +66,7 @@ export async function POST() {
           })
           .eq("id", existing.id);
         if (error) throw error;
-        skipped++;
+        updated++;
       } else {
         const { error } = await db
           .from("Video")
@@ -79,9 +80,13 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
-      total: vimeoVideos.length,
+      page,
+      totalPages,
+      total,
+      hasMore,
       synced,
-      updated: skipped,
+      updated,
+      pageSize: vimeoVideos.length,
     });
   } catch (err) {
     return handleApiError(err, "Videos Sync");

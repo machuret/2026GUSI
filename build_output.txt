@@ -1,0 +1,4 @@
+﻿  Γû▓ Next.js 14.2.22
+  - Environments: .env.local, .env
+
+   Creating an optimized production build ...
