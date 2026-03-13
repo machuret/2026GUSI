@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Clock, ExternalLink, Loader2, FileText } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { Video, VideoCategory } from "../types";
@@ -19,16 +19,19 @@ export function VideoDetailModal({ video, categories, assigningId, onClose, onAs
   const [loadingDetail, setLoadingDetail] = useState(true);
 
   // Load full video (with transcript) on mount
-  useState(() => {
+  useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const res = await authFetch(`/api/videos/${video.id}`);
         const data = await res.json();
-        if (data.video) onVideoLoaded(data.video);
+        if (!cancelled && data.video) onVideoLoaded(data.video);
       } catch { /* use existing data */ }
-      finally { setLoadingDetail(false); }
+      finally { if (!cancelled) setLoadingDetail(false); }
     })();
-  });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [video.id]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>

@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS "Video" (
 CREATE INDEX IF NOT EXISTS "Video_companyId_idx" ON "Video" ("companyId");
 CREATE INDEX IF NOT EXISTS "Video_categoryId_idx" ON "Video" ("categoryId");
 CREATE INDEX IF NOT EXISTS "Video_vimeoId_idx" ON "Video" ("vimeoId");
+CREATE INDEX IF NOT EXISTS "Video_publishedAt_idx" ON "Video" ("publishedAt" DESC NULLS LAST);
 
 -- RLS
 ALTER TABLE "VideoCategory" ENABLE ROW LEVEL SECURITY;

@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw, Loader2, FolderOpen, MessageSquareText, X } from "lucide-react";
+import { RefreshCw, Loader2, FolderOpen, MessageSquareText, X, Play } from "lucide-react";
 import { SyncProgress, SyncLogEntry } from "../types";
 import { timeAgo } from "../helpers";
 
@@ -34,7 +34,7 @@ export function SyncControls({
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-            <span className="h-7 w-7 text-indigo-600">▶</span> Videos
+            <Play className="h-7 w-7 text-indigo-600" /> Videos
           </h1>
           <p className="mt-1 text-gray-500">Sync and organize your Vimeo video library by category</p>
           <div className="mt-1.5 flex gap-4 text-[10px] text-gray-400">

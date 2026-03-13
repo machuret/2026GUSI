@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, Clock, Tag, ExternalLink, Loader2 } from "lucide-react";
+import { Play, Clock, Tag, ExternalLink } from "lucide-react";
 import { Video, VideoCategory } from "../types";
 import { formatDuration } from "../helpers";
 
@@ -50,6 +50,7 @@ export function VideoListRow({ video: v, categories, assigningId, onSelect, onAs
         <option value="">Uncategorized</option>
         {categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
       </select>
+      {assigningId === v.id && <span className="shrink-0 h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-indigo-600" />}
       <a href={v.vimeoUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-gray-400 hover:text-indigo-600">
         <ExternalLink className="h-4 w-4" />
       </a>
