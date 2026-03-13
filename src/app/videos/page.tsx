@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import {
   Play, RefreshCw, Loader2, X, Save,
-  Search, Grid3X3, List, ChevronDown,
+  Search, Grid3X3, List, ChevronDown, FileText,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { Video } from "./types";
@@ -18,6 +18,7 @@ import { CategoryBar } from "./components/CategoryBar";
 import { VideoCard } from "./components/VideoCard";
 import { VideoListRow } from "./components/VideoListRow";
 import { VideoDetailModal } from "./components/VideoDetailModal";
+import { TranscriptBrowser } from "./components/TranscriptBrowser";
 
 export default function VideosPage() {
   /* ── Hooks ── */
@@ -39,7 +40,7 @@ export default function VideosPage() {
     handleAddCategory, handleUpdateCategory, handleDeleteCategory,
   } = catHook;
 
-  const [view, setView] = useState<"grid" | "list">("grid");
+  const [view, setView] = useState<"grid" | "list" | "transcripts">("grid");
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
 
@@ -148,11 +149,14 @@ export default function VideosPage() {
             className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
         </div>
         <div className="flex items-center gap-1 rounded-lg border border-gray-200 p-0.5">
-          <button onClick={() => setView("grid")} className={`rounded-md p-1.5 transition-colors ${view === "grid" ? "bg-gray-900 text-white" : "text-gray-400 hover:text-gray-600"}`}>
+          <button onClick={() => setView("grid")} title="Grid view" className={`rounded-md p-1.5 transition-colors ${view === "grid" ? "bg-gray-900 text-white" : "text-gray-400 hover:text-gray-600"}`}>
             <Grid3X3 className="h-4 w-4" />
           </button>
-          <button onClick={() => setView("list")} className={`rounded-md p-1.5 transition-colors ${view === "list" ? "bg-gray-900 text-white" : "text-gray-400 hover:text-gray-600"}`}>
+          <button onClick={() => setView("list")} title="List view" className={`rounded-md p-1.5 transition-colors ${view === "list" ? "bg-gray-900 text-white" : "text-gray-400 hover:text-gray-600"}`}>
             <List className="h-4 w-4" />
+          </button>
+          <button onClick={() => setView("transcripts")} title="Transcripts" className={`rounded-md p-1.5 transition-colors ${view === "transcripts" ? "bg-gray-900 text-white" : "text-gray-400 hover:text-gray-600"}`}>
+            <FileText className="h-4 w-4" />
           </button>
         </div>
         {pagination && (
@@ -207,6 +211,9 @@ export default function VideosPage() {
           ))}
         </div>
       )}
+
+      {/* Transcripts view */}
+      {view === "transcripts" && <TranscriptBrowser />}
 
       {/* Load More */}
       {!loading && pagination?.hasMore && (
