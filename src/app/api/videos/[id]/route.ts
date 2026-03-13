@@ -11,6 +11,26 @@ const updateSchema = z.object({
   tags: z.array(z.string()).optional(),
 });
 
+// GET /api/videos/[id] — single video with all fields including transcript
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const { response: authError } = await requireAuth();
+    if (authError) return authError;
+
+    const { data, error } = await db
+      .from("Video")
+      .select("*")
+      .eq("id", params.id)
+      .single();
+
+    if (error) throw error;
+    if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ video: data });
+  } catch (err) {
+    return handleApiError(err, "Video GET");
+  }
+}
+
 // PATCH /api/videos/[id] — update video metadata (category, title, description, tags)
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {

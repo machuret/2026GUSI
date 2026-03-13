@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Play, RefreshCw, Loader2, X, Save, Trash2,
   FolderOpen, Tag, Clock, Search,
   ExternalLink, Grid3X3, List, Palette,
-  FileText, MessageSquareText,
+  FileText, MessageSquareText, ChevronDown,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 
@@ -34,10 +34,30 @@ interface Video {
   height: number;
   status: string;
   tags: string[];
-  transcript: string | null;
+  transcript?: string | null;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface Pagination {
+  page: number;
+  limit: number;
+  totalCount: number;
+  totalPages: number;
+  hasMore: boolean;
+}
+
+interface SyncLogEntry {
+  id: string;
+  type: string;
+  status: string;
+  synced: number;
+  updated: number;
+  errors: number;
+  totalProcessed: number;
+  durationMs: number;
+  createdAt: string;
 }
 
 /* ── Helpers ── */
@@ -46,6 +66,19 @@ function formatDuration(secs: number): string {
   const s = secs % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+const VIDEOS_PER_PAGE = 40;
 
 const CATEGORY_COLORS = [
   "#6366f1", "#8b5cf6", "#ec4899", "#ef4444", "#f97316",
@@ -58,8 +91,10 @@ const labelCls = "mb-1 block text-xs font-medium text-gray-600";
 export default function VideosPage() {
   /* ── State ── */
   const [videos, setVideos] = useState<Video[]>([]);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
   const [categories, setCategories] = useState<VideoCategory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ page: number; totalPages: number; synced: number; updated: number; total: number } | null>(null);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
@@ -69,10 +104,16 @@ export default function VideosPage() {
   const [syncingTranscripts, setSyncingTranscripts] = useState(false);
   const [transcriptMsg, setTranscriptMsg] = useState<string | null>(null);
 
-  // Filters
+  // Sync log
+  const [lastVideoSync, setLastVideoSync] = useState<SyncLogEntry | null>(null);
+  const [lastTranscriptSync, setLastTranscriptSync] = useState<SyncLogEntry | null>(null);
+
+  // Filters — server-side
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterCat, setFilterCat] = useState<string>("all");
   const [view, setView] = useState<"grid" | "list">("grid");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Category management
   const [showAddCat, setShowAddCat] = useState(false);
@@ -83,24 +124,80 @@ export default function VideosPage() {
 
   // Video detail / assign
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [assigningId, setAssigningId] = useState<string | null>(null);
 
-  /* ── Data fetching ── */
-  const fetchData = useCallback(async () => {
+  /* ── Debounced search ── */
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [search]);
+
+  /* ── Build API URL ── */
+  const buildUrl = useCallback((page: number) => {
+    const params = new URLSearchParams({ page: String(page), limit: String(VIDEOS_PER_PAGE) });
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    if (filterCat && filterCat !== "all") params.set("categoryId", filterCat);
+    return `/api/videos?${params}`;
+  }, [debouncedSearch, filterCat]);
+
+  /* ── Fetch videos (page 1) + categories ── */
+  const fetchData = useCallback(async (resetVideos = true) => {
+    if (resetVideos) setLoading(true);
     try {
       const [vRes, cRes] = await Promise.all([
-        authFetch("/api/videos"),
+        authFetch(buildUrl(1)),
         authFetch("/api/videos/categories"),
       ]);
       const vData = await vRes.json();
       const cData = await cRes.json();
       setVideos(vData.videos ?? []);
+      setPagination(vData.pagination ?? null);
       setCategories(cData.categories ?? []);
     } catch { setError("Failed to load data"); }
     finally { setLoading(false); }
+  }, [buildUrl]);
+
+  /* ── Load more (append next page) ── */
+  const loadMore = async () => {
+    if (!pagination?.hasMore || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const res = await authFetch(buildUrl(pagination.page + 1));
+      const data = await res.json();
+      setVideos((prev) => [...prev, ...(data.videos ?? [])]);
+      setPagination(data.pagination ?? null);
+    } catch { setError("Failed to load more"); }
+    finally { setLoadingMore(false); }
+  };
+
+  /* ── Fetch sync log ── */
+  const fetchSyncLog = useCallback(async () => {
+    try {
+      const res = await authFetch("/api/videos/sync-log");
+      const data = await res.json();
+      setLastVideoSync(data.lastVideoSync ?? null);
+      setLastTranscriptSync(data.lastTranscriptSync ?? null);
+    } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchData(); fetchSyncLog(); }, [fetchData, fetchSyncLog]);
+
+  // Re-fetch when search or category filter changes
+  useEffect(() => { fetchData(); }, [debouncedSearch, filterCat, fetchData]);
+
+  /* ── Open video detail (loads transcript on demand) ── */
+  const openVideoDetail = async (video: Video) => {
+    setSelectedVideo(video);
+    setLoadingDetail(true);
+    try {
+      const res = await authFetch(`/api/videos/${video.id}`);
+      const data = await res.json();
+      if (data.video) setSelectedVideo(data.video);
+    } catch { /* use existing data */ }
+    finally { setLoadingDetail(false); }
+  };
 
   /* ── Paginated Sync from Vimeo ── */
   const handleSync = async () => {
@@ -109,6 +206,7 @@ export default function VideosPage() {
     let totalSynced = 0;
     let totalUpdated = 0;
     let totalVimeo = 0;
+    const startTime = Date.now();
 
     try {
       while (true) {
@@ -125,10 +223,19 @@ export default function VideosPage() {
         page++;
       }
 
-      setSyncMsg(`Done! ${totalSynced} new, ${totalUpdated} updated (${totalVimeo} total from Vimeo)`);
+      // Log the sync
+      const durationMs = Date.now() - startTime;
+      await authFetch("/api/videos/sync-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "videos", status: "completed", synced: totalSynced, updated: totalUpdated, errors: 0, totalProcessed: totalVimeo, durationMs }),
+      }).catch(() => {});
+
+      setSyncMsg(`Done! ${totalSynced} new, ${totalUpdated} updated (${totalVimeo} total) in ${(durationMs / 1000).toFixed(1)}s`);
       setSyncProgress(null);
-      setTimeout(() => setSyncMsg(null), 8000);
+      setTimeout(() => setSyncMsg(null), 10000);
       await fetchData();
+      await fetchSyncLog();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");
       setSyncProgress(null);
@@ -140,23 +247,33 @@ export default function VideosPage() {
     setSyncingTranscripts(true); setTranscriptMsg(null); setError(null);
     let totalFetched = 0;
     let totalNoTrack = 0;
+    let totalErrors = 0;
+    const startTime = Date.now();
 
     try {
       while (true) {
-        const res = await authFetch("/api/videos/transcripts?batch=10&offset=0", { method: "POST" });
+        const res = await authFetch("/api/videos/transcripts?batch=10", { method: "POST" });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Transcript sync failed");
 
         totalFetched += data.fetched;
         totalNoTrack += data.noTrack;
+        totalErrors += data.errors;
         setTranscriptMsg(`Fetching transcripts… ${totalFetched} found, ${totalNoTrack} no track, ${data.remaining} remaining`);
 
         if (!data.hasMore) break;
       }
 
-      setTranscriptMsg(`Transcripts done! ${totalFetched} fetched, ${totalNoTrack} videos had no captions`);
-      setTimeout(() => setTranscriptMsg(null), 8000);
-      await fetchData();
+      const durationMs = Date.now() - startTime;
+      await authFetch("/api/videos/sync-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "transcripts", status: "completed", synced: totalFetched, updated: 0, errors: totalErrors, totalProcessed: totalFetched + totalNoTrack + totalErrors, durationMs }),
+      }).catch(() => {});
+
+      setTranscriptMsg(`Done! ${totalFetched} transcripts fetched, ${totalNoTrack} had no captions (${(durationMs / 1000).toFixed(1)}s)`);
+      setTimeout(() => setTranscriptMsg(null), 10000);
+      await fetchSyncLog();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Transcript sync failed");
     } finally { setSyncingTranscripts(false); }
@@ -202,8 +319,8 @@ export default function VideosPage() {
     try {
       await authFetch(`/api/videos/categories/${id}`, { method: "DELETE" });
       setCategories((prev) => prev.filter((c) => c.id !== id));
-      setVideos((prev) => prev.map((v) => (v.categoryId === id ? { ...v, categoryId: null } : v)));
       if (filterCat === id) setFilterCat("all");
+      else await fetchData();
     } catch (err) { setError(err instanceof Error ? err.message : "Failed"); }
   };
 
@@ -218,22 +335,13 @@ export default function VideosPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
-      setVideos((prev) => prev.map((v) => (v.id === videoId ? data.video : v)));
-      if (selectedVideo?.id === videoId) setSelectedVideo(data.video);
+      setVideos((prev) => prev.map((v) => (v.id === videoId ? { ...data.video, transcript: v.transcript } : v)));
+      if (selectedVideo?.id === videoId) setSelectedVideo((prev) => prev ? { ...prev, categoryId: data.video.categoryId } : prev);
     } catch (err) { setError(err instanceof Error ? err.message : "Failed"); }
     finally { setAssigningId(null); }
   };
 
-  /* ── Filtering ── */
-  const filtered = videos.filter((v) => {
-    const q = search.toLowerCase();
-    const matchSearch = !search || v.title.toLowerCase().includes(q) || v.description.toLowerCase().includes(q) || v.tags.some((t) => t.toLowerCase().includes(q));
-    const matchCat = filterCat === "all" || (filterCat === "uncategorized" ? !v.categoryId : v.categoryId === filterCat);
-    return matchSearch && matchCat;
-  });
-
   const getCat = (id: string | null) => categories.find((c) => c.id === id);
-  const uncategorizedCount = videos.filter((v) => !v.categoryId).length;
 
   /* ── Render ── */
   return (
@@ -247,6 +355,11 @@ export default function VideosPage() {
           <p className="mt-1 text-gray-500">
             Sync and organize your Vimeo video library by category
           </p>
+          {/* Last sync info */}
+          <div className="mt-1.5 flex gap-4 text-[10px] text-gray-400">
+            {lastVideoSync && <span>Last sync: {timeAgo(lastVideoSync.createdAt)} ({lastVideoSync.totalProcessed} videos, {(lastVideoSync.durationMs / 1000).toFixed(1)}s)</span>}
+            {lastTranscriptSync && <span>Transcripts: {timeAgo(lastTranscriptSync.createdAt)} ({lastTranscriptSync.synced} fetched)</span>}
+          </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
@@ -357,29 +470,26 @@ export default function VideosPage() {
           <div className="flex items-center gap-2 overflow-x-auto pb-2">
             <button onClick={() => setFilterCat("all")}
               className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${filterCat === "all" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
-              All ({videos.length})
+              All {pagination ? `(${pagination.totalCount})` : ""}
             </button>
-            {categories.map((cat) => {
-              const count = videos.filter((v) => v.categoryId === cat.id).length;
-              return (
-                <div key={cat.id} className="flex items-center gap-0 shrink-0">
-                  <button onClick={() => setFilterCat(cat.id)}
-                    className={`rounded-l-full px-3.5 py-1.5 text-xs font-semibold transition-all ${filterCat === cat.id ? "text-white" : "text-gray-600 hover:opacity-80"}`}
-                    style={{ backgroundColor: filterCat === cat.id ? cat.color : `${cat.color}20`, color: filterCat === cat.id ? "white" : cat.color }}>
-                    {cat.name} ({count})
+            {categories.map((cat) => (
+              <div key={cat.id} className="flex items-center gap-0 shrink-0">
+                <button onClick={() => setFilterCat(cat.id)}
+                  className={`rounded-l-full px-3.5 py-1.5 text-xs font-semibold transition-all ${filterCat === cat.id ? "text-white" : "text-gray-600 hover:opacity-80"}`}
+                  style={{ backgroundColor: filterCat === cat.id ? cat.color : `${cat.color}20`, color: filterCat === cat.id ? "white" : cat.color }}>
+                  {cat.name}
+                </button>
+                {editCatId !== cat.id && (
+                  <button onClick={() => { setEditCatId(cat.id); setEditCatForm({ name: cat.name, description: cat.description, color: cat.color }); }}
+                    className="rounded-r-full px-2 py-1.5 text-[10px] text-gray-400 hover:text-gray-600 hover:bg-gray-100" title="Edit category">
+                    <Palette className="h-3 w-3" />
                   </button>
-                  {editCatId !== cat.id && (
-                    <button onClick={() => { setEditCatId(cat.id); setEditCatForm({ name: cat.name, description: cat.description, color: cat.color }); }}
-                      className="rounded-r-full px-2 py-1.5 text-[10px] text-gray-400 hover:text-gray-600 hover:bg-gray-100" title="Edit category">
-                      <Palette className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+                )}
+              </div>
+            ))}
             <button onClick={() => setFilterCat("uncategorized")}
               className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${filterCat === "uncategorized" ? "bg-gray-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
-              Uncategorized ({uncategorizedCount})
+              Uncategorized
             </button>
           </div>
 
@@ -446,7 +556,11 @@ export default function VideosPage() {
             <List className="h-4 w-4" />
           </button>
         </div>
-        <p className="text-xs text-gray-400 ml-auto">{filtered.length} video{filtered.length !== 1 ? "s" : ""}</p>
+        {pagination && (
+          <p className="text-xs text-gray-400 ml-auto">
+            Showing {videos.length} of {pagination.totalCount} video{pagination.totalCount !== 1 ? "s" : ""}
+          </p>
+        )}
       </div>
 
       {/* Loading */}
@@ -457,7 +571,7 @@ export default function VideosPage() {
       )}
 
       {/* Empty states */}
-      {!loading && videos.length === 0 && (
+      {!loading && videos.length === 0 && !debouncedSearch && filterCat === "all" && (
         <div className="rounded-xl border border-dashed border-gray-300 py-20 text-center">
           <Play className="mx-auto h-10 w-10 text-gray-300 mb-3" />
           <p className="text-gray-500 font-medium">No videos yet</p>
@@ -469,21 +583,24 @@ export default function VideosPage() {
         </div>
       )}
 
+      {!loading && videos.length === 0 && (debouncedSearch || filterCat !== "all") && (
+        <div className="rounded-xl border border-dashed border-gray-300 py-12 text-center">
+          <p className="text-gray-400">No videos match your filter.</p>
+        </div>
+      )}
+
       {/* Video grid */}
-      {!loading && filtered.length > 0 && view === "grid" && (
+      {!loading && videos.length > 0 && view === "grid" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filtered.map((v) => {
+          {videos.map((v) => {
             const cat = getCat(v.categoryId);
             return (
               <div key={v.id} className="group rounded-xl border border-gray-200 bg-white overflow-hidden hover:shadow-lg transition-shadow">
-                {/* Thumbnail */}
-                <div className="relative aspect-video bg-gray-100 cursor-pointer" onClick={() => setSelectedVideo(v)}>
+                <div className="relative aspect-video bg-gray-100 cursor-pointer" onClick={() => openVideoDetail(v)}>
                   {v.thumbnailUrl ? (
                     <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Play className="h-8 w-8 text-gray-300" />
-                    </div>
+                    <div className="w-full h-full flex items-center justify-center"><Play className="h-8 w-8 text-gray-300" /></div>
                   )}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
                     <Play className="h-10 w-10 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
@@ -492,9 +609,8 @@ export default function VideosPage() {
                     {formatDuration(v.duration)}
                   </span>
                 </div>
-                {/* Info */}
                 <div className="p-3">
-                  <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 mb-1 cursor-pointer hover:text-indigo-600" onClick={() => setSelectedVideo(v)}>
+                  <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 mb-1 cursor-pointer hover:text-indigo-600" onClick={() => openVideoDetail(v)}>
                     {v.title}
                   </h3>
                   {v.publishedAt && (
@@ -502,19 +618,12 @@ export default function VideosPage() {
                       <Clock className="h-3 w-3" /> {new Date(v.publishedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
                     </p>
                   )}
-                  {/* Category badge + assign */}
                   <div className="flex items-center gap-1.5">
-                    <select
-                      value={v.categoryId || ""}
-                      onChange={(e) => handleAssign(v.id, e.target.value || null)}
-                      disabled={assigningId === v.id}
+                    <select value={v.categoryId || ""} onChange={(e) => handleAssign(v.id, e.target.value || null)} disabled={assigningId === v.id}
                       className="flex-1 rounded-md border border-gray-200 px-2 py-1 text-[11px] text-gray-600 focus:border-indigo-400 focus:outline-none bg-white truncate"
-                      style={cat ? { borderColor: cat.color, color: cat.color } : {}}
-                    >
+                      style={cat ? { borderColor: cat.color, color: cat.color } : {}}>
                       <option value="">Uncategorized</option>
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
+                      {categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
                     </select>
                     {assigningId === v.id && <Loader2 className="h-3 w-3 animate-spin text-gray-400 shrink-0" />}
                   </div>
@@ -526,13 +635,13 @@ export default function VideosPage() {
       )}
 
       {/* Video list view */}
-      {!loading && filtered.length > 0 && view === "list" && (
+      {!loading && videos.length > 0 && view === "list" && (
         <div className="rounded-xl border border-gray-200 bg-white overflow-hidden divide-y divide-gray-100">
-          {filtered.map((v) => {
+          {videos.map((v) => {
             const cat = getCat(v.categoryId);
             return (
               <div key={v.id} className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors">
-                <div className="relative w-28 aspect-video rounded-lg overflow-hidden bg-gray-100 shrink-0 cursor-pointer" onClick={() => setSelectedVideo(v)}>
+                <div className="relative w-28 aspect-video rounded-lg overflow-hidden bg-gray-100 shrink-0 cursor-pointer" onClick={() => openVideoDetail(v)}>
                   {v.thumbnailUrl ? (
                     <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" />
                   ) : (
@@ -543,7 +652,7 @@ export default function VideosPage() {
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-gray-900 truncate cursor-pointer hover:text-indigo-600" onClick={() => setSelectedVideo(v)}>
+                  <h3 className="text-sm font-semibold text-gray-900 truncate cursor-pointer hover:text-indigo-600" onClick={() => openVideoDetail(v)}>
                     {v.title}
                   </h3>
                   {v.description && <p className="text-xs text-gray-400 truncate mt-0.5">{v.description}</p>}
@@ -560,17 +669,11 @@ export default function VideosPage() {
                     )}
                   </div>
                 </div>
-                <select
-                  value={v.categoryId || ""}
-                  onChange={(e) => handleAssign(v.id, e.target.value || null)}
-                  disabled={assigningId === v.id}
+                <select value={v.categoryId || ""} onChange={(e) => handleAssign(v.id, e.target.value || null)} disabled={assigningId === v.id}
                   className="w-36 shrink-0 rounded-md border border-gray-200 px-2 py-1.5 text-xs text-gray-600 focus:border-indigo-400 focus:outline-none bg-white"
-                  style={cat ? { borderColor: cat.color, color: cat.color } : {}}
-                >
+                  style={cat ? { borderColor: cat.color, color: cat.color } : {}}>
                   <option value="">Uncategorized</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
+                  {categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
                 </select>
                 <a href={v.vimeoUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-gray-400 hover:text-indigo-600">
                   <ExternalLink className="h-4 w-4" />
@@ -581,23 +684,26 @@ export default function VideosPage() {
         </div>
       )}
 
-      {!loading && videos.length > 0 && filtered.length === 0 && (
-        <div className="rounded-xl border border-dashed border-gray-300 py-12 text-center">
-          <p className="text-gray-400">No videos match the current filter.</p>
+      {/* Load More button */}
+      {!loading && pagination?.hasMore && (
+        <div className="mt-6 text-center">
+          <button onClick={loadMore} disabled={loadingMore}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+            {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronDown className="h-4 w-4" />}
+            {loadingMore ? "Loading…" : `Load More (${pagination.totalCount - videos.length} remaining)`}
+          </button>
         </div>
       )}
 
       {/* Video detail modal */}
       {selectedVideo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setSelectedVideo(null)}>
-          <div className="relative w-full max-w-4xl rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="relative w-full max-w-4xl max-h-[90vh] rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setSelectedVideo(null)} className="absolute top-3 right-3 z-10 rounded-full bg-white/90 p-1.5 text-gray-500 hover:text-gray-800 shadow">
               <X className="h-5 w-5" />
             </button>
-            {/* Embedded video */}
-            <div className="aspect-video bg-black" dangerouslySetInnerHTML={{ __html: selectedVideo.embedHtml.replace(/width="\d+"/, 'width="100%"').replace(/height="\d+"/, 'height="100%"') }} />
-            {/* Details */}
-            <div className="p-5">
+            <div className="aspect-video bg-black shrink-0" dangerouslySetInnerHTML={{ __html: selectedVideo.embedHtml.replace(/width="\d+"/, 'width="100%"').replace(/height="\d+"/, 'height="100%"') }} />
+            <div className="p-5 overflow-y-auto">
               <h2 className="text-lg font-bold text-gray-900 mb-1">{selectedVideo.title}</h2>
               {selectedVideo.description && <p className="text-sm text-gray-500 whitespace-pre-wrap mb-3 max-h-32 overflow-y-auto">{selectedVideo.description}</p>}
               <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
@@ -615,24 +721,21 @@ export default function VideosPage() {
                   ))}
                 </div>
               )}
-              {/* Category assign */}
               <div className="mt-4 flex items-center gap-3">
                 <label className="text-xs font-medium text-gray-600">Category:</label>
-                <select
-                  value={selectedVideo.categoryId || ""}
-                  onChange={(e) => handleAssign(selectedVideo.id, e.target.value || null)}
-                  disabled={assigningId === selectedVideo.id}
-                  className="rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:border-indigo-400 focus:outline-none bg-white"
-                >
+                <select value={selectedVideo.categoryId || ""} onChange={(e) => handleAssign(selectedVideo.id, e.target.value || null)} disabled={assigningId === selectedVideo.id}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:border-indigo-400 focus:outline-none bg-white">
                   <option value="">Uncategorized</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
+                  {categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
                 </select>
                 {assigningId === selectedVideo.id && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
               </div>
-              {/* Transcript */}
-              {selectedVideo.transcript ? (
+              {/* Transcript — loaded on demand */}
+              {loadingDetail ? (
+                <div className="mt-4 flex items-center gap-2 text-xs text-gray-400">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading transcript…
+                </div>
+              ) : selectedVideo.transcript ? (
                 <div className="mt-4">
                   <h3 className="text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1.5">
                     <FileText className="h-3.5 w-3.5" /> Transcript
@@ -652,12 +755,11 @@ export default function VideosPage() {
       )}
 
       {/* Footer stats */}
-      {!loading && videos.length > 0 && (
+      {!loading && pagination && pagination.totalCount > 0 && (
         <div className="mt-6 flex gap-4 text-xs text-gray-400">
-          <span>{videos.length} videos</span>
+          <span>{pagination.totalCount} total videos</span>
           <span>{categories.length} categories</span>
-          <span>{uncategorizedCount} uncategorized</span>
-          <span>{videos.filter((v) => v.transcript).length} with transcripts</span>
+          <span>Showing {videos.length}</span>
         </div>
       )}
     </div>
