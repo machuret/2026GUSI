@@ -90,6 +90,7 @@ const newsletterNav = [
 const videosNav = [
   { href: "/videos", label: "Videos", icon: PlayCircle },
   { href: "/videos/transcriptions", label: "Transcriptions", icon: FileText },
+  { href: "/videos/lessons", label: "Video Lessons", icon: BookOpen },
 ];
 
 const grantsNav = [
