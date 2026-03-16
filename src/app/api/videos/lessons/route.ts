@@ -154,6 +154,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: `Seeded ${rows.length} lessons for "${courseName}"`, seeded: true, count: rows.length });
     }
 
+    // getTranscripts — fetch transcript text for given vimeoIds
+    if (action === "getTranscripts") {
+      const vimeoIds: string[] = body.vimeoIds;
+      if (!vimeoIds || vimeoIds.length === 0) {
+        return NextResponse.json({ error: "vimeoIds required" }, { status: 400 });
+      }
+
+      const { data: videos } = await db
+        .from("Video")
+        .select("vimeoId, title, transcript")
+        .in("vimeoId", vimeoIds);
+
+      const transcripts: Record<string, { title: string; transcript: string }> = {};
+      for (const v of videos ?? []) {
+        if (v.transcript && v.transcript.trim()) {
+          transcripts[v.vimeoId] = { title: v.title, transcript: v.transcript };
+        }
+      }
+
+      return NextResponse.json({ transcripts });
+    }
+
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err) {
     return handleApiError(err, "VideoLessons POST");
