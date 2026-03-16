@@ -52,7 +52,11 @@ export function useCategories(
   const handleDeleteCategory = async (id: string, onFilterReset?: () => void, onRefetch?: () => Promise<void>) => {
     if (!confirm("Delete this category? Videos will become uncategorized.")) return;
     try {
-      await authFetch(`/api/videos/categories/${id}`, { method: "DELETE" });
+      const res = await authFetch(`/api/videos/categories/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Delete failed");
+      }
       setCategories((prev) => prev.filter((c) => c.id !== id));
       if (onFilterReset) onFilterReset();
       else if (onRefetch) await onRefetch();

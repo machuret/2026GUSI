@@ -38,8 +38,8 @@ export function SyncControls({
           </h1>
           <p className="mt-1 text-gray-500">Sync and organize your Vimeo video library by category</p>
           <div className="mt-1.5 flex gap-4 text-[10px] text-gray-400">
-            {lastVideoSync && <span>Last sync: {timeAgo(lastVideoSync.createdAt)} ({lastVideoSync.totalProcessed} videos, {(lastVideoSync.durationMs / 1000).toFixed(1)}s)</span>}
-            {lastTranscriptSync && <span>Transcripts: {timeAgo(lastTranscriptSync.createdAt)} ({lastTranscriptSync.synced} fetched)</span>}
+            {lastVideoSync && <span>Last sync: {timeAgo(lastVideoSync.createdAt)} ({lastVideoSync.totalProcessed ?? 0} videos, {((lastVideoSync.durationMs ?? 0) / 1000).toFixed(1)}s)</span>}
+            {lastTranscriptSync && <span>Transcripts: {timeAgo(lastTranscriptSync.createdAt)} ({lastTranscriptSync.synced ?? 0} fetched)</span>}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">

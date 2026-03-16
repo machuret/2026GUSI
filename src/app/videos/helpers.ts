@@ -1,11 +1,14 @@
 export function formatDuration(secs: number): string {
+  if (!secs || isNaN(secs)) return "0:00";
   const m = Math.floor(secs / 60);
   const s = secs % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 export function timeAgo(dateStr: string): string {
+  if (!dateStr) return "unknown";
   const diff = Date.now() - new Date(dateStr).getTime();
+  if (isNaN(diff)) return "unknown";
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;

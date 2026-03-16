@@ -14,7 +14,7 @@ export function useSyncLog() {
       const data = await res.json();
       setLastVideoSync(data.lastVideoSync ?? null);
       setLastTranscriptSync(data.lastTranscriptSync ?? null);
-    } catch { /* ignore */ }
+    } catch (err) { console.error("SyncLog fetch:", err); }
   }, []);
 
   return { lastVideoSync, lastTranscriptSync, fetchSyncLog };

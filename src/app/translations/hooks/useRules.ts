@@ -29,7 +29,7 @@ export function useRules() {
           return;
         }
       }
-    } catch { /* fall through to localStorage */ }
+    } catch (err) { console.error("Rules DB load:", err); /* fall through to localStorage */ }
 
     // Fallback: localStorage
     const stored = loadAllRules();
@@ -59,7 +59,7 @@ export function useRules() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key: SETTINGS_KEY, value: JSON.stringify(toSave) }),
       });
-    } catch { /* non-fatal — also saved to localStorage below */ }
+    } catch (err) { console.error("Rules DB save:", err); /* non-fatal — also saved to localStorage below */ }
     // Always save to localStorage as backup
     saveAllRules(toSave);
     setAllRules(toSave);

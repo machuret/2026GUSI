@@ -25,7 +25,8 @@ export async function GET(req: NextRequest) {
       .eq("companyId", DEMO_COMPANY_ID)
       .not("transcript", "is", null)
       .neq("transcript", "")
-      .neq("transcript", "__no_captions__");
+      .neq("transcript", "__no_captions__")
+      .neq("transcript", "__fetch_error__");
 
     // Data query — select fields needed for the transcript library
     let dataQuery = db
@@ -35,6 +36,7 @@ export async function GET(req: NextRequest) {
       .not("transcript", "is", null)
       .neq("transcript", "")
       .neq("transcript", "__no_captions__")
+      .neq("transcript", "__fetch_error__")
       .order("publishedAt", { ascending: false, nullsFirst: false })
       .range(offset, offset + limit - 1);
 

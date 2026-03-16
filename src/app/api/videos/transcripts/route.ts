@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
     let fetched = 0;
     let noTrack = 0;
     let errors = 0;
+    let errorIds: string[] = [];
     const now = new Date().toISOString();
 
     for (const video of videos ?? []) {
@@ -77,8 +78,15 @@ export async function POST(req: NextRequest) {
 
         await sleep(RATE_LIMIT_MS); // rate-limit between texttracks calls
       } catch (err) {
-        // Leave transcript as null so this video will be retried on next sync
+        // Mark as fetch error so it leaves the queue — prevents infinite retry loops
+        // Users can manually clear this via the transcriptions page to retry
         console.error(`Transcript fetch failed for ${video.vimeoId}:`, err instanceof Error ? err.message : err);
+        try {
+          await db
+            .from("Video")
+            .update({ transcript: "__fetch_error__", updatedAt: now })
+            .eq("id", video.id);
+        } catch { /* best-effort mark */ }
         errors++;
       }
     }

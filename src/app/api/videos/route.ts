@@ -47,9 +47,12 @@ export async function GET(req: NextRequest) {
 
     // Search filter (ilike on title or description)
     if (search) {
-      const pattern = `%${search}%`;
-      countQuery = countQuery.or(`title.ilike.${pattern},description.ilike.${pattern}`);
-      dataQuery = dataQuery.or(`title.ilike.${pattern},description.ilike.${pattern}`);
+      const safe = search.replace(/[%_\\,.()"']/g, "");
+      if (safe) {
+        const pattern = `%${safe}%`;
+        countQuery = countQuery.or(`title.ilike.${pattern},description.ilike.${pattern}`);
+        dataQuery = dataQuery.or(`title.ilike.${pattern},description.ilike.${pattern}`);
+      }
     }
 
     const [{ count }, { data, error }] = await Promise.all([countQuery, dataQuery]);

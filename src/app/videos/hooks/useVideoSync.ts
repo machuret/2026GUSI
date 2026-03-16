@@ -37,7 +37,7 @@ export function useVideoSync() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "videos", status: "completed", synced: totalSynced, updated: totalUpdated, errors: 0, totalProcessed: totalVimeo, durationMs }),
-      }).catch(() => {});
+      }).catch((err) => console.error("Sync log save:", err));
 
       setSyncMsg(`Done! ${totalSynced} new, ${totalUpdated} updated (${totalVimeo} total) in ${(durationMs / 1000).toFixed(1)}s`);
       setSyncProgress(null);

@@ -33,7 +33,7 @@ export function useTranscriptSync() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "transcripts", status: "completed", synced: totalFetched, updated: 0, errors: totalErrors, totalProcessed: totalFetched + totalNoTrack + totalErrors, durationMs }),
-      }).catch(() => {});
+      }).catch((err) => console.error("Transcript sync log save:", err));
 
       setTranscriptMsg(`Done! ${totalFetched} transcripts fetched, ${totalNoTrack} had no captions (${(durationMs / 1000).toFixed(1)}s)`);
       setTimeout(() => setTranscriptMsg(null), 10000);

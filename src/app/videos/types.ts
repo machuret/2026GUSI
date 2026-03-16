@@ -21,7 +21,7 @@ export interface Video {
   width: number;
   height: number;
   status: string;
-  tags: string[];
+  tags: string[] | null;
   transcript?: string | null;
   publishedAt: string | null;
   createdAt: string;
