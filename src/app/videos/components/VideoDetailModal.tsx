@@ -62,6 +62,13 @@ export function VideoDetailModal({ video, categories, assigningId, onClose, onAs
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [video.id]);
 
+  // Close on Escape key
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div className="relative w-full max-w-4xl max-h-[90vh] rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -80,9 +87,9 @@ export function VideoDetailModal({ video, categories, assigningId, onClose, onAs
               <ExternalLink className="h-3.5 w-3.5" /> View on Vimeo
             </a>
           </div>
-          {video.tags.length > 0 && (
+          {(video.tags ?? []).length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {video.tags.map((t) => (
+              {(video.tags ?? []).map((t) => (
                 <span key={t} className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">{t}</span>
               ))}
             </div>

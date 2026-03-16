@@ -45,9 +45,9 @@ export function VideoListRow({ video: v, categories, assigningId, onSelect, onAs
               <Clock className="h-3 w-3" /> {new Date(v.publishedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
             </span>
           )}
-          {v.tags.length > 0 && (
+          {(v.tags ?? []).length > 0 && (
             <span className="text-[10px] text-gray-400 flex items-center gap-1">
-              <Tag className="h-3 w-3" /> {v.tags.slice(0, 3).join(", ")}
+              <Tag className="h-3 w-3" /> {(v.tags ?? []).slice(0, 3).join(", ")}
             </span>
           )}
         </div>

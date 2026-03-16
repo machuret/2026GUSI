@@ -83,7 +83,7 @@ export default function VideoLessonsPage() {
   const fetchLessons = async () => {
     setLoading(true);
     try {
-      const res = await authFetch("/api/videos/lessons");
+      const res = await authFetch(`/api/videos/lessons?language=${encodeURIComponent(targetLanguage)}`);
       const data = await res.json();
       setLessons(data.lessons ?? []);
       setStats(data.stats ?? null);
@@ -92,7 +92,8 @@ export default function VideoLessonsPage() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchLessons(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchLessons(); }, [targetLanguage]);
 
   const handleSeed = async () => {
     setSeeding(true);

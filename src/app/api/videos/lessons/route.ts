@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     if (authError) return authError;
 
     const courseName = req.nextUrl.searchParams.get("course") || GUSI_ESSENTIALS_COURSE;
+    const targetLanguage = req.nextUrl.searchParams.get("language") || "";
 
     // 1. Fetch all lessons for this course
     const { data: lessons, error: lessonsErr } = await db
@@ -49,24 +50,49 @@ export async function GET(req: NextRequest) {
     }
 
     // 4. Fetch matching Translations (check if any translation exists for each video title)
-    // We look for translations whose title starts with the video title
+    // Translations are saved with title format: "videoTitle — language"
     const videoTitles = (videos ?? []).map((v: any) => v.title).filter(Boolean);
     let translationSet = new Set<string>();
 
     if (videoTitles.length > 0) {
-      // Fetch all translations and match client-side (more reliable than many OR queries)
-      const { data: translations } = await db
+      let translationQuery = db
         .from("Translation")
         .select("title, language")
         .eq("companyId", DEMO_COMPANY_ID);
 
+      // If a target language is specified, only check translations in that language
+      if (targetLanguage) {
+        translationQuery = translationQuery.eq("language", targetLanguage);
+      }
+
+      const { data: translations } = await translationQuery;
+
       if (translations) {
+        // Build a set of expected translation titles for fast lookup
+        const titleLookup = new Map<string, string>(); // translationTitle → videoTitle
+        for (const vTitle of videoTitles) {
+          if (targetLanguage) {
+            // Exact match on the format we use when saving
+            titleLookup.set(`${vTitle} — ${targetLanguage}`, vTitle);
+          } else {
+            // No language filter — accept any "videoTitle — *" pattern
+            titleLookup.set(vTitle, vTitle);
+          }
+        }
+
         for (const t of translations) {
-          // Match if translation title starts with any video title
-          for (const vTitle of videoTitles) {
-            if (t.title && t.title.startsWith(vTitle)) {
-              translationSet.add(vTitle);
-              break;
+          if (!t.title) continue;
+          if (targetLanguage) {
+            // Exact lookup
+            const vTitle = titleLookup.get(t.title);
+            if (vTitle) translationSet.add(vTitle);
+          } else {
+            // Match if translation title is "videoTitle — anyLang"
+            for (const vTitle of videoTitles) {
+              if (t.title === vTitle || t.title.startsWith(`${vTitle} — `)) {
+                translationSet.add(vTitle);
+                break;
+              }
             }
           }
         }

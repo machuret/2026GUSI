@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
 
 const updateSchema = z.object({
@@ -14,15 +15,17 @@ const updateSchema = z.object({
 });
 
 // GET /api/videos/[id] — single video with all fields including transcript
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { response: authError } = await requireAuth();
     if (authError) return authError;
+    const { id } = await params;
 
     const { data, error } = await db
       .from("Video")
       .select("*")
-      .eq("id", params.id)
+      .eq("id", id)
+      .eq("companyId", DEMO_COMPANY_ID)
       .single();
 
     if (error) throw error;
@@ -34,10 +37,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 // PATCH /api/videos/[id] — update video metadata (category, title, description, tags)
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { response: authError } = await requireAuth();
     if (authError) return authError;
+    const { id } = await params;
 
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
@@ -48,7 +52,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const { data, error } = await db
       .from("Video")
       .update({ ...parsed.data, updatedAt: new Date().toISOString() })
-      .eq("id", params.id)
+      .eq("id", id)
+      .eq("companyId", DEMO_COMPANY_ID)
       .select()
       .single();
 
@@ -60,12 +65,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE /api/videos/[id] — remove a video from our database (does not delete from Vimeo)
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { response: authError } = await requireAuth();
     if (authError) return authError;
+    const { id } = await params;
 
-    const { error } = await db.from("Video").delete().eq("id", params.id);
+    const { error } = await db.from("Video").delete().eq("id", id).eq("companyId", DEMO_COMPANY_ID);
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (err) {
