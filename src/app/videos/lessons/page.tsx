@@ -41,13 +41,13 @@ function formatTotalDuration(secs: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
+function StatusBadge({ ok, label, text }: { ok: boolean; label: string; text: string }) {
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+    <span title={text} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
       ok ? "bg-green-100 text-green-700" : "bg-red-50 text-red-500"
     }`}>
       {ok ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-      {label}
+      {text} {label}
     </span>
   );
 }
@@ -173,6 +173,20 @@ export default function VideoLessonsPage() {
         </div>
       )}
 
+      {/* Legend — shown right after stats so users understand columns immediately */}
+      {stats && lessons.length > 0 && (
+        <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-gray-500">
+          <span className="font-semibold text-gray-600">Status columns:</span>
+          <span className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 text-gray-400" /> <strong>Transcript</strong> — extracted from Vimeo</span>
+          <span className="flex items-center gap-1.5"><Languages className="h-3.5 w-3.5 text-gray-400" /> <strong>Translation</strong> — AI-translated to Spanish</span>
+          <span className="flex items-center gap-1.5"><Volume2 className="h-3.5 w-3.5 text-gray-400" /> <strong>Audio</strong> — ElevenLabs voiceover</span>
+          <span className="flex items-center gap-2 ml-auto text-[11px]">
+            <span className="flex items-center gap-1 text-green-600"><CheckCircle2 className="h-3.5 w-3.5" /> Done</span>
+            <span className="flex items-center gap-1 text-red-400"><XCircle className="h-3.5 w-3.5" /> Missing</span>
+          </span>
+        </div>
+      )}
+
       {/* Seed message */}
       {seedMsg && (
         <div className="mb-4 rounded-lg bg-blue-50 border border-blue-200 px-4 py-2 text-sm text-blue-700 font-medium">
@@ -230,9 +244,9 @@ export default function VideoLessonsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <StatusBadge ok={modTranscripts === mod.lessons.length} label={`${modTranscripts}/${mod.lessons.length}`} />
-                    <StatusBadge ok={modTranslations === mod.lessons.length} label={`${modTranslations}/${mod.lessons.length}`} />
-                    <StatusBadge ok={modAudio === mod.lessons.length} label={`${modAudio}/${mod.lessons.length}`} />
+                    <StatusBadge ok={modTranscripts === mod.lessons.length} label={`${modTranscripts}/${mod.lessons.length}`} text="Transcript" />
+                    <StatusBadge ok={modTranslations === mod.lessons.length} label={`${modTranslations}/${mod.lessons.length}`} text="Translation" />
+                    <StatusBadge ok={modAudio === mod.lessons.length} label={`${modAudio}/${mod.lessons.length}`} text="Audio" />
                   </div>
                 </button>
 
@@ -240,13 +254,13 @@ export default function VideoLessonsPage() {
                 {!isCollapsed && (
                   <div className="divide-y divide-gray-100">
                     {/* Column headers */}
-                    <div className="flex items-center gap-3 px-5 py-1.5 bg-gray-50/50 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    <div className="flex items-center gap-3 px-5 py-2 bg-gray-50/50 text-[10px] font-bold uppercase tracking-wider text-gray-400 border-b border-gray-100">
                       <span className="w-6 text-center">#</span>
                       <span className="w-12 text-center">Length</span>
-                      <span className="flex-1">Title</span>
-                      <span className="w-16 text-center"><FileText className="h-3 w-3 mx-auto" /></span>
-                      <span className="w-16 text-center"><Languages className="h-3 w-3 mx-auto" /></span>
-                      <span className="w-16 text-center"><Volume2 className="h-3 w-3 mx-auto" /></span>
+                      <span className="flex-1">Lesson Title</span>
+                      <span className="w-20 text-center flex items-center justify-center gap-1"><FileText className="h-3 w-3" /> Transcript</span>
+                      <span className="w-20 text-center flex items-center justify-center gap-1"><Languages className="h-3 w-3" /> Translation</span>
+                      <span className="w-20 text-center flex items-center justify-center gap-1"><Volume2 className="h-3 w-3" /> Audio</span>
                       <span className="w-8" />
                     </div>
                     {mod.lessons.map((lesson, li) => (
@@ -259,20 +273,20 @@ export default function VideoLessonsPage() {
                             <p className="text-[10px] text-gray-400 mt-0.5">{lesson.transcriptWordCount.toLocaleString()} words</p>
                           )}
                         </div>
-                        <div className="w-16 text-center">
+                        <div className="w-20 text-center" title={lesson.hasTranscript ? `Transcript available (${lesson.transcriptWordCount.toLocaleString()} words)` : "No transcript yet"}>
                           {lesson.hasTranscript
-                            ? <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" />
-                            : <XCircle className="h-4 w-4 text-red-300 mx-auto" />}
+                            ? <span className="inline-flex items-center gap-1 text-green-600 text-[10px] font-medium"><CheckCircle2 className="h-3.5 w-3.5" /> Yes</span>
+                            : <span className="inline-flex items-center gap-1 text-red-400 text-[10px] font-medium"><XCircle className="h-3.5 w-3.5" /> No</span>}
                         </div>
-                        <div className="w-16 text-center">
+                        <div className="w-20 text-center" title={lesson.hasTranslation ? "Translation available" : "No translation yet"}>
                           {lesson.hasTranslation
-                            ? <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" />
-                            : <XCircle className="h-4 w-4 text-red-300 mx-auto" />}
+                            ? <span className="inline-flex items-center gap-1 text-green-600 text-[10px] font-medium"><CheckCircle2 className="h-3.5 w-3.5" /> Yes</span>
+                            : <span className="inline-flex items-center gap-1 text-red-400 text-[10px] font-medium"><XCircle className="h-3.5 w-3.5" /> No</span>}
                         </div>
-                        <div className="w-16 text-center">
+                        <div className="w-20 text-center" title={lesson.hasAudio ? "Audio available" : "No audio yet"}>
                           {lesson.hasAudio
-                            ? <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" />
-                            : <XCircle className="h-4 w-4 text-red-300 mx-auto" />}
+                            ? <span className="inline-flex items-center gap-1 text-green-600 text-[10px] font-medium"><CheckCircle2 className="h-3.5 w-3.5" /> Yes</span>
+                            : <span className="inline-flex items-center gap-1 text-red-400 text-[10px] font-medium"><XCircle className="h-3.5 w-3.5" /> No</span>}
                         </div>
                         <a href={lesson.vimeoUrl} target="_blank" rel="noopener noreferrer" title="Open in Vimeo"
                           className="w-8 flex items-center justify-center rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-indigo-600">
@@ -288,16 +302,11 @@ export default function VideoLessonsPage() {
         </div>
       )}
 
-      {/* Legend */}
+      {/* Bottom legend — compact reminder */}
       {!loading && lessons.length > 0 && (
-        <div className="mt-6 flex items-center gap-6 text-xs text-gray-400">
-          <span className="flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> Transcript</span>
-          <span className="flex items-center gap-1"><Languages className="h-3.5 w-3.5" /> Translation</span>
-          <span className="flex items-center gap-1"><Volume2 className="h-3.5 w-3.5" /> Audio (ElevenLabs)</span>
-          <span className="flex items-center gap-1.5 ml-auto">
-            <CheckCircle2 className="h-3.5 w-3.5 text-green-500" /> Available
-            <XCircle className="h-3.5 w-3.5 text-red-300 ml-2" /> Missing
-          </span>
+        <div className="mt-4 flex items-center gap-4 text-[10px] text-gray-400 justify-center">
+          <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-green-500" /> Yes = Done</span>
+          <span className="flex items-center gap-1"><XCircle className="h-3 w-3 text-red-300" /> No = Missing</span>
         </div>
       )}
     </div>
