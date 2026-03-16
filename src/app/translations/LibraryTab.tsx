@@ -4,27 +4,11 @@ import { useMemo, useState, useRef } from "react";
 import JSZip from "jszip";
 import {
   ChevronDown, ChevronUp, Copy, Check, ThumbsUp, Archive,
-  Trash2, Pencil, Save, Loader2, X, RefreshCw, MessageSquare, Search, Download, GripVertical,
+  Trash2, Pencil, Save, Loader2, X, RefreshCw, MessageSquare, Download, GripVertical,
 } from "lucide-react";
 import type { Translation, TranslationStatus } from "./types";
-import { LANG_COLORS, LANG_FLAGS, STATUS_STYLES } from "./types";
-
-function FlagBadge({ lang }: { lang: string }) {
-  const flag = LANG_FLAGS[lang] ?? "";
-  const colorKey = Object.keys(LANG_COLORS).find((k) => lang.startsWith(k));
-  const colorCls = colorKey ? LANG_COLORS[colorKey] : "bg-gray-100 text-gray-600";
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${colorCls}`}>
-      {flag && <span className="text-sm leading-none">{flag}</span>}
-      {lang}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: TranslationStatus }) {
-  const labels = { draft: "Draft", approved: "Approved", archived: "Archived" };
-  return <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}>{labels[status]}</span>;
-}
+import { FlagBadge, StatusBadge } from "./TranslationBadges";
+import { LibraryFilters } from "./LibraryFilters";
 
 interface Props {
   translations: Translation[];
@@ -67,7 +51,7 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
     archived: translations.filter((t) => t.status === "archived").length,
   };
 
-  const hasActiveFilters = filterStatus !== "all" || filterLang !== "all" || filterCat !== "all" || search || dateFrom || dateTo || sort !== "newest";
+  const hasActiveFilters = filterStatus !== "all" || filterLang !== "all" || filterCat !== "all" || !!search || !!dateFrom || !!dateTo || sort !== "newest";
 
   const clearFilters = () => {
     setFilterStatus("all"); setFilterLang("all"); setFilterCat("all");
@@ -250,70 +234,33 @@ export function LibraryTab({ translations, loading, onStatusChange, onSaveEdit, 
         </div>
       )}
 
-      {/* Search + filters */}
-      <div className="mb-4 space-y-2">
-        {/* Search bar */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by title or content…"
-            className="w-full rounded-lg border border-gray-300 pl-9 pr-9 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-200"
-          />
-          {search && (
-            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-
-        {/* Dropdowns row */}
-        <div className="flex flex-wrap items-center gap-2">
-          <select value={filterLang} onChange={(e) => setFilterLang(e.target.value)}
-            className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-700 focus:outline-none bg-white">
-            <option value="all">All Languages</option>
-            {usedLangs.map((l) => <option key={l} value={l}>{l}</option>)}
-          </select>
-          <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)}
-            className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-700 focus:outline-none bg-white">
-            <option value="all">All Categories</option>
-            {usedCats.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-gray-500">From</label>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-              className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-600 focus:border-brand-500 focus:outline-none" />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-gray-500">To</label>
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-              className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-600 focus:border-brand-500 focus:outline-none" />
-          </div>
-          <select value={sort} onChange={(e) => setSort(e.target.value as "newest" | "oldest")}
-            className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-700 focus:outline-none bg-white">
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-          </select>
-          {hasActiveFilters && (
-            <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-brand-600 hover:underline">
-              <X className="h-3 w-3" /> Clear all
-            </button>
-          )}
-          <div className="ml-auto flex items-center gap-3">
-            <span className="text-xs text-gray-500">{orderedFiltered.length} of {translations.length}</span>
-            {order.length > 0 && (
-              <button onClick={() => setOrder([])} className="text-xs text-gray-400 hover:text-gray-600 hover:underline">Reset order</button>
-            )}
-            {orderedFiltered.length > 0 && (
-              <button onClick={handleToggleSelectAll}
-                className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline">
-                {allSelected ? "Deselect all" : "Select all"}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+      <LibraryFilters
+        search={search}
+        filterStatus={filterStatus}
+        filterLang={filterLang}
+        filterCat={filterCat}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        sort={sort}
+        usedLangs={usedLangs}
+        usedCats={usedCats}
+        hasActiveFilters={hasActiveFilters}
+        resultCount={orderedFiltered.length}
+        totalCount={translations.length}
+        hasOrder={order.length > 0}
+        allSelected={allSelected}
+        someSelected={someSelected}
+        onSearch={setSearch}
+        onFilterStatus={setFilterStatus}
+        onFilterLang={setFilterLang}
+        onFilterCat={setFilterCat}
+        onDateFrom={setDateFrom}
+        onDateTo={setDateTo}
+        onSort={setSort}
+        onClearFilters={clearFilters}
+        onResetOrder={() => setOrder([])}
+        onToggleSelectAll={handleToggleSelectAll}
+      />
 
       {loading ? (
         <div className="py-16 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-gray-400" /></div>
