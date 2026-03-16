@@ -53,6 +53,14 @@ export function TranslateTab({
     setCustomCats(loadCustomCategories());
   }, []);
 
+  // Close import modal on Escape
+  useEffect(() => {
+    if (!showImport) return;
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowImport(false); };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [showImport]);
+
   // Debounce import search
   useEffect(() => {
     if (importTimer.current) clearTimeout(importTimer.current);
@@ -75,7 +83,7 @@ export function TranslateTab({
           setImportVideos(data.videos ?? []);
           setImportPagination(data.pagination ? { hasMore: data.pagination.hasMore, page: data.pagination.page, totalCount: data.pagination.totalCount } : null);
         }
-      } catch { /* silent */ }
+      } catch (err) { console.error("TranslateTab import fetch:", err); }
       finally { if (!cancelled) setImportLoading(false); }
     })();
     return () => { cancelled = true; };
@@ -91,7 +99,7 @@ export function TranslateTab({
       const data = await res.json();
       setImportVideos((prev) => [...prev, ...(data.videos ?? [])]);
       if (data.pagination) setImportPagination({ hasMore: data.pagination.hasMore, page: data.pagination.page, totalCount: data.pagination.totalCount });
-    } catch { /* silent */ }
+    } catch (err) { console.error("TranslateTab import more:", err); }
     finally { setImportLoading(false); }
   };
 

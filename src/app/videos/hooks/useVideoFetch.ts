@@ -33,18 +33,21 @@ export function useVideoFetch() {
     return `/api/videos?${params}`;
   }, [debouncedSearch, filterCat]);
 
+  const fetchCategories = useCallback(async () => {
+    try {
+      const res = await authFetch("/api/videos/categories");
+      const data = await res.json();
+      setCategories(data.categories ?? []);
+    } catch (err) { console.error("Categories fetch:", err); }
+  }, []);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [vRes, cRes] = await Promise.all([
-        authFetch(buildUrl(1)),
-        authFetch("/api/videos/categories"),
-      ]);
-      const vData = await vRes.json();
-      const cData = await cRes.json();
-      setVideos(vData.videos ?? []);
-      setPagination(vData.pagination ?? null);
-      setCategories(cData.categories ?? []);
+      const res = await authFetch(buildUrl(1));
+      const data = await res.json();
+      setVideos(data.videos ?? []);
+      setPagination(data.pagination ?? null);
     } catch { setError("Failed to load data"); }
     finally { setLoading(false); }
   }, [buildUrl]);
@@ -61,12 +64,15 @@ export function useVideoFetch() {
     finally { setLoadingMore(false); }
   };
 
+  // Fetch categories once on mount
+  useEffect(() => { fetchCategories(); }, [fetchCategories]);
+  // Fetch videos whenever search/filter changes
   useEffect(() => { fetchData(); }, [fetchData]);
 
   return {
     videos, setVideos, pagination, categories, setCategories,
     loading, loadingMore, error, setError,
     search, setSearch, debouncedSearch, filterCat, setFilterCat,
-    fetchData, loadMore,
+    fetchData, fetchCategories, loadMore,
   };
 }

@@ -43,7 +43,7 @@ export function VideoDetailModal({ video, categories, assigningId, onClose, onAs
         setSavedOk(true);
         setTimeout(() => setSavedOk(false), 3000);
       }
-    } catch { /* silent */ }
+    } catch (err) { console.error("VideoDetailModal save:", err); }
     finally { setSavingTranscript(false); }
   };
 
@@ -55,7 +55,7 @@ export function VideoDetailModal({ video, categories, assigningId, onClose, onAs
         const res = await authFetch(`/api/videos/${video.id}`);
         const data = await res.json();
         if (!cancelled && data.video) onVideoLoaded(data.video);
-      } catch { /* use existing data */ }
+      } catch (err) { console.error("VideoDetailModal load:", err); }
       finally { if (!cancelled) setLoadingDetail(false); }
     })();
     return () => { cancelled = true; };

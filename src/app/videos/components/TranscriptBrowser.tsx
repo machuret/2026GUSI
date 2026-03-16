@@ -73,7 +73,7 @@ export function TranscriptBrowser() {
         setVideos(data.videos ?? []);
       }
       setPagination(data.pagination ?? null);
-    } catch { /* silent */ }
+    } catch (err) { console.error("TranscriptBrowser fetch:", err); }
     finally { setLoading(false); setLoadingMore(false); }
   }, [debouncedSearch]);
 
@@ -106,7 +106,7 @@ export function TranscriptBrowser() {
         setSavedId(v.id);
         setTimeout(() => setSavedId(null), 3000);
       }
-    } catch { /* silent */ }
+    } catch (err) { console.error("TranscriptBrowser save:", err); }
     finally { setSavingId(null); }
   };
 

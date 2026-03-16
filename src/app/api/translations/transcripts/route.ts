@@ -24,7 +24,8 @@ export async function GET(req: NextRequest) {
       .select("id", { count: "exact", head: true })
       .eq("companyId", DEMO_COMPANY_ID)
       .not("transcript", "is", null)
-      .neq("transcript", "");
+      .neq("transcript", "")
+      .neq("transcript", "__no_captions__");
 
     // Data query — select fields needed for the transcript library
     let dataQuery = db
@@ -33,14 +34,18 @@ export async function GET(req: NextRequest) {
       .eq("companyId", DEMO_COMPANY_ID)
       .not("transcript", "is", null)
       .neq("transcript", "")
+      .neq("transcript", "__no_captions__")
       .order("publishedAt", { ascending: false, nullsFirst: false })
       .range(offset, offset + limit - 1);
 
     // Search filter — search in title, description, and transcript content
     if (search) {
-      const pattern = `%${search}%`;
-      countQuery = countQuery.or(`title.ilike.${pattern},description.ilike.${pattern},transcript.ilike.${pattern}`);
-      dataQuery = dataQuery.or(`title.ilike.${pattern},description.ilike.${pattern},transcript.ilike.${pattern}`);
+      const safe = search.replace(/[%_\\,.()"']/g, "");
+      if (safe) {
+        const pattern = `%${safe}%`;
+        countQuery = countQuery.or(`title.ilike.${pattern},description.ilike.${pattern},transcript.ilike.${pattern}`);
+        dataQuery = dataQuery.or(`title.ilike.${pattern},description.ilike.${pattern},transcript.ilike.${pattern}`);
+      }
     }
 
     const [{ count }, { data, error }] = await Promise.all([countQuery, dataQuery]);

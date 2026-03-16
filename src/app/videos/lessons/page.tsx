@@ -88,7 +88,7 @@ export default function VideoLessonsPage() {
       setLessons(data.lessons ?? []);
       setStats(data.stats ?? null);
       setCourseName(data.courseName ?? "");
-    } catch { /* silent */ }
+    } catch (err) { console.error("Lessons fetch:", err); setErrorMsg("Failed to load lessons"); }
     finally { setLoading(false); }
   };
 

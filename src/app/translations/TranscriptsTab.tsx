@@ -135,10 +135,30 @@ export function TranscriptsTab({ buildCombinedRules, onSaved, onError, onNavigat
     setTranslating(true);
     setTranslateProgress({ current: 0, total: selectedVideos.length, saved: 0 });
 
+    // Check for existing translations to avoid duplicates
+    let existingTitles = new Set<string>();
+    try {
+      const checkRes = await authFetch(`/api/translations?limit=1000&language=${encodeURIComponent(targetLanguage)}`);
+      const checkData = await checkRes.json();
+      if (checkData.translations) {
+        existingTitles = new Set((checkData.translations as { title: string }[]).map((t) => t.title));
+      }
+    } catch { /* proceed without check */ }
+
     let saved = 0;
+    let skipped = 0;
     for (let i = 0; i < selectedVideos.length; i++) {
       if (cancelRef.current) break;
       const video = selectedVideos[i];
+      const expectedTitle = `${video.title} — ${targetLanguage}`;
+
+      // Skip if translation already exists
+      if (existingTitles.has(expectedTitle)) {
+        skipped++;
+        setTranslateProgress({ current: i + 1, total: selectedVideos.length, saved });
+        continue;
+      }
+
       setTranslateProgress({ current: i + 1, total: selectedVideos.length, saved });
 
       try {
@@ -189,6 +209,10 @@ export function TranscriptsTab({ buildCombinedRules, onSaved, onError, onNavigat
     setTranslateProgress({ current: wasCancelled ? saved : selectedVideos.length, total: selectedVideos.length, saved });
     setTranslating(false);
     setSelected(new Set());
+
+    if (skipped > 0) {
+      onError(`Skipped ${skipped} already-translated transcript${skipped !== 1 ? "s" : ""} (${targetLanguage})`);
+    }
 
     // Keep the progress message visible for a bit
     setTimeout(() => setTranslateProgress(null), 8000);

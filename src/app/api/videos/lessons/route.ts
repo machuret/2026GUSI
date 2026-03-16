@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
     const enriched = lessons.map((lesson: any) => {
       const video = videoMap.get(lesson.vimeoId);
       const hasVideo = !!video;
-      const hasTranscript = hasVideo && !!video.transcript && video.transcript.trim().length > 0;
+      const hasTranscript = hasVideo && !!video.transcript && video.transcript.trim().length > 0 && video.transcript !== "__no_captions__";
       const hasTranslation = hasVideo && translationSet.has(video.title);
 
       return {

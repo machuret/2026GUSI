@@ -28,7 +28,10 @@ export async function GET(req: NextRequest) {
 
     if (language) query = query.eq("language", language);
     if (status)   query = query.eq("status", status);
-    if (search)   query = query.or(`title.ilike.%${search}%,translatedText.ilike.%${search}%`);
+    if (search) {
+      const safe = search.replace(/[%_\\,.()"']/g, "");
+      if (safe) query = query.or(`title.ilike.%${safe}%,translatedText.ilike.%${safe}%`);
+    }
 
     const { data, error, count } = await query.range(offset, offset + limit - 1);
 

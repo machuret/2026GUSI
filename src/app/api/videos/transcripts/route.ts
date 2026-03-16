@@ -56,10 +56,10 @@ export async function POST(req: NextRequest) {
           tracks[0];
 
         if (!track?.link) {
-          // Save immediately — marks as "" so it won't be retried
+          // Mark as no captions available — distinct from null (never fetched) and real transcript
           await db
             .from("Video")
-            .update({ transcript: "", updatedAt: now })
+            .update({ transcript: "__no_captions__", updatedAt: now })
             .eq("id", video.id);
           noTrack++;
         } else {
@@ -76,14 +76,9 @@ export async function POST(req: NextRequest) {
         }
 
         await sleep(RATE_LIMIT_MS); // rate-limit between texttracks calls
-      } catch {
-        // Save immediately — mark failed so we don't retry endlessly
-        try {
-          await db
-            .from("Video")
-            .update({ transcript: "", updatedAt: now })
-            .eq("id", video.id);
-        } catch { /* best-effort mark */ }
+      } catch (err) {
+        // Leave transcript as null so this video will be retried on next sync
+        console.error(`Transcript fetch failed for ${video.vimeoId}:`, err instanceof Error ? err.message : err);
         errors++;
       }
     }

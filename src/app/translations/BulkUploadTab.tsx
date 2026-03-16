@@ -174,7 +174,12 @@ export function BulkUploadTab({ buildCombinedRules, getLangRules, onSaved }: Pro
       if (res.ok) {
         setSavedIds((prev) => new Set(Array.from(prev).concat(item.id)));
         onSaved(data.translation);
+      } else {
+        updateFile(item.id, { error: data.error || "Save failed" });
       }
+    } catch (err) {
+      console.error("BulkUpload save:", err);
+      updateFile(item.id, { error: err instanceof Error ? err.message : "Save failed" });
     } finally {
       setSavingId(null);
     }
