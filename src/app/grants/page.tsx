@@ -94,6 +94,25 @@ export default function GrantsPage() {
     setBulkBusy(false);
   };
 
+  const getOlderDuplicateIds = (): string[] => {
+    const pairsSeen = new Set<string>();
+    const toDelete: string[] = [];
+    for (const entry of Array.from(duplicateMap.entries())) {
+      const idA = entry[0];
+      const nameB = entry[1];
+      if (pairsSeen.has(idA)) continue;
+      const idB = grants.find(g => g.name === nameB && g.id !== idA)?.id;
+      if (!idB) continue;
+      pairsSeen.add(idA);
+      pairsSeen.add(idB);
+      const gA = grants.find(g => g.id === idA)!;
+      const gB = grants.find(g => g.id === idB)!;
+      const older = new Date(gA.createdAt) <= new Date(gB.createdAt) ? gA : gB;
+      toDelete.push(older.id);
+    }
+    return toDelete;
+  };
+
   const toggleSort = (field: typeof sortField) => {
     if (sortField === field) setSortAsc(v => !v);
     else { setSortField(field); setSortAsc(field === "name"); }
@@ -594,23 +613,7 @@ export default function GrantsPage() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => {
-                // For each pair, keep the newer (later createdAt), select the older for deletion
-                const pairsSeen = new Set<string>();
-                const toDelete = new Set<string>();
-                for (const [idA, nameB] of Array.from(duplicateMap.entries())) {
-                  if (pairsSeen.has(idA)) continue;
-                  // Find the paired grant (the one whose name matches nameB)
-                  const idB = grants.find(g => g.name === nameB && g.id !== idA)?.id;
-                  if (!idB) continue;
-                  pairsSeen.add(idA);
-                  pairsSeen.add(idB);
-                  const gA = grants.find(g => g.id === idA)!;
-                  const gB = grants.find(g => g.id === idB)!;
-                  // Keep newer, delete older
-                  const older = new Date(gA.createdAt) <= new Date(gB.createdAt) ? gA : gB;
-                  toDelete.add(older.id);
-                }
-                setSelected(toDelete);
+                setSelected(new Set(getOlderDuplicateIds()));
               }}
               className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
             >
@@ -618,20 +621,7 @@ export default function GrantsPage() {
             </button>
             <button
               onClick={async () => {
-                // Build delete set: older of each pair
-                const pairsSeen = new Set<string>();
-                const toDelete: string[] = [];
-                for (const [idA, nameB] of Array.from(duplicateMap.entries())) {
-                  if (pairsSeen.has(idA)) continue;
-                  const idB = grants.find(g => g.name === nameB && g.id !== idA)?.id;
-                  if (!idB) continue;
-                  pairsSeen.add(idA);
-                  pairsSeen.add(idB);
-                  const gA = grants.find(g => g.id === idA)!;
-                  const gB = grants.find(g => g.id === idB)!;
-                  const older = new Date(gA.createdAt) <= new Date(gB.createdAt) ? gA : gB;
-                  toDelete.push(older.id);
-                }
+                const toDelete = getOlderDuplicateIds();
                 if (toDelete.length === 0) return;
                 if (!confirm(`Delete ${toDelete.length} older duplicate grant${toDelete.length !== 1 ? "s" : ""}, keeping the newer entry in each pair?`)) return;
                 setBulkBusy(true);
