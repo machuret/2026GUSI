@@ -235,7 +235,6 @@ export default function GrantsPage() {
       const matchSearch = !search || g.name.toLowerCase().includes(q) || (g.founder ?? "").toLowerCase().includes(q) || (g.notes ?? "").toLowerCase().includes(q);
       const matchDecision = decisionFilter === "All" || g.decision === decisionFilter;
       const matchCrm = crmFilter === "all" || (crmFilter === "in" ? !!g.crmStatus : !g.crmStatus);
-      const matchDuplicates = !showDuplicatesOnly || duplicateMap.has(g.id);
       let matchDeadline = true;
       if (deadlineFilter === "active") {
         matchDeadline = !g.deadlineDate || new Date(g.deadlineDate).getTime() >= now;
@@ -246,7 +245,7 @@ export default function GrantsPage() {
       } else if (deadlineFilter !== "all" && !g.deadlineDate) {
         matchDeadline = false;
       }
-      return matchSearch && matchDecision && matchDeadline && matchCrm && matchDuplicates;
+      return matchSearch && matchDecision && matchDeadline && matchCrm;
     })
     .sort((a, b) => {
       let av: string | number = 0, bv: string | number = 0;
