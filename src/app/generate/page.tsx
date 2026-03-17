@@ -39,8 +39,19 @@ export default function GeneratePage() {
     loading, regenerating, result, reviewStatus, error,
     abVariants,
     generate, generateAB, handleABPick,
-    handleApprove, handleReject, handleRevise, handleRegenerate, reset,
+    handleApprove: _handleApprove, handleReject, handleRevise, handleRegenerate, reset,
   } = useContentGeneration();
+
+  const handleApprove = async () => {
+    await _handleApprove();
+    if (selectedIdeaId) {
+      await authFetch(`/api/ideas/${selectedIdeaId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "done" }),
+      });
+    }
+  };
 
   useEffect(() => {
     if (activeTab !== "ideas") return;

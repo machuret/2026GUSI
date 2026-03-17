@@ -3,7 +3,7 @@
 import { memo, useState } from "react";
 import {
   Copy, Check, Pencil, Send, Trash2, Tag,
-  X, ChevronDown, ChevronUp, User, Calendar, ShieldCheck,
+  X, ChevronDown, ChevronUp, User, Calendar, ShieldCheck, Download,
 } from "lucide-react";
 import { SchedulePicker } from "@/components/content/SchedulePicker";
 import { DestinationPicker } from "@/components/library/DestinationPicker";
@@ -288,6 +288,21 @@ function LibraryCardInner({
               {copied
                 ? <><Check className="h-3.5 w-3.5 text-green-500" /> Copied</>
                 : <><Copy className="h-3.5 w-3.5" /> Copy</>}
+            </button>
+
+            <button
+              onClick={() => {
+                const blob = new Blob([item.output], { type: "text/plain" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${item.categoryLabel ?? "post"}-${new Date(item.createdAt).toISOString().slice(0,10)}.txt`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+            >
+              <Download className="h-3.5 w-3.5" /> Export
             </button>
 
             <button

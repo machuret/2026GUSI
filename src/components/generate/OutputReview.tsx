@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   Copy, Check, ThumbsUp, ThumbsDown,
-  RefreshCw, ArrowRight, RotateCcw,
+  RefreshCw, ArrowRight, RotateCcw, Download,
 } from "lucide-react";
 import { CATEGORIES } from "./CategoryPicker";
 import { FeedbackForm } from "./FeedbackForm";
@@ -163,10 +163,25 @@ export function OutputReview({
           </button>
         )}
         {reviewStatus === "approved" && (
-          <button onClick={onCreateAnother}
-            className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
-            <ArrowRight className="h-4 w-4" /> Create Another
-          </button>
+          <>
+            <button
+              onClick={() => {
+                const blob = new Blob([result.output], { type: "text/plain" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `approved-post-${new Date().toISOString().slice(0,10)}.txt`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-100">
+              <Download className="h-4 w-4" /> Export .txt
+            </button>
+            <button onClick={onCreateAnother}
+              className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
+              <ArrowRight className="h-4 w-4" /> Create Another
+            </button>
+          </>
         )}
       </div>
     </div>
