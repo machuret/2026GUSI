@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { authFetch } from "@/lib/authFetch";
 
 export interface Grant {
@@ -48,23 +47,15 @@ export function useGrants() {
     else setLoading(true);
     setError(null);
     try {
-      // TODO: replace DEMO_COMPANY_ID with session companyId when multi-tenancy lands
-      const [grantsRes, companyRes, profileRes] = await Promise.all([
-        authFetch(`/api/grants?companyId=${DEMO_COMPANY_ID}`),
-        authFetch(`/api/company?companyId=${DEMO_COMPANY_ID}`),
-        authFetch("/api/grant-profile"),
-      ]);
-      if (!grantsRes.ok) throw new Error(`Failed to load grants (${grantsRes.status})`);
-      if (!companyRes.ok && companyRes.status !== 404) throw new Error(`Failed to load company (${companyRes.status})`);
-      const grantsData = await grantsRes.json();
-      const companyData = companyRes.ok ? await companyRes.json() : {};
-      const profileData = profileRes.ok ? await profileRes.json() : {};
+      // Single bootstrap call replaces 3 parallel fetches (grants + company + profile)
+      const res = await authFetch("/api/grants/bootstrap");
+      if (!res.ok) throw new Error(`Failed to load grants (${res.status})`);
+      const data = await res.json();
 
-      setGrants(grantsData.grants ?? []);
+      setGrants(data.grants ?? []);
 
-      // /api/company returns { company, info } — not companyInfo
-      const info = companyData.info;
-      const company = companyData.company;
+      const company = data.company;
+      const info = data.info;
       const parts = [
         company?.name        ? `Company: ${company.name}`           : null,
         company?.industry    ? `Industry: ${company.industry}`      : null,
@@ -76,20 +67,20 @@ export function useGrants() {
         info?.products       ? `Products: ${info.products}`         : null,
       ].filter(Boolean);
 
-      // Fallback: also build DNA from Grant Profile if company info is sparse
-      const gp = profileData.profile;
+      // Also build DNA from Grant Profile if company info is sparse
+      const gp = data.profile;
       if (gp) {
         const gpParts = [
-          gp.orgType          ? `Organisation Type: ${gp.orgType}` : null,
-          gp.sector            ? `Sector: ${gp.sector}${gp.subSector ? ` / ${gp.subSector}` : ""}` : null,
-          gp.location          ? `Location: ${gp.location}, ${gp.country ?? "Australia"}` : null,
-          gp.stage             ? `Stage: ${gp.stage}` : null,
-          gp.teamSize          ? `Team Size: ${gp.teamSize}` : null,
-          gp.annualRevenue     ? `Annual Revenue: ${gp.annualRevenue}` : null,
-          gp.missionStatement  ? `Mission: ${gp.missionStatement}` : null,
-          gp.keyActivities     ? `Key Activities: ${gp.keyActivities}` : null,
-          gp.uniqueStrengths   ? `Unique Strengths: ${gp.uniqueStrengths}` : null,
-          gp.pastGrantsWon     ? `Past Grants Won: ${gp.pastGrantsWon}` : null,
+          gp.orgType         ? `Organisation Type: ${gp.orgType}${gp.orgType2 ? ` / ${gp.orgType2}` : ""}` : null,
+          gp.sector          ? `Sector: ${gp.sector}${gp.subSector ? ` / ${gp.subSector}` : ""}` : null,
+          gp.location        ? `Location: ${gp.location}, ${gp.country ?? "Australia"}` : null,
+          gp.stage           ? `Stage: ${gp.stage}` : null,
+          gp.teamSize        ? `Team Size: ${gp.teamSize}` : null,
+          gp.annualRevenue   ? `Annual Revenue: ${gp.annualRevenue}` : null,
+          gp.missionStatement ? `Mission: ${gp.missionStatement}` : null,
+          gp.keyActivities   ? `Key Activities: ${gp.keyActivities}` : null,
+          gp.uniqueStrengths ? `Unique Strengths: ${gp.uniqueStrengths}` : null,
+          gp.pastGrantsWon   ? `Past Grants Won: ${gp.pastGrantsWon}` : null,
           Array.isArray(gp.focusAreas) && gp.focusAreas.length > 0 ? `Focus Areas: ${gp.focusAreas.join(", ")}` : null,
         ].filter(Boolean);
         parts.push(...gpParts);
