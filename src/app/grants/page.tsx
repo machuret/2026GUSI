@@ -41,15 +41,6 @@ export default function GrantsPage() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const pageItems = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
-  const allPageSelected = pageItems.length > 0 && pageItems.every(g => selected.has(g.id));
-  const toggleSelectAll = () => {
-    if (allPageSelected) {
-      setSelected(prev => { const next = new Set(prev); pageItems.forEach(g => next.delete(g.id)); return next; });
-    } else {
-      setSelected(prev => { const next = new Set(prev); pageItems.forEach(g => next.add(g.id)); return next; });
-    }
-  };
 
   const bulkAddToCRM = async () => {
     setBulkBusy(true);
@@ -245,6 +236,16 @@ export default function GrantsPage() {
       else { av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
       return av < bv ? (sortAsc ? -1 : 1) : av > bv ? (sortAsc ? 1 : -1) : 0;
     });
+
+  const pageItems = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
+  const allPageSelected = pageItems.length > 0 && pageItems.every(g => selected.has(g.id));
+  const toggleSelectAll = () => {
+    if (allPageSelected) {
+      setSelected(prev => { const next = new Set(prev); pageItems.forEach(g => next.delete(g.id)); return next; });
+    } else {
+      setSelected(prev => { const next = new Set(prev); pageItems.forEach(g => next.add(g.id)); return next; });
+    }
+  };
 
   const counts = {
     Apply:    grants.filter(g => g.decision === "Apply").length,
