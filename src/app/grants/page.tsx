@@ -11,7 +11,7 @@ import { AddGrantModal } from "./components/AddGrantModal";
 import { GrantSearchModal } from "./components/GrantSearchModal";
 
 export default function GrantsPage() {
-  const { grants, loading, companyDNA, updateGrant: updateGrantRaw, deleteGrant, addGrant, fetchGrants } = useGrants();
+  const { grants, loading, error, companyDNA, updateGrant: updateGrantRaw, deleteGrant, addGrant, fetchGrants } = useGrants();
   const updateGrant = async (id: string, d: Partial<Grant>) => { return await updateGrantRaw(id, d); };
   const [showAdd, setShowAdd] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
