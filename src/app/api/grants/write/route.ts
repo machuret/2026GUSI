@@ -6,8 +6,8 @@ import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
 import { getCompanyContext, getVaultContext, getLessonsContext } from "@/lib/aiContext";
-import { stripHtml } from "@/lib/htmlUtils";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { crawlGrantUrl, buildProfileContext } from "@/lib/grantCrawl";
 import { z } from "zod";
 
 const SECTIONS = [
@@ -70,23 +70,6 @@ const SECTION_INSTRUCTIONS: Record<Section, string> = {
   "Contact Details": "Provide the primary contact person for this grant application. Format as: Full Name, Position/Title, Organisation Name, Phone Number, Email Address, Mailing Address. If available, also include a secondary contact. Use the organisation details from the company profile. Present the information in a clear, professional format suitable for a formal grant application.",
 };
 
-async function crawlGrantUrl(url: string): Promise<string> {
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
-      },
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) return "";
-    const html = await res.text();
-    return stripHtml(html).slice(0, 8000);
-  } catch {
-    return "";
-  }
-}
-
 function buildGrantContext(grant: Record<string, unknown>): string {
   const lines = [
     `Grant Name: ${grant.name}`,
@@ -122,28 +105,6 @@ function buildGrantContext(grant: Record<string, unknown>): string {
   }
 
   return `## GRANT DETAILS\n${lines.join("\n")}`;
-}
-
-function buildProfileContext(profile: Record<string, unknown>): string {
-  const lines = [
-    profile.orgType ? `Organisation Type: ${profile.orgType}` : null,
-    profile.sector ? `Sector: ${profile.sector}${profile.subSector ? ` / ${profile.subSector}` : ""}` : null,
-    profile.stage ? `Stage: ${profile.stage}` : null,
-    profile.teamSize ? `Team Size: ${profile.teamSize}` : null,
-    profile.annualRevenue ? `Annual Revenue: ${profile.annualRevenue}` : null,
-    profile.location ? `Location: ${profile.location}, ${profile.country ?? "Australia"}` : null,
-    profile.yearFounded ? `Year Founded: ${profile.yearFounded}` : null,
-    (profile.focusAreas as string[] | null)?.length ? `Focus Areas: ${(profile.focusAreas as string[]).join(", ")}` : null,
-    profile.isRegisteredCharity ? `Registered Charity: Yes` : null,
-    profile.indigenousOwned ? `Indigenous-owned: Yes` : null,
-    profile.womanOwned ? `Woman-owned: Yes` : null,
-    profile.regionalOrRural ? `Regional/Rural: Yes` : null,
-    profile.missionStatement ? `\nMission Statement:\n${profile.missionStatement}` : null,
-    profile.keyActivities ? `\nKey Activities:\n${profile.keyActivities}` : null,
-    profile.uniqueStrengths ? `\nUnique Strengths:\n${profile.uniqueStrengths}` : null,
-    profile.pastGrantsWon ? `\nPast Grants Won:\n${profile.pastGrantsWon}` : null,
-  ].filter(Boolean);
-  return `## GRANT PROFILE\n${lines.join("\n")}`;
 }
 
 export async function POST(req: NextRequest) {

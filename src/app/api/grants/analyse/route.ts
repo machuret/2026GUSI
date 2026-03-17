@@ -7,29 +7,12 @@ import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
 import { getCompanyContext, getVaultContext } from "@/lib/aiContext";
-import { stripHtml } from "@/lib/htmlUtils";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { crawlGrantUrl, buildProfileContext } from "@/lib/grantCrawl";
 
 const bodySchema = z.object({
   grantId: z.string().min(1),
 });
-
-async function crawlGrantUrl(url: string): Promise<string> {
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
-      },
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) return "";
-    const html = await res.text();
-    return stripHtml(html).slice(0, 8000);
-  } catch {
-    return "";
-  }
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -87,26 +70,7 @@ export async function POST(req: NextRequest) {
     ].filter(Boolean);
 
     // ── Build profile block ───────────────────────────────────────────────
-    const profileLines = profile ? [
-      profile.orgType ? `Organisation Type: ${profile.orgType}` : null,
-      profile.sector ? `Sector: ${profile.sector}${profile.subSector ? ` / ${profile.subSector}` : ""}` : null,
-      profile.location ? `Location: ${profile.location}, ${profile.country ?? "Australia"}` : null,
-      profile.stage ? `Stage: ${profile.stage}` : null,
-      profile.teamSize ? `Team Size: ${profile.teamSize}` : null,
-      profile.annualRevenue ? `Annual Revenue: ${profile.annualRevenue}` : null,
-      (profile.focusAreas as string[] | null)?.length ? `Focus Areas: ${(profile.focusAreas as string[]).join(", ")}` : null,
-      profile.targetFundingMin != null || profile.targetFundingMax != null
-        ? `Target Funding: $${profile.targetFundingMin ?? 0} – $${profile.targetFundingMax ?? "Any"}` : null,
-      profile.preferredDuration ? `Preferred Duration: ${profile.preferredDuration}` : null,
-      profile.isRegisteredCharity ? "Registered Charity: Yes" : null,
-      profile.indigenousOwned ? "Indigenous-owned: Yes" : null,
-      profile.womanOwned ? "Woman-owned: Yes" : null,
-      profile.regionalOrRural ? "Regional/Rural: Yes" : null,
-      profile.missionStatement ? `\nMission Statement:\n${profile.missionStatement}` : null,
-      profile.keyActivities ? `\nKey Activities:\n${profile.keyActivities}` : null,
-      profile.uniqueStrengths ? `\nUnique Strengths:\n${profile.uniqueStrengths}` : null,
-      profile.pastGrantsWon ? `\nPast Grants Won:\n${profile.pastGrantsWon}` : null,
-    ].filter(Boolean) : [];
+    const profileBlock = profile ? buildProfileContext(profile as Record<string, unknown>) : "";
 
     // ── Deadline context ──────────────────────────────────────────────────
     const deadlineStr = grant.deadlineDate ? (() => {
@@ -120,7 +84,7 @@ export async function POST(req: NextRequest) {
     // ── Assemble context ─────────────────────────────────────────────────
     const contextParts: string[] = [
       `## GRANT DETAILS\n${grantLines.join("\n")}\nDeadline: ${deadlineStr}`,
-      profileLines.length > 0 ? `## GRANT PROFILE\n${profileLines.join("\n")}` : "",
+      profileBlock,
       company.block,
       vault.block,
       crawledContent
@@ -188,14 +152,18 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation:
     // ── Persist full analysis to Grant record ─────────────────────────────
     const score = typeof analysis.score === "number" ? Math.min(100, Math.max(0, Math.round(analysis.score))) : null;
     const verdict = typeof analysis.verdict === "string" ? analysis.verdict : null;
-    const decision = verdict === "Strong Fit" || verdict === "Good Fit" ? "Apply"
+
+    // Only auto-set decision if the user hasn't manually chosen one
+    const currentDecision = (grant as Record<string, unknown>).decision as string | null;
+    const autoDecision = verdict === "Strong Fit" || verdict === "Good Fit" ? "Apply"
       : verdict === "Not Eligible" ? "No" : "Maybe";
+    const decisionUpdate = currentDecision ? {} : { decision: autoDecision };
 
     await db.from("Grant").update({
       aiScore: score,
       aiVerdict: verdict,
       aiAnalysis: analysis,
-      decision,
+      ...decisionUpdate,
       updatedAt: new Date().toISOString(),
     }).eq("id", grantId);
 

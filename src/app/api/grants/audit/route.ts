@@ -1,4 +1,3 @@
-export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
@@ -8,6 +7,7 @@ import { requireAuth, handleApiError } from "@/lib/apiHelpers";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
 import { getVaultContext } from "@/lib/aiContext";
+import { buildProfileContext } from "@/lib/grantCrawl";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 
 const DEFAULT_AUDIT_PROMPT = `You are a Grant Application Auditor. Your job is to review a draft grant application and assess its accuracy and quality against the organisation's real information (vault documents and grant profile).
@@ -117,15 +117,7 @@ export async function POST(req: NextRequest) {
     const systemPrompt = promptRow?.systemPrompt ?? DEFAULT_AUDIT_PROMPT;
 
     // Build profile block
-    const profileBlock = profile ? [
-      profile.orgType      ? `Organisation Type: ${profile.orgType}` : null,
-      profile.sector       ? `Sector: ${profile.sector}${profile.subSector ? ` / ${profile.subSector}` : ""}` : null,
-      profile.location     ? `Location: ${profile.location}, ${profile.country ?? "Australia"}` : null,
-      profile.missionStatement ? `\nMission Statement:\n${profile.missionStatement}` : null,
-      profile.keyActivities    ? `\nKey Activities:\n${profile.keyActivities}` : null,
-      profile.uniqueStrengths  ? `\nUnique Strengths:\n${profile.uniqueStrengths}` : null,
-      profile.pastGrantsWon    ? `\nPast Grants Won:\n${profile.pastGrantsWon}` : null,
-    ].filter(Boolean).join("\n") : "";
+    const profileBlock = profile ? buildProfileContext(profile as Record<string, unknown>) : "";
 
     // Build draft content block
     const draftBlock = Object.entries(sections)

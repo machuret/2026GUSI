@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { FileText, BookOpen, PenLine, Trophy, ShieldCheck, Sparkles, Loader2 } from "lucide-react";
+import { FileText, BookOpen, PenLine, Trophy, ShieldCheck, Sparkles, Loader2, X } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import {
@@ -54,6 +54,7 @@ export default function GrantBuilderPage() {
   const [exportingIds, setExportingIds] = useState<Set<string>>(new Set());
   const [massGenerating, setMassGenerating] = useState(false);
   const [massProgress, setMassProgress] = useState<{ done: number; total: number; current: string } | null>(null);
+  const massAbortRef = useRef(false);
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const selectedGrant = grants.find((g) => g.id === selectedGrantId) ?? null;
@@ -253,34 +254,41 @@ export default function GrantBuilderPage() {
     const crmGrants = grants.filter(g => !!g.crmStatus);
     if (crmGrants.length === 0) { alert("No CRM grants found. Add grants to CRM first."); return; }
     if (!confirm(`Generate full applications for all ${crmGrants.length} CRM grant${crmGrants.length !== 1 ? "s" : ""}? This will run sequentially and may take several minutes.`)) return;
+    massAbortRef.current = false;
     setMassGenerating(true);
     setMassProgress({ done: 0, total: crmGrants.length, current: "" });
+    const currentTone = tone;
+    const currentLength = length;
     for (let i = 0; i < crmGrants.length; i++) {
+      if (massAbortRef.current) break;
       const grant = crmGrants[i];
       setMassProgress({ done: i, total: crmGrants.length, current: grant.name });
       try {
         // 1. Get brief
-        let brief: WritingBrief | null = grant.aiBrief && typeof grant.aiBrief === "object"
-          ? grant.aiBrief as unknown as WritingBrief
-          : null;
+        let brief: WritingBrief | null = null;
+        if (grant.aiBrief && typeof grant.aiBrief === "object" &&
+            "funderPriorities" in grant.aiBrief && Array.isArray((grant.aiBrief as Record<string,unknown>).funderPriorities)) {
+          brief = grant.aiBrief as unknown as WritingBrief;
+        }
         if (!brief) {
-          const bRes  = await authFetch("/api/grants/write", {
+          const bRes = await authFetch("/api/grants/write", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ grantId: grant.id, mode: "brief" }),
           });
           const bData = await bRes.json();
           if (!bRes.ok || !bData.brief) continue;
-          brief = bData.brief;
+          brief = bData.brief as WritingBrief;
         }
         // 2. Generate each section
         const generatedSections: Record<string, string> = {};
         for (const section of ALL_SECTIONS) {
+          if (massAbortRef.current) break;
           try {
-            const sRes  = await authFetch("/api/grants/write", {
+            const sRes = await authFetch("/api/grants/write", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ grantId: grant.id, mode: "section", section, brief, tone: "first_person", length: "standard", previousSections: generatedSections }),
+              body: JSON.stringify({ grantId: grant.id, mode: "section", section, brief, tone: currentTone, length: currentLength, previousSections: generatedSections }),
             });
             const sData = await sRes.json();
             if (sRes.ok && sData.content) generatedSections[section] = sData.content;
@@ -291,7 +299,7 @@ export default function GrantBuilderPage() {
           await authFetch("/api/grants/drafts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ grantId: grant.id, grantName: grant.name, sections: generatedSections, brief, tone: "first_person", length: "standard" }),
+            body: JSON.stringify({ grantId: grant.id, grantName: grant.name, sections: generatedSections, brief, tone: currentTone, length: currentLength }),
           });
         }
       } catch { /* skip grant */ }
@@ -325,9 +333,15 @@ export default function GrantBuilderPage() {
     }
     setExportingIds(new Set());
     if (results.length === 0) { alert("Export failed — check Google service account configuration."); return; }
-    // Open each doc in a new tab
-    results.forEach(r => window.open(r.url, "_blank", "noopener,noreferrer"));
-    if (results.length > 1) alert(`Exported ${results.length} grant docs to Google Docs.`);
+    if (results.length === 1) {
+      // Single export — safe to open directly (user-initiated)
+      window.open(results[0].url, "_blank", "noopener,noreferrer");
+    } else {
+      // Multiple exports — browsers block sequential window.open calls not tied to gesture.
+      // Show a summary with clickable links instead.
+      const links = results.map(r => `${r.name}: ${r.url}`).join("\n");
+      alert(`Exported ${results.length} grant docs to Google Docs:\n\n${links}\n\nCopy links above to open each doc.`);
+    }
   }, []);
 
   // ── Export to Google Docs ───────────────────────────────────────────────────
@@ -444,7 +458,16 @@ export default function GrantBuilderPage() {
         <div className="mb-5 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
           <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-indigo-700">
             <span>Generating CRM grants — {massProgress.done} / {massProgress.total} complete{massProgress.current ? ` · Now: ${massProgress.current}` : ""}</span>
-            <span>{Math.round((massProgress.done / massProgress.total) * 100)}%</span>
+            <div className="flex items-center gap-2">
+              <span>{Math.round((massProgress.done / massProgress.total) * 100)}%</span>
+              <button
+                onClick={() => { massAbortRef.current = true; }}
+                title="Cancel generation"
+                className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-indigo-600 hover:bg-indigo-200"
+              >
+                <X className="h-3 w-3" /> Cancel
+              </button>
+            </div>
           </div>
           <div className="h-2 w-full rounded-full bg-indigo-100 overflow-hidden">
             <div className="h-full rounded-full bg-indigo-500 transition-all duration-300"

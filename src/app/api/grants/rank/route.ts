@@ -7,6 +7,7 @@ import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
+import { buildProfileContext } from "@/lib/grantCrawl";
 
 // POST /api/grants/rank — re-score all grants against the GrantProfile
 export async function POST(req: NextRequest) {
@@ -26,26 +27,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No grants to rank." }, { status: 400 });
     }
 
-    const profileSummary = [
-      `Organisation Type: ${profile.orgType ?? "Not specified"}`,
-      `Sector: ${profile.sector ?? "Not specified"}${profile.subSector ? ` / ${profile.subSector}` : ""}`,
-      `Location: ${profile.location ?? "Not specified"}, ${profile.country ?? "Australia"}`,
-      `Stage: ${profile.stage ?? "Not specified"}`,
-      `Team Size: ${profile.teamSize ?? "Not specified"}`,
-      `Annual Revenue: ${profile.annualRevenue ?? "Not specified"}`,
-      `Focus Areas: ${(profile.focusAreas ?? []).join(", ") || "Not specified"}`,
-      `Target Funding: $${profile.targetFundingMin ?? 0} – $${profile.targetFundingMax ?? "Any"}`,
-      `Preferred Duration: ${profile.preferredDuration ?? "Any"}`,
-      `Registered Charity: ${profile.isRegisteredCharity ? "Yes" : "No"}`,
-      `Has ABN: ${profile.hasABN ? "Yes" : "No"}`,
-      `Indigenous Owned: ${profile.indigenousOwned ? "Yes" : "No"}`,
-      `Woman Owned: ${profile.womanOwned ? "Yes" : "No"}`,
-      `Regional/Rural: ${profile.regionalOrRural ? "Yes" : "No"}`,
-      profile.missionStatement ? `Mission: ${profile.missionStatement}` : null,
-      profile.keyActivities ? `Key Activities: ${profile.keyActivities}` : null,
-      profile.uniqueStrengths ? `Unique Strengths: ${profile.uniqueStrengths}` : null,
-      profile.pastGrantsWon ? `Past Grants Won: ${profile.pastGrantsWon}` : null,
-    ].filter(Boolean).join("\n");
+    const profileSummary = buildProfileContext(profile as Record<string, unknown>);
 
     const results: { id: string; matchScore: number }[] = [];
     let totalPrompt = 0;

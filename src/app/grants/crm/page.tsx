@@ -23,7 +23,7 @@ const COLUMNS: { status: CrmStatus; label: string; color: string; bg: string; bo
   { status: "Lost",        label: "❌ Lost",         color: "text-gray-500",   bg: "bg-gray-50",   border: "border-gray-200" },
 ];
 
-const STATUS_OPTIONS: CrmStatus[] = ["Researching", "Pipeline", "Active", "Submitted", "Lost"];
+const STATUS_OPTIONS: CrmStatus[] = ["Researching", "Pipeline", "Active", "Submitted", "Won", "Lost"];
 
 function parseAmount(raw?: string | null): number | null {
   if (!raw) return null;

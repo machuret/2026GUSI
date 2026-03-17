@@ -131,8 +131,9 @@ export default function GrantsPage() {
           const data = await res.json();
           const batchScored = res.ok && data.results ? data.results.length : 0;
           scored += batchScored;
-          if (!res.ok || !batchScored) errors += batch.length;
+          if (!res.ok || batchScored === 0) errors += batch.length;
         } catch { errors += batch.length; }
+        // Only count as errors if the whole batch failed (batchScored=0)
         setScoreProgress({ done: Math.min(i + BATCH, ids.length), total: ids.length, errors });
       }
       setMsg(`✓ Complexity scored ${scored} of ${ids.length} grants${errors > 0 ? ` (${errors} failed)` : ""}`);
@@ -150,7 +151,9 @@ export default function GrantsPage() {
       return !g.deadlineDate || new Date(g.deadlineDate).getTime() >= nowMs;
     });
     if (ids.length === 0) { setMsg("No active grants to analyse (all selected grants have expired deadlines)"); return; }
-    if (!confirm(`Run AI Fit analysis on ${ids.length} grant${ids.length !== 1 ? "s" : ""}? This may take a while.`)) return;
+    const skipped = allIds.length - ids.length;
+    const skipNote = skipped > 0 ? ` (${skipped} expired skipped)` : "";
+    if (!confirm(`Run AI Fit analysis on ${ids.length} grant${ids.length !== 1 ? "s" : ""}${skipNote}? This may take a while.`)) return;
     setBulkAnalysing(true); setActionMsg(null);
     setAnalyseProgress({ done: 0, total: ids.length, errors: 0 });
     let ok = 0;
@@ -539,13 +542,25 @@ export default function GrantsPage() {
       )}
 
       {/* Table */}
-      {loading ? (
+      {error && (
+        <div className="py-20 text-center">
+          <p className="text-red-600 font-medium mb-2">Failed to load grants</p>
+          <p className="text-sm text-gray-500 mb-4">{error}</p>
+          <button onClick={fetchGrants} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">Retry</button>
+        </div>
+      )}
+
+      {loading && (
         <div className="py-20 text-center text-gray-400"><Loader2 className="mx-auto h-8 w-8 animate-spin mb-3" />Loading grants…</div>
-      ) : filtered.length === 0 ? (
+      )}
+
+      {!loading && !error && filtered.length === 0 && (
         <div className="rounded-xl border border-dashed border-gray-300 py-20 text-center">
           <p className="text-gray-400">{grants.length === 0 ? "No grants yet. Click \"Add Grant\" to get started." : "No grants match the current filter."}</p>
         </div>
-      ) : (
+      )}
+
+      {!loading && !error && filtered.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
           <table className="w-full">
             <thead>

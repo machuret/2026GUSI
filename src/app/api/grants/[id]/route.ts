@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { handleApiError } from "@/lib/apiHelpers";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
+import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
 
 const updateSchema = z.object({
@@ -48,6 +49,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     if (fetchError) throw fetchError;
     if (!existing) return NextResponse.json({ error: "Grant not found" }, { status: 404 });
+    if (existing.companyId !== DEMO_COMPANY_ID) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { data: grant, error } = await db
       .from("Grant")
@@ -78,6 +80,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     if (fetchError) throw fetchError;
     if (!existing) return NextResponse.json({ error: "Grant not found" }, { status: 404 });
+    if (existing.companyId !== DEMO_COMPANY_ID) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { error } = await db.from("Grant").delete().eq("id", id);
     if (error) throw error;
