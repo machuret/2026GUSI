@@ -59,7 +59,12 @@ export default function GrantsPage() {
       const result = await res.json();
       if (result.success) {
         patchGrantsLocal(ids, { crmStatus: "Researching" as Grant["crmStatus"] });
-        setMsg(`✓ Added ${ids.length} grant${ids.length !== 1 ? "s" : ""} to CRM`);
+        const actual = result.updated ?? ids.length;
+        if (actual < ids.length) {
+          setMsg(`⚠ Only ${actual} of ${ids.length} grants updated in DB — check Vercel logs`);
+        } else {
+          setMsg(`✓ Added ${actual} grant${actual !== 1 ? "s" : ""} to CRM`);
+        }
       } else {
         setMsg(`Failed to add to CRM: ${result.error ?? "unknown error"}`);
       }

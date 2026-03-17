@@ -19,15 +19,29 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { ids } = schema.parse(body);
 
-    const { error } = await db
+    // Verify ownership first
+    const { data: owned, error: checkErr } = await db
       .from("Grant")
-      .delete()
+      .select("id")
       .in("id", ids)
       .eq("companyId", DEMO_COMPANY_ID);
 
+    if (checkErr) throw checkErr;
+
+    const ownedIds = (owned ?? []).map((r: { id: string }) => r.id);
+
+    if (ownedIds.length === 0) {
+      return NextResponse.json({ success: false, error: "No matching grants found for this company" }, { status: 404 });
+    }
+
+    const { error } = await db
+      .from("Grant")
+      .delete()
+      .in("id", ownedIds);
+
     if (error) throw error;
 
-    return NextResponse.json({ success: true, deleted: ids.length });
+    return NextResponse.json({ success: true, deleted: ownedIds.length });
   } catch (error) {
     return handleApiError(error, "Bulk Delete Grants");
   }

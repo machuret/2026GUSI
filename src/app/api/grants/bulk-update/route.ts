@@ -23,15 +23,37 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { ids, data } = bulkUpdateSchema.parse(body);
 
-    const { error } = await db
+    // Verify all IDs belong to this company first
+    const { data: owned, error: checkErr } = await db
       .from("Grant")
-      .update({ ...data, updatedAt: new Date().toISOString() })
+      .select("id")
       .in("id", ids)
       .eq("companyId", DEMO_COMPANY_ID);
 
-    if (error) throw error;
+    if (checkErr) throw checkErr;
 
-    return NextResponse.json({ success: true, updated: ids.length });
+    const ownedIds = (owned ?? []).map((r: { id: string }) => r.id);
+
+    if (ownedIds.length === 0) {
+      console.error(`[bulk-update] 0 of ${ids.length} IDs matched companyId=${DEMO_COMPANY_ID}`);
+      return NextResponse.json({ success: false, error: "No matching grants found for this company" }, { status: 404 });
+    }
+
+    // Update only the verified IDs (by id alone — service role bypasses RLS)
+    const { data: updated, error } = await db
+      .from("Grant")
+      .update({ ...data, updatedAt: new Date().toISOString() })
+      .in("id", ownedIds)
+      .select("id, crmStatus");
+
+    if (error) {
+      console.error("[bulk-update] DB error:", error);
+      throw error;
+    }
+
+    console.log(`[bulk-update] requested=${ids.length} owned=${ownedIds.length} actuallyUpdated=${updated?.length ?? 0} crmStatus=${data.crmStatus}`);
+
+    return NextResponse.json({ success: true, updated: updated?.length ?? 0, requested: ids.length, owned: ownedIds.length });
   } catch (error) {
     return handleApiError(error, "Bulk Update Grants");
   }
