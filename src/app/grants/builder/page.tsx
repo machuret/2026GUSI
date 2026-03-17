@@ -251,9 +251,18 @@ export default function GrantBuilderPage() {
 
   // ── Mass generate all CRM grants ─────────────────────────────────────────────
   const massGenerateCRM = useCallback(async () => {
-    const crmGrants = grants.filter(g => !!g.crmStatus);
-    if (crmGrants.length === 0) { alert("No CRM grants found. Add grants to CRM first."); return; }
-    if (!confirm(`Generate full applications for all ${crmGrants.length} CRM grant${crmGrants.length !== 1 ? "s" : ""}? This will run sequentially and may take several minutes.`)) return;
+    const allCrmGrants = grants.filter(g => !!g.crmStatus);
+    if (allCrmGrants.length === 0) { alert("No CRM grants found. Add grants to CRM first."); return; }
+    // Only build grants that don't already have a saved draft
+    const draftedGrantIds = new Set(drafts.map(d => d.grantId));
+    const crmGrants = allCrmGrants.filter(g => !draftedGrantIds.has(g.id));
+    const alreadyBuilt = allCrmGrants.length - crmGrants.length;
+    if (crmGrants.length === 0) {
+      alert(`All ${allCrmGrants.length} CRM grant${allCrmGrants.length !== 1 ? "s" : ""} already have a saved draft. Nothing to generate.`);
+      return;
+    }
+    const skipNote = alreadyBuilt > 0 ? ` (${alreadyBuilt} already built — skipped)` : "";
+    if (!confirm(`Generate full applications for ${crmGrants.length} CRM grant${crmGrants.length !== 1 ? "s" : ""}${skipNote}? This will run sequentially and may take several minutes.`)) return;
     massAbortRef.current = false;
     setMassGenerating(true);
     setMassProgress({ done: 0, total: crmGrants.length, current: "" });
@@ -310,7 +319,7 @@ export default function GrantBuilderPage() {
     setMassGenerating(false);
     setMassProgress(null);
     setActiveTab("drafts");
-  }, [grants, tone, length]);
+  }, [grants, drafts, tone, length]);
 
   // ── Bulk export drafts to Google Docs ────────────────────────────────────────
   const bulkExportDrafts = useCallback(async (ids: string[]) => {
@@ -442,7 +451,12 @@ export default function GrantBuilderPage() {
             className="flex items-center gap-2 rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
           >
             {massGenerating ? <Loader2 className="inline h-4 w-4 animate-spin" /> : <Sparkles className="inline h-4 w-4" />}
-            {massGenerating ? `Generating… (${massProgress?.done ?? 0}/${massProgress?.total ?? 0})` : "Generate All CRM"}
+            {massGenerating ? `Generating… (${massProgress?.done ?? 0}/${massProgress?.total ?? 0})` : (() => {
+              const allCrm = grants.filter(g => !!g.crmStatus).length;
+              const draftedIds = new Set(drafts.map(d => d.grantId));
+              const pending = grants.filter(g => !!g.crmStatus && !draftedIds.has(g.id)).length;
+              return pending === 0 ? `All CRM Built (${allCrm})` : `Build CRM (${pending} pending${allCrm - pending > 0 ? `, ${allCrm - pending} done` : ""})`;
+            })()}
           </button>
             <Link href="/grants/examples" className="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 transition-colors">
             <Trophy className="inline h-4 w-4 mr-1.5 -mt-0.5" />Examples
