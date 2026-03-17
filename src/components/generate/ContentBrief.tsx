@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sparkles, ChevronDown, ChevronUp } from "lucide-react";
 import { CATEGORIES } from "./CategoryPicker";
 
@@ -42,11 +42,23 @@ interface Props {
   category: string;
   loading: boolean;
   onGenerate: (brief: BriefFields) => void;
+  initialTopic?: string;
+  initialTitle?: string;
 }
 
-export function ContentBrief({ category, loading, onGenerate }: Props) {
+export function ContentBrief({ category, loading, onGenerate, initialTopic, initialTitle }: Props) {
   const [brief, setBrief] = useState<BriefFields>(defaultBrief);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  useEffect(() => {
+    if (initialTopic || initialTitle) {
+      setBrief((prev) => ({
+        ...prev,
+        topic: initialTopic ?? prev.topic,
+        title: initialTitle ?? prev.title,
+      }));
+    }
+  }, [initialTopic, initialTitle]);
   const selectedCat = CATEGORIES.find((c) => c.key === category);
   const isSocial = category === "social_media";
   const hasTitle = category === "blog_post" || category === "newsletter";

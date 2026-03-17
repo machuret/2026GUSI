@@ -32,6 +32,8 @@ export default function GeneratePage() {
   const [ideas, setIdeas] = useState<SavedIdea[]>([]);
   const [ideasLoading, setIdeasLoading] = useState(false);
   const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
+  const [ideaTopic, setIdeaTopic]   = useState<string | undefined>(undefined);
+  const [ideaTitle, setIdeaTitle]   = useState<string | undefined>(undefined);
 
   const {
     loading, regenerating, result, reviewStatus, error,
@@ -54,13 +56,10 @@ export default function GeneratePage() {
     setSelectedIdeaId(idea.id);
     const cat = CONTENT_TYPE_TO_CATEGORY[idea.contentType] ?? "blog_post";
     setCategory(cat);
+    setIdeaTopic(idea.summary ? `${idea.title} — ${idea.summary}` : idea.title);
+    setIdeaTitle(idea.title);
     setActiveTab("brief");
     reset();
-    // Pre-fill brief topic with idea title after tab switch
-    setTimeout(() => {
-      const topicInput = document.querySelector<HTMLInputElement>('input[name="topic"], textarea[name="topic"]');
-      if (topicInput) { topicInput.value = idea.title; topicInput.dispatchEvent(new Event("input", { bubbles: true })); }
-    }, 100);
   };
 
   const handleGenerate = (brief: BriefFields) => {
@@ -123,6 +122,8 @@ export default function GeneratePage() {
             category={category}
             loading={loading}
             onGenerate={handleGenerate}
+            initialTopic={ideaTopic}
+            initialTitle={ideaTitle}
           />
         </div>
       )}
