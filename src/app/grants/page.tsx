@@ -552,7 +552,7 @@ export default function GrantsPage() {
         <div className="flex flex-shrink-0 gap-1.5 items-center">
           {duplicateMap.size > 0 && (
             <button
-              onClick={() => { setShowDuplicatesOnly(v => { if (!v) { setDeadlineFilter("all"); setDecisionFilter("All"); setCrmFilter("all"); } return !v; }); setCurrentPage(1); }}
+              onClick={() => { if (!showDuplicatesOnly) { setDeadlineFilter("all"); setDecisionFilter("All"); setCrmFilter("all"); } setShowDuplicatesOnly(!showDuplicatesOnly); setCurrentPage(1); }}
               className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
                 showDuplicatesOnly
                   ? "bg-amber-500 text-white"
