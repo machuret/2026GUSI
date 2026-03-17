@@ -552,7 +552,7 @@ export default function GrantsPage() {
         <div className="flex flex-shrink-0 gap-1.5 items-center">
           {duplicateMap.size > 0 && (
             <button
-              onClick={() => { setShowDuplicatesOnly(v => !v); setCurrentPage(1); }}
+              onClick={() => { setShowDuplicatesOnly(v => { if (!v) { setDeadlineFilter("all"); setDecisionFilter("All"); setCrmFilter("all"); } return !v; }); setCurrentPage(1); }}
               className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
                 showDuplicatesOnly
                   ? "bg-amber-500 text-white"
@@ -587,7 +587,7 @@ export default function GrantsPage() {
             {Math.floor(duplicateMap.size / 2)} possible duplicate pair{Math.floor(duplicateMap.size / 2) !== 1 ? "s" : ""} detected in your grant list
           </p>
           <button
-            onClick={() => { setShowDuplicatesOnly(true); setCurrentPage(1); }}
+            onClick={() => { setShowDuplicatesOnly(true); setDeadlineFilter("all"); setDecisionFilter("All"); setCrmFilter("all"); setCurrentPage(1); }}
             className="ml-auto rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
           >
             Review duplicates
@@ -604,7 +604,7 @@ export default function GrantsPage() {
               {filtered.length} grant{filtered.length !== 1 ? "s" : ""} in {Math.floor(duplicateMap.size / 2)} duplicate pair{Math.floor(duplicateMap.size / 2) !== 1 ? "s" : ""} — the older entry in each pair is pre-selected for deletion
             </p>
             <button
-              onClick={() => setShowDuplicatesOnly(false)}
+              onClick={() => { setShowDuplicatesOnly(false); setDeadlineFilter("active"); }}
               className="ml-auto rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 whitespace-nowrap"
             >
               Back to all
