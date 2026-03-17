@@ -141,14 +141,14 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
               className="h-3.5 w-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
           </td>
         )}
-        <td className="px-4 py-3">
+        <td className="px-4 py-3 max-w-[280px]">
           <div className="flex items-start gap-2">
             <button onClick={() => setExpanded(v => !v)} className="mt-0.5 shrink-0 text-gray-400 hover:text-brand-600">
               {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-medium text-gray-900 text-sm">{grant.name}</p>
+                <p className="font-medium text-gray-900 text-sm break-words">{grant.name}</p>
                 {grant.aiAnalysis && (
                   <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">✦ AI Fit</span>
                 )}
