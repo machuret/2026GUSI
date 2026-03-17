@@ -47,9 +47,10 @@ export default function GrantBuilderPage() {
 
   // ── UI ─────────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<"builder" | "drafts">("builder");
-  const [saving,    setSaving]    = useState(false);
-  const [saveMsg,   setSaveMsg]   = useState<string | null>(null);
-  const [copied,    setCopied]    = useState<string | null>(null);
+  const [saving,       setSaving]       = useState(false);
+  const [saveMsg,      setSaveMsg]      = useState<string | null>(null);
+  const [copied,       setCopied]       = useState<string | null>(null);
+  const [exportingDoc, setExportingDoc] = useState(false);
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const selectedGrant = grants.find((g) => g.id === selectedGrantId) ?? null;
@@ -244,6 +245,30 @@ export default function GrantBuilderPage() {
     setDrafts((prev) => prev.filter((d) => d.id !== draftId));
   }, []);
 
+  // ── Export to Google Docs ───────────────────────────────────────────────────
+  const exportDoc = useCallback(async () => {
+    if (!hasSections) return;
+    setExportingDoc(true);
+    try {
+      const res  = await authFetch("/api/grants/export-doc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          grantName: selectedGrant?.name ?? "Grant Application",
+          sections,
+          enabledList,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Export failed");
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      alert(`Export failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setExportingDoc(false);
+    }
+  }, [hasSections, selectedGrant, sections, enabledList]);
+
   // ── Copy helpers ───────────────────────────────────────────────────────────
   const copySection = useCallback((key: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -375,6 +400,8 @@ export default function GrantBuilderPage() {
             onEditSection={(s, val) => { setSections((prev) => ({ ...prev, [s]: val })); setSaved(false); }}
             onDownload={() => downloadTxt(selectedGrant?.name ?? "grant", sections, enabledList)}
             onSaveDraft={saveDraft}
+            onExportDoc={exportDoc}
+            exportingDoc={exportingDoc}
             hasSections={hasSections}
           />
         </div>

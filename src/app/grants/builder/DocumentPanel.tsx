@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles, Loader2, Copy, RefreshCw, CheckCircle, Download, Save } from "lucide-react";
+import { Sparkles, Loader2, Copy, RefreshCw, CheckCircle, Download, Save, FileUp } from "lucide-react";
 import { SECTION_META, SectionName, wordCount } from "./types";
 
 interface Props {
@@ -19,6 +19,8 @@ interface Props {
   onEditSection: (s: SectionName, value: string) => void;
   onDownload: () => void;
   onSaveDraft: () => void;
+  onExportDoc: () => void;
+  exportingDoc: boolean;
   hasSections: boolean;
 }
 
@@ -26,7 +28,7 @@ export default function DocumentPanel({
   enabledList, sections, generatingSection, generating,
   copied, saving, saveMsg, totalWords, grantName,
   onCopySection, onCopyAll, onRegenSection, onEditSection,
-  onDownload, onSaveDraft, hasSections,
+  onDownload, onSaveDraft, onExportDoc, exportingDoc, hasSections,
 }: Props) {
   if (!hasSections && !generating) {
     return (
@@ -70,6 +72,16 @@ export default function DocumentPanel({
               className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
             >
               <Download className="h-3.5 w-3.5" /> Download .txt
+            </button>
+            <button
+              onClick={onExportDoc}
+              disabled={exportingDoc}
+              className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+            >
+              {exportingDoc
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <FileUp className="h-3.5 w-3.5" />}
+              {exportingDoc ? "Exporting…" : "Export to Google Docs"}
             </button>
             <button
               onClick={onSaveDraft}
