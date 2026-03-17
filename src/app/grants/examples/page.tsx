@@ -86,17 +86,25 @@ export default function GrantExamplesPage() {
   const set = (k: string, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
 
   const handleAdd = async () => {
-    if (!form.title.trim() || !form.content.trim()) {
-      setSaveError("Title and content are required");
+    if (!form.content.trim()) {
+      setSaveError("Content is required — paste your grant text");
       return;
     }
+    // Auto-generate title from first ~60 chars of content if left blank
+    const payload = form.title.trim()
+      ? form
+      : {
+          ...form,
+          title: form.content.trim().replace(/\s+/g, " ").slice(0, 60) +
+            (form.content.trim().length > 60 ? "…" : ""),
+        };
     setSaving(true);
     setSaveError(null);
     try {
       const res = await authFetch("/api/grants/examples", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save");
@@ -207,36 +215,48 @@ export default function GrantExamplesPage() {
             <button onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {/* Content first — paste-first flow */}
             <div className="md:col-span-2">
-              <label className={labelCls}>Title *</label>
-              <input value={form.title} onChange={(e) => set("title", e.target.value)} className={inputCls} placeholder="e.g. AIATSIS Grant 2024 — Won" />
+              <label className={labelCls}>Content <span className="text-red-500">*</span> <span className="text-gray-400 font-normal">— paste your grant document here, everything else is optional</span></label>
+              <textarea
+                autoFocus
+                value={form.content}
+                onChange={(e) => set("content", e.target.value)}
+                rows={12}
+                className={inputCls + " resize-y font-mono text-xs"}
+                placeholder="Paste the full or partial grant application text here…"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelCls}>Title <span className="text-gray-400 font-normal">— optional, auto-filled from content if blank</span></label>
+              <input value={form.title} onChange={(e) => set("title", e.target.value)} className={inputCls} placeholder="e.g. AIATSIS Grant 2024 — Won (leave blank to auto-fill)" />
             </div>
             <div>
-              <label className={labelCls}>Grant Name</label>
+              <label className={labelCls}>Grant Name <span className="text-gray-400 font-normal">(optional)</span></label>
               <input value={form.grantName} onChange={(e) => set("grantName", e.target.value)} className={inputCls} placeholder="e.g. AIATSIS Research Grant" />
             </div>
             <div>
-              <label className={labelCls}>Funder</label>
+              <label className={labelCls}>Funder <span className="text-gray-400 font-normal">(optional)</span></label>
               <input value={form.funder} onChange={(e) => set("funder", e.target.value)} className={inputCls} placeholder="e.g. AIATSIS" />
             </div>
             <div>
-              <label className={labelCls}>Amount</label>
+              <label className={labelCls}>Amount <span className="text-gray-400 font-normal">(optional)</span></label>
               <input value={form.amount} onChange={(e) => set("amount", e.target.value)} className={inputCls} placeholder="e.g. $50,000" />
             </div>
             <div>
-              <label className={labelCls}>Outcome</label>
+              <label className={labelCls}>Outcome <span className="text-gray-400 font-normal">(optional)</span></label>
               <select value={form.outcome} onChange={(e) => set("outcome", e.target.value)} className={inputCls}>
                 {OUTCOME_OPTIONS.map((o) => <option key={o} value={o}>{o || "Select…"}</option>)}
               </select>
             </div>
             <div>
-              <label className={labelCls}>Section</label>
+              <label className={labelCls}>Section <span className="text-gray-400 font-normal">(optional)</span></label>
               <select value={form.section} onChange={(e) => set("section", e.target.value)} className={inputCls}>
                 {SECTION_OPTIONS.map((s) => <option key={s} value={s}>{s || "Select section…"}</option>)}
               </select>
             </div>
             <div>
-              <label className={labelCls}>Tags</label>
+              <label className={labelCls}>Tags <span className="text-gray-400 font-normal">(optional)</span></label>
               <div className="flex gap-2">
                 <input value={tagInput} onChange={(e) => setTagInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
@@ -257,23 +277,13 @@ export default function GrantExamplesPage() {
               )}
             </div>
             <div className="md:col-span-2">
-              <label className={labelCls}>Content * <span className="text-gray-400 font-normal">— paste the example grant text here</span></label>
-              <textarea
-                value={form.content}
-                onChange={(e) => set("content", e.target.value)}
-                rows={10}
-                className={inputCls + " resize-y font-mono text-xs"}
-                placeholder="Paste the full or partial grant application text here. This will be used by the AI as a reference when writing new applications."
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className={labelCls}>Notes <span className="text-gray-400 font-normal">— why was this example successful?</span></label>
+              <label className={labelCls}>Notes <span className="text-gray-400 font-normal">— why was this successful? (optional)</span></label>
               <textarea
                 value={form.notes}
                 onChange={(e) => set("notes", e.target.value)}
                 rows={3}
                 className={inputCls + " resize-y"}
-                placeholder="e.g. Strong needs statement backed by ABS data, clear SMART objectives, aligned with funder's reconciliation focus"
+                placeholder="e.g. Strong needs statement backed by ABS data, clear SMART objectives…"
               />
             </div>
           </div>
