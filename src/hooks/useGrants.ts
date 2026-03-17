@@ -124,5 +124,13 @@ export function useGrants() {
     setGrants((prev) => [grant, ...prev]);
   }, []);
 
-  return { grants, loading, refreshing, error, companyDNA, fetchGrants, updateGrant, deleteGrant, addGrant };
+  const patchGrantsLocal = useCallback((ids: string[], data: Partial<Grant>) => {
+    setGrants((prev) => prev.map((g) => ids.includes(g.id) ? { ...g, ...data } : g));
+  }, []);
+
+  const removeGrantsLocal = useCallback((ids: string[]) => {
+    setGrants((prev) => prev.filter((g) => !ids.includes(g.id)));
+  }, []);
+
+  return { grants, loading, refreshing, error, companyDNA, fetchGrants, updateGrant, deleteGrant, addGrant, patchGrantsLocal, removeGrantsLocal };
 }

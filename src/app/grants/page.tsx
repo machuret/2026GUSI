@@ -11,7 +11,7 @@ import { AddGrantModal } from "./components/AddGrantModal";
 import { GrantSearchModal } from "./components/GrantSearchModal";
 
 export default function GrantsPage() {
-  const { grants, loading, error, companyDNA, updateGrant: updateGrantRaw, deleteGrant, addGrant, fetchGrants } = useGrants();
+  const { grants, loading, error, companyDNA, updateGrant: updateGrantRaw, deleteGrant, addGrant, fetchGrants, patchGrantsLocal, removeGrantsLocal } = useGrants();
   const updateGrant = async (id: string, d: Partial<Grant>) => { return await updateGrantRaw(id, d); };
   const [showAdd, setShowAdd] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -55,8 +55,7 @@ export default function GrantsPage() {
       });
       const result = await res.json();
       if (result.success) {
-        // Update local state for all affected grants
-        ids.forEach(id => updateGrantRaw(id, { crmStatus: "Researching" as Grant["crmStatus"] }));
+        patchGrantsLocal(ids, { crmStatus: "Researching" as Grant["crmStatus"] });
         setMsg(`✓ Added ${ids.length} grant${ids.length !== 1 ? "s" : ""} to CRM`);
       } else {
         setMsg(`Failed to add to CRM: ${result.error ?? "unknown error"}`);
@@ -81,7 +80,7 @@ export default function GrantsPage() {
       });
       const result = await res.json();
       if (result.success) {
-        ids.forEach(id => deleteGrant(id));
+        removeGrantsLocal(ids);
         setMsg(`✓ Deleted ${ids.length} grant${ids.length !== 1 ? "s" : ""}`);
       } else {
         setMsg(`Failed to delete: ${result.error ?? "unknown error"}`);
