@@ -11,6 +11,7 @@ import { PromptCard, type Prompt } from "./components/PromptCard";
 const CATEGORIES = [
   ...BASE_CATEGORIES.map(({ key, label }) => ({ key, label })),
   { key: "general", label: "General" },
+  { key: "grant_audit", label: "Grant Audit (Grant Auditor tool)" },
 ];
 
 export default function PromptsPage() {
@@ -105,6 +106,9 @@ export default function PromptsPage() {
         <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6">
           <h3 className="mb-4 font-semibold text-gray-800">New Custom Prompt Override</h3>
           <p className="mb-4 text-xs text-gray-500">This will be injected into the &ldquo;Custom Instructions&rdquo; section of the live prompt for the selected content type.</p>
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <strong>Tip:</strong> Use content type <code className="bg-amber-100 px-1 rounded">Grant Audit</code> to customise the <a href="/grants/auditor" className="underline font-medium">Grant Auditor</a> tool. Your prompt replaces the default audit instructions and receives the draft content, vault documents, and grant profile as context.
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <input placeholder="Template name (e.g. Newsletter — Clinical Tone)"
               value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}

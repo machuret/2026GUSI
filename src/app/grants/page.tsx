@@ -573,8 +573,8 @@ export default function GrantsPage() {
                 <th className="px-2 py-3 text-left w-[90px]">{renderSortBtn("geographicScope", "Country")}</th>
                 <th className="px-2 py-3 text-left w-[100px]">{renderSortBtn("deadlineDate", "Deadline")}</th>
                 <th className="px-2 py-3 text-left w-[100px]">{renderSortBtn("amount", "Amount")}</th>
-                <th className="px-2 py-3 text-left w-[80px]">{renderSortBtn("matchScore", "Match")}</th>
-                <th className="px-2 py-3 text-left w-[60px]">{renderSortBtn("fitScore", "Fit")}</th>
+                <th className="px-2 py-3 text-left w-[80px]" title="AI Profile Match score (0–100) — how well this grant matches your Grant Profile">{renderSortBtn("matchScore", "Match")}</th>
+                <th className="px-2 py-3 text-left w-[60px]" title="Your manual Fit rating (1–5 stars) — set this yourself to track personal priority">{renderSortBtn("fitScore", "Fit ★")}</th>
                 <th className="px-2 py-3 text-left w-[90px] text-xs font-semibold uppercase tracking-wide text-gray-500">Decision</th>
                 <th className="px-2 py-3 text-center w-[50px] text-xs font-semibold uppercase tracking-wide text-gray-500">···</th>
               </tr>
