@@ -157,7 +157,8 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation:
     const currentDecision = (grant as Record<string, unknown>).decision as string | null;
     const autoDecision = verdict === "Strong Fit" || verdict === "Good Fit" ? "Apply"
       : verdict === "Not Eligible" ? "No" : "Maybe";
-    const decisionUpdate = currentDecision ? {} : { decision: autoDecision };
+    const decision = currentDecision ?? autoDecision;
+    const decisionUpdate = currentDecision ? {} : { decision };
 
     await db.from("Grant").update({
       aiScore: score,
