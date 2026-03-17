@@ -570,19 +570,19 @@ export default function GrantsPage() {
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-2 py-3 w-8">
+              <tr className="border-b border-gray-100 bg-gray-50 sticky top-0 z-10">
+                <th className="px-2 py-3 w-8 bg-gray-50">
                   <input type="checkbox" checked={allPageSelected}
                     onChange={toggleSelectAll} className="h-3.5 w-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
                 </th>
-                <th className="px-3 py-3 text-left">{renderSortBtn("name", "Grant")}</th>
-                <th className="px-2 py-3 text-left w-[90px]">{renderSortBtn("geographicScope", "Country")}</th>
-                <th className="px-2 py-3 text-left w-[100px]">{renderSortBtn("deadlineDate", "Deadline")}</th>
-                <th className="px-2 py-3 text-left w-[100px]">{renderSortBtn("amount", "Amount")}</th>
-                <th className="px-2 py-3 text-left w-[80px]" title="AI Profile Match score (0–100) — how well this grant matches your Grant Profile">{renderSortBtn("matchScore", "Match")}</th>
-                <th className="px-2 py-3 text-left w-[60px]" title="Your manual Fit rating (1–5 stars) — set this yourself to track personal priority">{renderSortBtn("fitScore", "Fit ★")}</th>
-                <th className="px-2 py-3 text-left w-[90px] text-xs font-semibold uppercase tracking-wide text-gray-500">Decision</th>
-                <th className="px-2 py-3 text-center w-[50px] text-xs font-semibold uppercase tracking-wide text-gray-500">···</th>
+                <th className="px-3 py-3 text-left bg-gray-50">{renderSortBtn("name", "Grant")}</th>
+                <th className="px-2 py-3 text-left w-[90px] bg-gray-50">{renderSortBtn("geographicScope", "Country")}</th>
+                <th className="px-2 py-3 text-left w-[100px] bg-gray-50">{renderSortBtn("deadlineDate", "Deadline")}</th>
+                <th className="px-2 py-3 text-left w-[160px] bg-gray-50">{renderSortBtn("amount", "Amount")}</th>
+                <th className="px-2 py-3 text-left w-[80px] bg-gray-50" title="AI Profile Match score (0–100) — how well this grant matches your Grant Profile">{renderSortBtn("matchScore", "Match")}</th>
+                <th className="px-2 py-3 text-left w-[60px] bg-gray-50" title="Your manual Fit rating (1–5 stars) — set this yourself to track personal priority">{renderSortBtn("fitScore", "Fit ★")}</th>
+                <th className="px-2 py-3 text-left w-[90px] bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">Decision</th>
+                <th className="px-2 py-3 text-center w-[50px] bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">···</th>
               </tr>
             </thead>
             <tbody>

@@ -173,7 +173,7 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
         </td>
         <td className="px-3 py-3 text-xs text-gray-600 whitespace-nowrap">{grant.geographicScope || <span className="text-gray-300">—</span>}</td>
         <td className="px-3 py-3 whitespace-nowrap"><DeadlineBadge date={grant.deadlineDate} /></td>
-        <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{grant.amount || <span className="text-gray-300">—</span>}</td>
+        <td className="px-3 py-3 text-sm text-gray-700 max-w-[160px]"><span className="block truncate" title={grant.amount ?? undefined}>{grant.amount || <span className="text-gray-300">—</span>}</span></td>
         <td className="px-3 py-3">
           {grant.matchScore != null ? (
             <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${grant.matchScore >= 70 ? "bg-green-100 text-green-700" : grant.matchScore >= 40 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-600"}`}>{grant.matchScore}%</span>
