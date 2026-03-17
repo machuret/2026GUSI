@@ -47,41 +47,48 @@ export default function GrantsPage() {
     if (!confirm(`Add ${ids.length} grant${ids.length !== 1 ? "s" : ""} to CRM?`)) return;
     setBulkBusy(true);
     setActionMsg(null);
-    let ok = 0;
-    let fail = 0;
-    // Run in parallel batches of 5 to avoid Supabase throttling
-    const BATCH = 5;
-    for (let i = 0; i < ids.length; i += BATCH) {
-      const batch = ids.slice(i, i + BATCH);
-      const results = await Promise.allSettled(
-        batch.map(id => updateGrantRaw(id, { crmStatus: "Researching" as Grant["crmStatus"] }))
-      );
-      for (const r of results) {
-        if (r.status === "fulfilled" && r.value?.success) ok++;
-        else fail++;
+    try {
+      const res = await authFetch("/api/grants/bulk-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, data: { crmStatus: "Researching" } }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        // Update local state for all affected grants
+        ids.forEach(id => updateGrantRaw(id, { crmStatus: "Researching" as Grant["crmStatus"] }));
+        setMsg(`✓ Added ${ids.length} grant${ids.length !== 1 ? "s" : ""} to CRM`);
+      } else {
+        setMsg(`Failed to add to CRM: ${result.error ?? "unknown error"}`);
       }
-    }
-    if (ok > 0) {
-      setMsg(`✓ Added ${ok} of ${ids.length} grant${ids.length !== 1 ? "s" : ""} to CRM${fail > 0 ? ` — ${fail} failed, please retry` : ""}`);
-    } else {
-      setMsg(`Failed to add grants to CRM — ${fail} errors. Please try again.`);
+    } catch {
+      setMsg("Network error — could not add to CRM. Please try again.");
     }
     setSelected(new Set());
     setBulkBusy(false);
   };
 
   const bulkDelete = async () => {
-    if (!confirm(`Delete ${selected.size} grant${selected.size !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    const ids = Array.from(selected);
+    if (!confirm(`Delete ${ids.length} grant${ids.length !== 1 ? "s" : ""}? This cannot be undone.`)) return;
     setBulkBusy(true);
     setActionMsg(null);
-    let ok = 0;
-    for (const id of Array.from(selected)) {
-      try {
-        const res = await deleteGrant(id);
-        if (res.success) ok++;
-      } catch { /* skip */ }
+    try {
+      const res = await authFetch("/api/grants/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        ids.forEach(id => deleteGrant(id));
+        setMsg(`✓ Deleted ${ids.length} grant${ids.length !== 1 ? "s" : ""}`);
+      } else {
+        setMsg(`Failed to delete: ${result.error ?? "unknown error"}`);
+      }
+    } catch {
+      setMsg("Network error — could not delete. Please try again.");
     }
-    setMsg(`✓ Deleted ${ok} grant${ok !== 1 ? "s" : ""}`);
     setSelected(new Set());
     setBulkBusy(false);
   };
