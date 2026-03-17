@@ -43,20 +43,28 @@ export default function GrantsPage() {
   });
 
   const bulkAddToCRM = async () => {
+    const ids = Array.from(selected);
+    if (!confirm(`Add ${ids.length} grant${ids.length !== 1 ? "s" : ""} to CRM?`)) return;
     setBulkBusy(true);
     setActionMsg(null);
     let ok = 0;
     let fail = 0;
-    for (const id of Array.from(selected)) {
-      try {
-        const res = await updateGrantRaw(id, { crmStatus: "Researching" as Grant["crmStatus"] });
-        if (res.success) ok++; else fail++;
-      } catch { fail++; }
+    // Run in parallel batches of 5 to avoid Supabase throttling
+    const BATCH = 5;
+    for (let i = 0; i < ids.length; i += BATCH) {
+      const batch = ids.slice(i, i + BATCH);
+      const results = await Promise.allSettled(
+        batch.map(id => updateGrantRaw(id, { crmStatus: "Researching" as Grant["crmStatus"] }))
+      );
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value?.success) ok++;
+        else fail++;
+      }
     }
     if (ok > 0) {
-      setMsg(`✓ Added ${ok} grant${ok !== 1 ? "s" : ""} to CRM${fail > 0 ? ` (${fail} failed)` : ""}`);
+      setMsg(`✓ Added ${ok} of ${ids.length} grant${ids.length !== 1 ? "s" : ""} to CRM${fail > 0 ? ` — ${fail} failed, please retry` : ""}`);
     } else {
-      setMsg(`Failed to add grants to CRM — please try again or refresh the page`);
+      setMsg(`Failed to add grants to CRM — ${fail} errors. Please try again.`);
     }
     setSelected(new Set());
     setBulkBusy(false);
