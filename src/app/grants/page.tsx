@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useState } from "react";
-import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus, AlertTriangle } from "lucide-react";
+import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus, AlertTriangle, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useGrants, type Grant } from "@/hooks/useGrants";
 import { authFetch } from "@/lib/authFetch";
@@ -26,6 +26,11 @@ export default function GrantsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkAnalysing, setBulkAnalysing] = useState(false);
+
+  // Progress tracking
+  const [analyseProgress, setAnalyseProgress] = useState<{ done: number; total: number; errors: number } | null>(null);
+  const [scoreProgress, setScoreProgress]     = useState<{ done: number; total: number; errors: number } | null>(null);
+  const [rankProgress, setRankProgress]       = useState<{ done: number; total: number } | null>(null);
   const [deletingExpired, setDeletingExpired] = useState(false);
   const [crmFilter, setCrmFilter] = useState<"all" | "in" | "out">("all");
   const [perPage, setPerPage] = useState(25);
@@ -85,16 +90,19 @@ export default function GrantsPage() {
   const handleRank = async () => {
     setRanking(true);
     setActionMsg(null);
+    const total = grants.length;
+    setRankProgress({ done: 0, total });
     try {
       const res = await authFetch("/api/grants/rank", { method: "POST" });
       const data = await res.json();
       if (!res.ok) { setMsg(data.error ?? "Ranking failed"); return; }
+      setRankProgress({ done: total, total });
       setMsg(`✓ Ranked ${data.ranked} grants by profile match`);
       await fetchGrants();
       setSortField("matchScore");
       setSortAsc(false);
     } catch { setMsg("Ranking failed — try again"); }
-    finally { setRanking(false); }
+    finally { setRanking(false); setRankProgress(null); }
   };
 
   const setMsg = (msg: string) => {
@@ -105,29 +113,37 @@ export default function GrantsPage() {
   const handleScoreComplexity = async () => {
     setScoring(true);
     setActionMsg(null);
+    const ids = selected.size > 0 ? Array.from(selected) : grants.map((g) => g.id);
+    const BATCH = 20;
+    const totalBatches = Math.ceil(ids.length / BATCH);
+    setScoreProgress({ done: 0, total: ids.length, errors: 0 });
+    let scored = 0;
+    let errors = 0;
     try {
-      const ids = selected.size > 0 ? Array.from(selected) : grants.map((g) => g.id);
-      let scored = 0;
-      for (let i = 0; i < ids.length; i += 20) {
-        const batch = ids.slice(i, i + 20);
-        const res = await authFetch("/api/grants/score-complexity", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ grantIds: batch }),
-        });
-        const data = await res.json();
-        if (res.ok && data.results) scored += data.results.length;
+      for (let i = 0; i < ids.length; i += BATCH) {
+        const batch = ids.slice(i, i + BATCH);
+        try {
+          const res = await authFetch("/api/grants/score-complexity", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ grantIds: batch }),
+          });
+          const data = await res.json();
+          const batchScored = res.ok && data.results ? data.results.length : 0;
+          scored += batchScored;
+          if (!res.ok || !batchScored) errors += batch.length;
+        } catch { errors += batch.length; }
+        setScoreProgress({ done: Math.min(i + BATCH, ids.length), total: ids.length, errors });
       }
-      setMsg(`✓ Complexity scored ${scored} grants`);
+      setMsg(`✓ Complexity scored ${scored} of ${ids.length} grants${errors > 0 ? ` (${errors} failed)` : ""}`);
       await fetchGrants();
     } catch { setMsg("Scoring failed — try again"); }
-    finally { setScoring(false); }
+    finally { setScoring(false); setScoreProgress(null); }
   };
 
   const handleBulkAnalyse = async () => {
     const nowMs = Date.now();
     const allIds = selected.size > 0 ? Array.from(selected) : grants.map((g) => g.id);
-    // Skip expired grants — no point analysing fit for dead deadlines
     const ids = allIds.filter(id => {
       const g = grants.find(gr => gr.id === id);
       if (!g) return false;
@@ -136,23 +152,26 @@ export default function GrantsPage() {
     if (ids.length === 0) { setMsg("No active grants to analyse (all selected grants have expired deadlines)"); return; }
     if (!confirm(`Run AI Fit analysis on ${ids.length} grant${ids.length !== 1 ? "s" : ""}? This may take a while.`)) return;
     setBulkAnalysing(true); setActionMsg(null);
+    setAnalyseProgress({ done: 0, total: ids.length, errors: 0 });
     let ok = 0;
     let errors = 0;
-    for (const id of ids) {
+    for (let i = 0; i < ids.length; i++) {
       try {
         const res = await authFetch("/api/grants/analyse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ grantId: id }),
+          body: JSON.stringify({ grantId: ids[i] }),
         });
         const data = await res.json();
         if (data.success) { ok++; } else { errors++; }
       } catch { errors++; }
+      setAnalyseProgress({ done: i + 1, total: ids.length, errors });
     }
     await fetchGrants();
     setMsg(ok > 0 ? `✓ AI Fit analysed ${ok} of ${ids.length} grants${errors > 0 ? ` (${errors} failed)` : ""}` : `Analysis failed for all ${ids.length} grants — check Company Info or Grant Profile`);
     setSelected(new Set());
     setBulkAnalysing(false);
+    setAnalyseProgress(null);
   };
 
   const handleDeleteExpired = async () => {
@@ -271,6 +290,9 @@ export default function GrantsPage() {
         <Link href="/grants/crawler" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-brand-600">
           <Rss className="h-3.5 w-3.5" /> Crawler
         </Link>
+        <Link href="/grants/auditor" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-amber-600">
+          <ShieldCheck className="h-3.5 w-3.5" /> Auditor
+        </Link>
       </div>
 
       {/* Header */}
@@ -347,6 +369,45 @@ export default function GrantsPage() {
         </button>
         {actionMsg && <span className="text-sm text-brand-700 font-medium">{actionMsg}</span>}
       </div>
+
+      {/* Progress bars */}
+      {(analyseProgress || scoreProgress || rankProgress) && (
+        <div className="mt-3 space-y-2">
+          {analyseProgress && (
+            <div>
+              <div className="mb-1 flex items-center justify-between text-xs text-purple-700 font-medium">
+                <span>AI Fit Analysis — {analyseProgress.done} / {analyseProgress.total} done{analyseProgress.errors > 0 ? ` · ${analyseProgress.errors} failed` : ""}</span>
+                <span>{Math.round((analyseProgress.done / analyseProgress.total) * 100)}%</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-purple-100 overflow-hidden">
+                <div className="h-full rounded-full bg-purple-500 transition-all duration-300" style={{ width: `${(analyseProgress.done / analyseProgress.total) * 100}%` }} />
+              </div>
+            </div>
+          )}
+          {scoreProgress && (
+            <div>
+              <div className="mb-1 flex items-center justify-between text-xs text-gray-600 font-medium">
+                <span>Score Complexity — {scoreProgress.done} / {scoreProgress.total} done{scoreProgress.errors > 0 ? ` · ${scoreProgress.errors} failed` : ""}</span>
+                <span>{Math.round((scoreProgress.done / scoreProgress.total) * 100)}%</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
+                <div className="h-full rounded-full bg-gray-500 transition-all duration-300" style={{ width: `${(scoreProgress.done / scoreProgress.total) * 100}%` }} />
+              </div>
+            </div>
+          )}
+          {rankProgress && (
+            <div>
+              <div className="mb-1 flex items-center justify-between text-xs text-brand-700 font-medium">
+                <span>Ranking by Profile Match — {rankProgress.total} grants…</span>
+                <span className="animate-pulse">Processing</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-brand-100 overflow-hidden">
+                <div className="h-full rounded-full bg-brand-500 animate-pulse" style={{ width: rankProgress.done === rankProgress.total ? "100%" : "60%" }} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-6">

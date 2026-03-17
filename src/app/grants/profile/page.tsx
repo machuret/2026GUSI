@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Save, Loader2, CheckCircle, Target, Building2, MapPin, DollarSign, Tag, Star, ArrowLeft, Trophy, PenLine, Rss, KanbanSquare } from "lucide-react";
+import { Save, Loader2, CheckCircle, Target, Building2, MapPin, DollarSign, Tag, Star, ArrowLeft, Trophy, PenLine, Rss, KanbanSquare, ShieldCheck } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 
 const ORG_TYPES = ["Non-profit / Charity", "Social Enterprise", "SME (Small-Medium Business)", "Startup", "University / Research Institute", "Government / Council", "Indigenous Organisation", "Other"];
@@ -15,6 +15,7 @@ const FOCUS_AREA_OPTIONS = ["R&D / Innovation", "Export & International", "Train
 
 interface GrantProfile {
   orgType?: string;
+  orgType2?: string;
   sector?: string;
   subSector?: string;
   location?: string;
@@ -40,7 +41,7 @@ interface GrantProfile {
 }
 
 const EMPTY: GrantProfile = {
-  orgType: "", sector: "", subSector: "", location: "", country: "Australia",
+  orgType: "", orgType2: "", sector: "", subSector: "", location: "", country: "Australia",
   stage: "", teamSize: "", annualRevenue: "", yearFounded: "",
   focusAreas: [], targetFundingMin: null, targetFundingMax: null, preferredDuration: "",
   isRegisteredCharity: false, hasABN: true, hasACN: false,
@@ -159,6 +160,9 @@ export default function GrantProfilePage() {
         <Link href="/grants/crawler" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-brand-600">
           <Rss className="h-3.5 w-3.5" /> Crawler
         </Link>
+        <Link href="/grants/auditor" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-amber-600">
+          <ShieldCheck className="h-3.5 w-3.5" /> Auditor
+        </Link>
       </div>
 
       {saveError && (
@@ -185,10 +189,17 @@ export default function GrantProfilePage() {
         <Section icon={Building2} title="Organisation Identity">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className={labelCls}>Organisation Type</label>
+              <label className={labelCls}>Primary Organisation Type</label>
               <select className={selectCls} value={profile.orgType ?? ""} onChange={(e) => set("orgType", e.target.value)}>
                 <option value="">Select…</option>
                 {ORG_TYPES.map((o) => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Secondary Organisation Type <span className="text-gray-400 font-normal text-xs">(optional)</span></label>
+              <select className={selectCls} value={profile.orgType2 ?? ""} onChange={(e) => set("orgType2", e.target.value)}>
+                <option value="">None</option>
+                {ORG_TYPES.filter(o => o !== profile.orgType).map((o) => <option key={o}>{o}</option>)}
               </select>
             </div>
             <div>

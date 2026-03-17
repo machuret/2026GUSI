@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { FileText, BookOpen, PenLine, Trophy } from "lucide-react";
+import { FileText, BookOpen, PenLine, Trophy, ShieldCheck, Sparkles, Loader2 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import {
@@ -51,6 +51,9 @@ export default function GrantBuilderPage() {
   const [saveMsg,      setSaveMsg]      = useState<string | null>(null);
   const [copied,       setCopied]       = useState<string | null>(null);
   const [exportingDoc, setExportingDoc] = useState(false);
+  const [exportingIds, setExportingIds] = useState<Set<string>>(new Set());
+  const [massGenerating, setMassGenerating] = useState(false);
+  const [massProgress, setMassProgress] = useState<{ done: number; total: number; current: string } | null>(null);
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const selectedGrant = grants.find((g) => g.id === selectedGrantId) ?? null;
@@ -245,6 +248,88 @@ export default function GrantBuilderPage() {
     setDrafts((prev) => prev.filter((d) => d.id !== draftId));
   }, []);
 
+  // ── Mass generate all CRM grants ─────────────────────────────────────────────
+  const massGenerateCRM = useCallback(async () => {
+    const crmGrants = grants.filter(g => !!g.crmStatus);
+    if (crmGrants.length === 0) { alert("No CRM grants found. Add grants to CRM first."); return; }
+    if (!confirm(`Generate full applications for all ${crmGrants.length} CRM grant${crmGrants.length !== 1 ? "s" : ""}? This will run sequentially and may take several minutes.`)) return;
+    setMassGenerating(true);
+    setMassProgress({ done: 0, total: crmGrants.length, current: "" });
+    for (let i = 0; i < crmGrants.length; i++) {
+      const grant = crmGrants[i];
+      setMassProgress({ done: i, total: crmGrants.length, current: grant.name });
+      try {
+        // 1. Get brief
+        let brief: WritingBrief | null = grant.aiBrief && typeof grant.aiBrief === "object"
+          ? grant.aiBrief as unknown as WritingBrief
+          : null;
+        if (!brief) {
+          const bRes  = await authFetch("/api/grants/write", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ grantId: grant.id, mode: "brief" }),
+          });
+          const bData = await bRes.json();
+          if (!bRes.ok || !bData.brief) continue;
+          brief = bData.brief;
+        }
+        // 2. Generate each section
+        const generatedSections: Record<string, string> = {};
+        for (const section of ALL_SECTIONS) {
+          try {
+            const sRes  = await authFetch("/api/grants/write", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ grantId: grant.id, mode: "section", section, brief, tone: "first_person", length: "standard", previousSections: generatedSections }),
+            });
+            const sData = await sRes.json();
+            if (sRes.ok && sData.content) generatedSections[section] = sData.content;
+          } catch { /* skip section */ }
+        }
+        // 3. Save draft
+        if (Object.keys(generatedSections).length > 0) {
+          await authFetch("/api/grants/drafts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ grantId: grant.id, grantName: grant.name, sections: generatedSections, brief, tone: "first_person", length: "standard" }),
+          });
+        }
+      } catch { /* skip grant */ }
+    }
+    // Refresh drafts list
+    const dRes = await authFetch("/api/grants/drafts");
+    setDrafts((await dRes.json()).drafts ?? []);
+    setMassGenerating(false);
+    setMassProgress(null);
+    setActiveTab("drafts");
+  }, [grants, tone, length]);
+
+  // ── Bulk export drafts to Google Docs ────────────────────────────────────────
+  const bulkExportDrafts = useCallback(async (ids: string[]) => {
+    setExportingIds(new Set(ids));
+    const results: { name: string; url: string }[] = [];
+    for (const id of ids) {
+      try {
+        const res  = await authFetch(`/api/grants/drafts/${id}`);
+        const data = await res.json();
+        if (!res.ok || !data.draft) continue;
+        const d = data.draft;
+        const expRes  = await authFetch("/api/grants/export-doc", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ grantName: d.grantName, sections: d.sections ?? {}, enabledList: Object.keys(d.sections ?? {}) }),
+        });
+        const expData = await expRes.json();
+        if (expRes.ok && expData.url) results.push({ name: d.grantName, url: expData.url });
+      } catch { /* skip */ }
+    }
+    setExportingIds(new Set());
+    if (results.length === 0) { alert("Export failed — check Google service account configuration."); return; }
+    // Open each doc in a new tab
+    results.forEach(r => window.open(r.url, "_blank", "noopener,noreferrer"));
+    if (results.length > 1) alert(`Exported ${results.length} grant docs to Google Docs.`);
+  }, []);
+
   // ── Export to Google Docs ───────────────────────────────────────────────────
   const exportDoc = useCallback(async () => {
     if (!hasSections) return;
@@ -318,7 +403,7 @@ export default function GrantBuilderPage() {
             Professional grant application writer — 10 sections, 6 data sources, strategic pre-analysis
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {(["builder", "drafts"] as const).map((t) => (
             <button
               key={t}
@@ -336,11 +421,37 @@ export default function GrantBuilderPage() {
               )}
             </button>
           ))}
-          <Link href="/grants/examples" className="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 transition-colors">
+          <button
+            onClick={massGenerateCRM}
+            disabled={massGenerating || loadingGrants}
+            title="Generate full applications for all CRM grants"
+            className="flex items-center gap-2 rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
+          >
+            {massGenerating ? <Loader2 className="inline h-4 w-4 animate-spin" /> : <Sparkles className="inline h-4 w-4" />}
+            {massGenerating ? `Generating… (${massProgress?.done ?? 0}/${massProgress?.total ?? 0})` : "Generate All CRM"}
+          </button>
+            <Link href="/grants/examples" className="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 transition-colors">
             <Trophy className="inline h-4 w-4 mr-1.5 -mt-0.5" />Examples
+          </Link>
+          <Link href="/grants/auditor" className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors">
+            <ShieldCheck className="inline h-4 w-4 mr-1.5 -mt-0.5" />Auditor
           </Link>
         </div>
       </div>
+
+      {/* Mass generation progress bar */}
+      {massProgress && (
+        <div className="mb-5 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+          <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-indigo-700">
+            <span>Generating CRM grants — {massProgress.done} / {massProgress.total} complete{massProgress.current ? ` · Now: ${massProgress.current}` : ""}</span>
+            <span>{Math.round((massProgress.done / massProgress.total) * 100)}%</span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-indigo-100 overflow-hidden">
+            <div className="h-full rounded-full bg-indigo-500 transition-all duration-300"
+              style={{ width: `${(massProgress.done / massProgress.total) * 100}%` }} />
+          </div>
+        </div>
+      )}
 
       {/* Drafts tab */}
       {activeTab === "drafts" && (
@@ -348,6 +459,8 @@ export default function GrantBuilderPage() {
           drafts={drafts}
           onLoad={loadDraft}
           onDelete={deleteDraft}
+          onBulkExport={bulkExportDrafts}
+          exportingIds={exportingIds}
         />
       )}
 

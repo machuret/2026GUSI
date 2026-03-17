@@ -1,0 +1,328 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import {
+  ArrowLeft, ShieldCheck, Loader2, ChevronDown, ChevronUp,
+  CheckCircle, AlertTriangle, XCircle, Info, Trophy, PenLine,
+  KanbanSquare, UserCheck, Rss, Settings, BookOpen,
+} from "lucide-react";
+import { authFetch } from "@/lib/authFetch";
+
+interface SavedDraft {
+  id: string;
+  grantName: string;
+  updatedAt: string;
+}
+
+interface SectionAudit {
+  section: string;
+  score: number;
+  issues: string[];
+  improvements: string[];
+}
+
+interface AuditResult {
+  overallScore: number;
+  overallVerdict: "Excellent" | "Good" | "Needs Work" | "Poor";
+  summary: string;
+  sectionAudits: SectionAudit[];
+  topRecommendations: string[];
+}
+
+const verdictColor = (v: string) => {
+  if (v === "Excellent") return "text-green-700 bg-green-100 border-green-300";
+  if (v === "Good")      return "text-blue-700 bg-blue-100 border-blue-300";
+  if (v === "Needs Work") return "text-orange-700 bg-orange-100 border-orange-300";
+  return "text-red-700 bg-red-100 border-red-300";
+};
+
+const scoreColor = (s: number) => {
+  if (s >= 80) return "text-green-700";
+  if (s >= 60) return "text-blue-600";
+  if (s >= 40) return "text-orange-600";
+  return "text-red-600";
+};
+
+const scoreBarColor = (s: number) => {
+  if (s >= 80) return "bg-green-500";
+  if (s >= 60) return "bg-blue-500";
+  if (s >= 40) return "bg-orange-500";
+  return "bg-red-500";
+};
+
+export default function GrantAuditorPage() {
+  const [drafts, setDrafts] = useState<SavedDraft[]>([]);
+  const [loadingDrafts, setLoadingDrafts] = useState(true);
+  const [selectedDraftId, setSelectedDraftId] = useState<string>("");
+  const [auditing, setAuditing] = useState(false);
+  const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const [hasCustomPrompt, setHasCustomPrompt] = useState(false);
+
+  const fetchDrafts = useCallback(async () => {
+    try {
+      const res  = await authFetch("/api/grants/drafts");
+      const data = await res.json();
+      setDrafts(data.drafts ?? []);
+      if (data.drafts?.length > 0) setSelectedDraftId(data.drafts[0].id);
+    } catch { /* ignore */ }
+    finally { setLoadingDrafts(false); }
+  }, []);
+
+  const checkPrompt = useCallback(async () => {
+    try {
+      const res  = await authFetch("/api/prompts?limit=100");
+      const data = await res.json();
+      setHasCustomPrompt((data.prompts ?? []).some((p: { contentType: string }) => p.contentType === "grant_audit"));
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    fetchDrafts();
+    checkPrompt();
+  }, [fetchDrafts, checkPrompt]);
+
+  const runAudit = async () => {
+    if (!selectedDraftId) return;
+    setAuditing(true);
+    setAuditResult(null);
+    setAuditError(null);
+    try {
+      const res  = await authFetch("/api/grants/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftId: selectedDraftId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Audit failed");
+      setAuditResult(data.audit);
+      setExpandedSection(null);
+    } catch (err) {
+      setAuditError(err instanceof Error ? err.message : "Audit failed");
+    } finally {
+      setAuditing(false);
+    }
+  };
+
+  const selectedDraftName = drafts.find(d => d.id === selectedDraftId)?.grantName ?? "";
+
+  return (
+    <div className="mx-auto max-w-4xl">
+      {/* Grants suite nav */}
+      <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5">
+        <Link href="/grants" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-brand-600">
+          <Trophy className="h-3.5 w-3.5" /> All Grants
+        </Link>
+        <Link href="/grants/crm" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-indigo-600">
+          <KanbanSquare className="h-3.5 w-3.5" /> CRM
+        </Link>
+        <Link href="/grants/builder" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-emerald-600">
+          <PenLine className="h-3.5 w-3.5" /> Builder
+        </Link>
+        <Link href="/grants/profile" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-brand-600">
+          <UserCheck className="h-3.5 w-3.5" /> Profile
+        </Link>
+        <Link href="/grants/examples" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-emerald-600">
+          <BookOpen className="h-3.5 w-3.5" /> Examples
+        </Link>
+        <Link href="/grants/crawler" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-brand-600">
+          <Rss className="h-3.5 w-3.5" /> Crawler
+        </Link>
+        <span className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 border border-amber-200">
+          <ShieldCheck className="h-3.5 w-3.5" /> Auditor
+        </span>
+      </div>
+
+      {/* Header */}
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Link href="/grants" className="flex items-center gap-1 text-sm text-gray-400 hover:text-brand-600">
+              <ArrowLeft className="h-4 w-4" /> Grants
+            </Link>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+            <ShieldCheck className="h-7 w-7 text-amber-600" /> Grant Auditor
+          </h1>
+          <p className="mt-1 text-gray-500">
+            AI-powered accuracy check — verifies your draft against your vault documents and grant profile
+          </p>
+        </div>
+        <Link
+          href="/prompts"
+          className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 shrink-0"
+          title="Customise the audit prompt in Prompt Manager"
+        >
+          <Settings className="h-4 w-4" />
+          {hasCustomPrompt ? "Edit Audit Prompt" : "Customise Prompt"}
+        </Link>
+      </div>
+
+      {/* Prompt hint */}
+      {!hasCustomPrompt && (
+        <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-800">
+            Using the default audit prompt. Go to{" "}
+            <Link href="/prompts" className="font-semibold underline">Prompt Manager</Link>{" "}
+            and create a prompt with content type <code className="bg-amber-100 px-1 rounded text-xs">grant_audit</code> to customise the auditor&apos;s behaviour.
+          </p>
+        </div>
+      )}
+
+      {/* Audit panel */}
+      <div className="rounded-xl border border-gray-200 bg-white p-6 mb-6">
+        <h2 className="text-base font-semibold text-gray-900 mb-4">Select a Grant Draft to Audit</h2>
+
+        {loadingDrafts ? (
+          <div className="flex items-center gap-2 text-sm text-gray-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading drafts…</div>
+        ) : drafts.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-gray-300 py-10 text-center">
+            <p className="text-gray-500 text-sm">No saved drafts yet.</p>
+            <Link href="/grants/builder" className="mt-2 inline-flex items-center gap-1.5 text-sm text-brand-600 hover:underline">
+              <PenLine className="h-4 w-4" /> Go to Grant Builder
+            </Link>
+          </div>
+        ) : (
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-gray-600">Draft</label>
+              <select
+                value={selectedDraftId}
+                onChange={(e) => { setSelectedDraftId(e.target.value); setAuditResult(null); setAuditError(null); }}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                {drafts.map((d) => (
+                  <option key={d.id} value={d.id}>{d.grantName}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={runAudit}
+              disabled={auditing || !selectedDraftId}
+              className="flex items-center gap-2 rounded-lg bg-amber-600 px-5 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+            >
+              {auditing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+              {auditing ? "Auditing…" : "Run Audit"}
+            </button>
+          </div>
+        )}
+
+        {auditError && (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{auditError}</div>
+        )}
+      </div>
+
+      {/* Audit results */}
+      {auditResult && (
+        <div className="space-y-5">
+          {/* Overall */}
+          <div className="rounded-xl border border-gray-200 bg-white p-6">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Audit Result: {selectedDraftName}</h2>
+                <p className="text-sm text-gray-500 mt-0.5">{auditResult.summary}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <div className={`text-4xl font-bold ${scoreColor(auditResult.overallScore)}`}>{auditResult.overallScore}</div>
+                <div className={`mt-1 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${verdictColor(auditResult.overallVerdict)}`}>
+                  {auditResult.overallVerdict}
+                </div>
+              </div>
+            </div>
+            <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${scoreBarColor(auditResult.overallScore)}`}
+                style={{ width: `${auditResult.overallScore}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Top recommendations */}
+          {auditResult.topRecommendations?.length > 0 && (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-5">
+              <h3 className="text-sm font-semibold text-indigo-900 mb-3 flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-indigo-600" /> Top Recommendations
+              </h3>
+              <ol className="space-y-2">
+                {auditResult.topRecommendations.map((r, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-indigo-800">
+                    <span className="shrink-0 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-200 text-xs font-bold text-indigo-700">{i + 1}</span>
+                    {r}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {/* Section audits */}
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Section-by-Section Audit</h3>
+            <div className="space-y-2">
+              {auditResult.sectionAudits?.map((s) => {
+                const isOpen = expandedSection === s.section;
+                return (
+                  <div key={s.section} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                    <button
+                      onClick={() => setExpandedSection(isOpen ? null : s.section)}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50"
+                    >
+                      <div className={`shrink-0 text-lg font-bold w-10 ${scoreColor(s.score)}`}>{s.score}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900">{s.section}</p>
+                        <div className="mt-1 h-1.5 w-full max-w-xs rounded-full bg-gray-100 overflow-hidden">
+                          <div className={`h-full rounded-full ${scoreBarColor(s.score)}`} style={{ width: `${s.score}%` }} />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {s.issues.length === 0
+                          ? <CheckCircle className="h-4 w-4 text-green-500" />
+                          : s.score < 50
+                            ? <XCircle className="h-4 w-4 text-red-400" />
+                            : <AlertTriangle className="h-4 w-4 text-orange-400" />}
+                        {isOpen ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+                      </div>
+                    </button>
+                    {isOpen && (
+                      <div className="border-t border-gray-100 px-4 py-4 space-y-3">
+                        {s.issues.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-red-600 mb-1.5">Issues Found</p>
+                            <ul className="space-y-1">
+                              {s.issues.map((issue, i) => (
+                                <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                                  <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" /> {issue}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {s.improvements.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-emerald-700 mb-1.5">Suggested Improvements</p>
+                            <ul className="space-y-1">
+                              {s.improvements.map((imp, i) => (
+                                <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                                  <CheckCircle className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" /> {imp}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {s.issues.length === 0 && s.improvements.length === 0 && (
+                          <p className="text-sm text-gray-400 italic">No issues found in this section.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
