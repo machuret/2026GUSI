@@ -30,6 +30,11 @@ export async function crawlGrantUrl(url: string, maxChars = 8000): Promise<strin
  */
 export function buildProfileContext(profile: Record<string, unknown>): string {
   const lines = [
+    profile.contactName   ? `Contact Name: ${profile.contactName}` : null,
+    profile.contactRole   ? `Contact Role: ${profile.contactRole}` : null,
+    profile.contactEmail  ? `Contact Email: ${profile.contactEmail}` : null,
+    profile.contactPhone  ? `Contact Phone: ${profile.contactPhone}` : null,
+    profile.contactAddress ? `Contact Address: ${profile.contactAddress}` : null,
     profile.orgType
       ? `Organisation Type: ${profile.orgType}${profile.orgType2 ? ` / ${profile.orgType2}` : ""}`
       : null,

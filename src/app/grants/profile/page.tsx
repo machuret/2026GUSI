@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Save, Loader2, CheckCircle, Target, Building2, MapPin, DollarSign, Tag, Star, ArrowLeft, Trophy, PenLine, Rss, KanbanSquare, ShieldCheck } from "lucide-react";
+import { Save, Loader2, CheckCircle, Target, Building2, MapPin, DollarSign, Tag, Star, ArrowLeft, Trophy, PenLine, Rss, KanbanSquare, ShieldCheck, User } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 
 const ORG_TYPES = ["Non-profit / Charity", "Social Enterprise", "SME (Small-Medium Business)", "Startup", "University / Research Institute", "Government / Council", "Indigenous Organisation", "Other"];
@@ -14,6 +14,11 @@ const DURATIONS = ["Under 6 months", "6–12 months", "1–2 years", "2+ years",
 const FOCUS_AREA_OPTIONS = ["R&D / Innovation", "Export & International", "Training & Workforce", "Capital Equipment", "Marketing & Promotion", "Environmental / Sustainability", "Community Impact", "Digital Transformation", "Product Development", "Research & Collaboration"];
 
 interface GrantProfile {
+  contactName?: string;
+  contactRole?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  contactAddress?: string;
   orgType?: string;
   orgType2?: string;
   sector?: string;
@@ -41,6 +46,7 @@ interface GrantProfile {
 }
 
 const EMPTY: GrantProfile = {
+  contactName: "", contactRole: "", contactEmail: "", contactPhone: "", contactAddress: "",
   orgType: "", orgType2: "", sector: "", subSector: "", location: "", country: "Australia",
   stage: "", teamSize: "", annualRevenue: "", yearFounded: "",
   focusAreas: [], targetFundingMin: null, targetFundingMax: null, preferredDuration: "",
@@ -185,6 +191,33 @@ export default function GrantProfilePage() {
       </div>
 
       <div className="space-y-5">
+        {/* Contact Person */}
+        <Section icon={User} title="Grant Contact Person">
+          <p className="text-sm text-gray-500">The person responsible for submitting grant applications. Used in the Contact Details section of your applications.</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className={labelCls}>Full Name</label>
+              <input className={inputCls} placeholder="e.g. Jane Smith" value={profile.contactName ?? ""} onChange={(e) => set("contactName", e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls}>Role / Title</label>
+              <input className={inputCls} placeholder="e.g. CEO, Grants Manager" value={profile.contactRole ?? ""} onChange={(e) => set("contactRole", e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls}>Email Address</label>
+              <input type="email" className={inputCls} placeholder="e.g. jane@organisation.com" value={profile.contactEmail ?? ""} onChange={(e) => set("contactEmail", e.target.value)} />
+            </div>
+            <div>
+              <label className={labelCls}>Phone Number</label>
+              <input type="tel" className={inputCls} placeholder="e.g. +61 400 000 000" value={profile.contactPhone ?? ""} onChange={(e) => set("contactPhone", e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Mailing Address</label>
+            <textarea rows={2} className={inputCls} placeholder="e.g. 123 Main St, Melbourne VIC 3000, Australia" value={profile.contactAddress ?? ""} onChange={(e) => set("contactAddress", e.target.value)} />
+          </div>
+        </Section>
+
         {/* Organisation Identity */}
         <Section icon={Building2} title="Organisation Identity">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

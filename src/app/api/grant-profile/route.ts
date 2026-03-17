@@ -6,6 +6,11 @@ import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
 
 const profileSchema = z.object({
+  contactName:         z.string().optional(),
+  contactRole:         z.string().optional(),
+  contactEmail:        z.string().optional(),
+  contactPhone:        z.string().optional(),
+  contactAddress:      z.string().optional(),
   orgType:             z.string().optional(),
   sector:              z.string().optional(),
   subSector:           z.string().optional(),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, PenLine, Sparkles, ExternalLink, Loader2,
@@ -272,6 +272,52 @@ export default function GrantsCrmPage() {
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
 
+  // ── Mass Research ────────────────────────────────────────────────────────
+  const [massResearching, setMassResearching] = useState(false);
+  const [researchProgress, setResearchProgress] = useState<{ done: number; total: number; errors: number } | null>(null);
+  const researchAbortRef = useRef(false);
+
+  const handleMassResearch = useCallback(async () => {
+    const crmGrants = grants.filter(g => !!g.crmStatus);
+    if (crmGrants.length === 0) return;
+    if (!confirm(`Run AI Research on all ${crmGrants.length} CRM grants to auto-fill missing fields?`)) return;
+    researchAbortRef.current = false;
+    setMassResearching(true);
+    setResearchProgress({ done: 0, total: crmGrants.length, errors: 0 });
+    let ok = 0; let errors = 0;
+    for (let i = 0; i < crmGrants.length; i++) {
+      if (researchAbortRef.current) break;
+      const g = crmGrants[i];
+      try {
+        const res = await authFetch("/api/grants/research", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ grantId: g.id }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success) ok++; else errors++;
+      } catch { errors++; }
+      setResearchProgress({ done: i + 1, total: crmGrants.length, errors });
+    }
+    setMassResearching(false);
+    setResearchProgress(null);
+    alert(`✓ Researched ${ok} of ${crmGrants.length} CRM grants${errors > 0 ? ` (${errors} failed)` : ""}.`);
+  }, [grants]);
+
+  // ── Reset CRM ────────────────────────────────────────────────────────────
+  const [resetting, setResetting] = useState(false);
+
+  const handleResetCrm = useCallback(async () => {
+    const crmGrants = grants.filter(g => !!g.crmStatus);
+    if (crmGrants.length === 0) return;
+    if (!confirm(`Remove all ${crmGrants.length} grants from CRM? This only clears their CRM status — the grants themselves are not deleted.`)) return;
+    setResetting(true);
+    for (const g of crmGrants) {
+      try { await updateGrant(g.id, { crmStatus: null }); } catch { /* continue */ }
+    }
+    setResetting(false);
+  }, [grants, updateGrant]);
+
   const crmGrants = grants.filter((g) => g.crmStatus != null);
   const filtered = crmGrants.filter((g) => {
     const q = search.toLowerCase();
@@ -324,7 +370,7 @@ export default function GrantsCrmPage() {
           <h1 className="text-3xl font-bold text-gray-900">Grants CRM</h1>
           <p className="mt-1 text-gray-500">Manage your grant pipeline — research, track progress, and write applications</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           {/* View toggle */}
           <div className="flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
             <button
@@ -338,6 +384,23 @@ export default function GrantsCrmPage() {
               <LayoutList className="h-3.5 w-3.5" /> List
             </button>
           </div>
+          <button
+            onClick={handleMassResearch}
+            disabled={massResearching || loading || grants.filter(g => !!g.crmStatus).length === 0}
+            className="flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+          >
+            {massResearching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            {massResearching ? `Researching… (${researchProgress?.done ?? 0}/${researchProgress?.total ?? 0})` : "Research All"}
+          </button>
+          <button
+            onClick={handleResetCrm}
+            disabled={resetting || loading || grants.filter(g => !!g.crmStatus).length === 0}
+            className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+            title="Remove all grants from CRM (does not delete the grants)"
+          >
+            {resetting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+            Reset CRM
+          </button>
           <Link href="/grants" className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
             ← All Grants
           </Link>
@@ -394,6 +457,25 @@ export default function GrantsCrmPage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Mass research progress bar */}
+      {researchProgress && (
+        <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+          <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-blue-700">
+            <span>Researching CRM grants — {researchProgress.done} / {researchProgress.total} done{researchProgress.errors > 0 ? ` · ${researchProgress.errors} failed` : ""}</span>
+            <div className="flex items-center gap-2">
+              <span>{Math.round((researchProgress.done / researchProgress.total) * 100)}%</span>
+              <button onClick={() => { researchAbortRef.current = true; }} className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-200">
+                <X className="h-3 w-3" /> Cancel
+              </button>
+            </div>
+          </div>
+          <div className="h-2 w-full rounded-full bg-blue-100 overflow-hidden">
+            <div className="h-full rounded-full bg-blue-500 transition-all duration-300"
+              style={{ width: `${(researchProgress.done / researchProgress.total) * 100}%` }} />
           </div>
         </div>
       )}
