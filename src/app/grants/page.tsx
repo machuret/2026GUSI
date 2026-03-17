@@ -228,7 +228,7 @@ export default function GrantsPage() {
     .sort((a, b) => {
       let av: string | number = 0, bv: string | number = 0;
       if (sortField === "deadlineDate") { av = a.deadlineDate ? new Date(a.deadlineDate).getTime() : Infinity; bv = b.deadlineDate ? new Date(b.deadlineDate).getTime() : Infinity; }
-      else if (sortField === "fitScore") { av = a.fitScore ?? 0; bv = b.fitScore ?? 0; }
+      else if (sortField === "fitScore") { av = a.aiScore ?? (a.fitScore != null ? a.fitScore * 20 : -1); bv = b.aiScore ?? (b.fitScore != null ? b.fitScore * 20 : -1); }
       else if (sortField === "matchScore") { av = a.matchScore ?? -1; bv = b.matchScore ?? -1; }
       else if (sortField === "complexityScore") { av = a.complexityScore ?? -1; bv = b.complexityScore ?? -1; }
       else if (sortField === "geographicScope") { av = (a.geographicScope ?? "zzz").toLowerCase(); bv = (b.geographicScope ?? "zzz").toLowerCase(); }
