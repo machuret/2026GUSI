@@ -9,6 +9,7 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { GrantRow } from "./components/GrantRow";
 import { AddGrantModal } from "./components/AddGrantModal";
 import { GrantSearchModal } from "./components/GrantSearchModal";
+import { DuplicatesModal } from "./components/DuplicatesModal";
 import { fuzzyMatchesExisting } from "@/lib/fuzzyMatch";
 
 export default function GrantsPage() {
@@ -34,7 +35,7 @@ export default function GrantsPage() {
   const [rankProgress, setRankProgress]       = useState<{ done: number; total: number } | null>(null);
   const [deletingExpired, setDeletingExpired] = useState(false);
   const [crmFilter, setCrmFilter] = useState<"all" | "in" | "out">("all");
-  const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false);
+  const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
   const [perPage, setPerPage] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -92,25 +93,6 @@ export default function GrantsPage() {
     }
     setSelected(new Set());
     setBulkBusy(false);
-  };
-
-  const getOlderDuplicateIds = (): string[] => {
-    const pairsSeen = new Set<string>();
-    const toDelete: string[] = [];
-    for (const entry of Array.from(duplicateMap.entries())) {
-      const idA = entry[0];
-      const nameB = entry[1];
-      if (pairsSeen.has(idA)) continue;
-      const idB = grants.find(g => g.name === nameB && g.id !== idA)?.id;
-      if (!idB) continue;
-      pairsSeen.add(idA);
-      pairsSeen.add(idB);
-      const gA = grants.find(g => g.id === idA)!;
-      const gB = grants.find(g => g.id === idB)!;
-      const older = new Date(gA.createdAt) <= new Date(gB.createdAt) ? gA : gB;
-      toDelete.push(older.id);
-    }
-    return toDelete;
   };
 
   const toggleSort = (field: typeof sortField) => {
@@ -306,22 +288,20 @@ export default function GrantsPage() {
 
   const existingNames = new Set(grants.map((g) => g.name.toLowerCase()));
 
-  // Build duplicate map: id -> name of the grant it duplicates
-  const duplicateMap = useMemo(() => {
-    const map = new Map<string, string>();
+  // Build duplicate id set for badge display only
+  const duplicateIds = useMemo(() => {
+    const ids = new Set<string>();
     for (let i = 0; i < grants.length; i++) {
       for (let j = i + 1; j < grants.length; j++) {
         const a = grants[i];
         const b = grants[j];
-        if (map.has(a.id) && map.has(b.id)) continue;
-        const match = fuzzyMatchesExisting(a.name, new Set([b.name.toLowerCase()]));
-        if (match) {
-          if (!map.has(b.id)) map.set(b.id, a.name);
-          if (!map.has(a.id)) map.set(a.id, b.name);
+        if (fuzzyMatchesExisting(a.name, new Set([b.name.toLowerCase()]))) {
+          ids.add(a.id);
+          ids.add(b.id);
         }
       }
     }
-    return map;
+    return ids;
   }, [grants]);
 
   return (
@@ -333,6 +313,13 @@ export default function GrantsPage() {
           onAdded={(g) => addGrant(g)}
           companyDNA={companyDNA}
           existingNames={existingNames}
+        />
+      )}
+      {showDuplicatesModal && (
+        <DuplicatesModal
+          grants={grants}
+          onClose={() => setShowDuplicatesModal(false)}
+          onDeleted={(ids) => { removeGrantsLocal(ids); setMsg(`✓ Removed ${ids.length} duplicate grant${ids.length !== 1 ? "s" : ""}`); }}
         />
       )}
 
@@ -550,17 +537,13 @@ export default function GrantsPage() {
           )}
         </div>
         <div className="flex flex-shrink-0 gap-1.5 items-center">
-          {duplicateMap.size > 0 && (
+          {duplicateIds.size > 0 && (
             <button
-              onClick={() => { if (!showDuplicatesOnly) { setDeadlineFilter("all"); setDecisionFilter("All"); setCrmFilter("all"); } setShowDuplicatesOnly(!showDuplicatesOnly); setCurrentPage(1); }}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                showDuplicatesOnly
-                  ? "bg-amber-500 text-white"
-                  : "bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100"
-              }`}
+              onClick={() => setShowDuplicatesModal(true)}
+              className="flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100 px-3 py-2 text-sm font-medium whitespace-nowrap"
             >
               <Copy className="h-3.5 w-3.5" />
-              Duplicates ({Math.floor(duplicateMap.size / 2)} pairs)
+              Duplicates ({Math.floor(duplicateIds.size / 2)} pairs)
             </button>
           )}
         </div>
@@ -580,83 +563,18 @@ export default function GrantsPage() {
       </div>
 
       {/* Duplicates warning banner */}
-      {duplicateMap.size > 0 && !showDuplicatesOnly && (
+      {duplicateIds.size > 0 && (
         <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <Copy className="h-4 w-4 text-amber-500 shrink-0" />
           <p className="text-sm text-amber-800 font-medium">
-            {Math.floor(duplicateMap.size / 2)} possible duplicate pair{Math.floor(duplicateMap.size / 2) !== 1 ? "s" : ""} detected in your grant list
+            {Math.floor(duplicateIds.size / 2)} possible duplicate pair{Math.floor(duplicateIds.size / 2) !== 1 ? "s" : ""} detected in your grant list
           </p>
           <button
-            onClick={() => { setShowDuplicatesOnly(true); setDeadlineFilter("all"); setDecisionFilter("All"); setCrmFilter("all"); setCurrentPage(1); }}
+            onClick={() => setShowDuplicatesModal(true)}
             className="ml-auto rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
           >
-            Review duplicates
+            Review &amp; Remove
           </button>
-        </div>
-      )}
-
-      {/* Duplicates action banner */}
-      {showDuplicatesOnly && duplicateMap.size > 0 && (
-        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-2">
-          <div className="flex items-center gap-3">
-            <Copy className="h-4 w-4 text-amber-500 shrink-0" />
-            <p className="text-sm text-amber-800 font-medium">
-              {filtered.length} grant{filtered.length !== 1 ? "s" : ""} in {Math.floor(duplicateMap.size / 2)} duplicate pair{Math.floor(duplicateMap.size / 2) !== 1 ? "s" : ""} — the older entry in each pair is pre-selected for deletion
-            </p>
-            <button
-              onClick={() => { setShowDuplicatesOnly(false); setDeadlineFilter("active"); }}
-              className="ml-auto rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 whitespace-nowrap"
-            >
-              Back to all
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => {
-                setSelected(new Set(getOlderDuplicateIds()));
-              }}
-              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
-            >
-              <CheckSquare className="h-3.5 w-3.5" /> Auto-select older duplicates
-            </button>
-            <button
-              onClick={async () => {
-                const toDelete = getOlderDuplicateIds();
-                if (toDelete.length === 0) return;
-                if (!confirm(`Delete ${toDelete.length} older duplicate grant${toDelete.length !== 1 ? "s" : ""}, keeping the newer entry in each pair?`)) return;
-                setBulkBusy(true);
-                try {
-                  const res = await authFetch("/api/grants/bulk-delete", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ ids: toDelete }),
-                  });
-                  const result = await res.json();
-                  if (result.success) {
-                    removeGrantsLocal(toDelete);
-                    setShowDuplicatesOnly(false);
-                    setMsg(`✓ Removed ${toDelete.length} duplicate grant${toDelete.length !== 1 ? "s" : ""}`);
-                  } else {
-                    setMsg(`Failed: ${result.error ?? "unknown error"}`);
-                  }
-                } catch {
-                  setMsg("Network error — could not delete duplicates.");
-                }
-                setBulkBusy(false);
-              }}
-              disabled={bulkBusy}
-              className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-              Delete older duplicates ({Math.floor(duplicateMap.size / 2)})
-            </button>
-            <button
-              onClick={() => setSelected(new Set(filtered.map(g => g.id)))}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-            >
-              Select all {filtered.length}
-            </button>
-          </div>
         </div>
       )}
 
@@ -739,7 +657,7 @@ export default function GrantsPage() {
               {pageItems.map((grant) => (
                 <GrantRow key={grant.id} grant={grant} onUpdate={updateGrant} onDelete={deleteGrant} companyDNA={companyDNA}
                   selected={selected.has(grant.id)} onToggleSelect={() => toggleSelect(grant.id)}
-                  duplicateOf={duplicateMap.get(grant.id)} />
+                  duplicateOf={duplicateIds.has(grant.id) ? "duplicate" : undefined} />
               ))}
             </tbody>
           </table>
