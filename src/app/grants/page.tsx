@@ -41,9 +41,14 @@ export default function GrantsPage() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
+  const pageItems = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
+  const allPageSelected = pageItems.length > 0 && pageItems.every(g => selected.has(g.id));
   const toggleSelectAll = () => {
-    if (selected.size === filtered.length) setSelected(new Set());
-    else setSelected(new Set(filtered.map((g) => g.id)));
+    if (allPageSelected) {
+      setSelected(prev => { const next = new Set(prev); pageItems.forEach(g => next.delete(g.id)); return next; });
+    } else {
+      setSelected(prev => { const next = new Set(prev); pageItems.forEach(g => next.add(g.id)); return next; });
+    }
   };
 
   const bulkAddToCRM = async () => {
@@ -566,7 +571,7 @@ export default function GrantsPage() {
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
                 <th className="px-2 py-3 w-8">
-                  <input type="checkbox" checked={filtered.length > 0 && selected.size === filtered.length}
+                  <input type="checkbox" checked={allPageSelected}
                     onChange={toggleSelectAll} className="h-3.5 w-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
                 </th>
                 <th className="px-3 py-3 text-left">{renderSortBtn("name", "Grant")}</th>
@@ -580,7 +585,7 @@ export default function GrantsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.slice((currentPage - 1) * perPage, currentPage * perPage).map((grant) => (
+              {pageItems.map((grant) => (
                 <GrantRow key={grant.id} grant={grant} onUpdate={updateGrant} onDelete={deleteGrant} companyDNA={companyDNA}
                   selected={selected.has(grant.id)} onToggleSelect={() => toggleSelect(grant.id)} />
               ))}
