@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Lightbulb, Sparkles, Loader2, Check,
-  RefreshCw, ChevronDown, ChevronUp, ThumbsDown,
+  RefreshCw, ChevronDown, ChevronUp, ThumbsDown, Layers, CheckSquare,
 } from "lucide-react";
 import { useIdeas, type ContentType, type IdeaStyle, type Idea } from "@/hooks/useIdeas";
 import { IdeaRow, ContentTypeBadge, CategoryBadge, StyleBadge } from "./components/IdeaRow";
@@ -18,6 +18,25 @@ export default function IdeasPage() {
   const [feedbackModal, setFeedbackModal] = useState<{ id: string; title: string } | null>(null);
   const [feedbackText, setFeedbackText]   = useState("");
   const [showLibrary, setShowLibrary]     = useState(true);
+  const [selectedIdeas, setSelectedIdeas] = useState<Set<string>>(new Set());
+
+  const toggleIdeaSelect = (id: string) => setSelectedIdeas(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const toggleSelectAllIdeas = () => {
+    if (selectedIdeas.size === h.activeIdeas.length) setSelectedIdeas(new Set());
+    else setSelectedIdeas(new Set(h.activeIdeas.map(i => i.id)));
+  };
+
+  const sendToBulk = () => {
+    const titles = h.activeIdeas
+      .filter(i => selectedIdeas.has(i.id))
+      .map(i => encodeURIComponent(i.title));
+    router.push(`/bulk?topics=${titles.join("&topics=")}`);
+  };
 
   // ── Approve & navigate ─────────────────────────────────────────────────────
   const handleApprove = async (idea: Idea) => {
@@ -219,10 +238,33 @@ export default function IdeasPage() {
               </div>
             ) : (
               <div className="space-y-2">
+                {/* Select all bar */}
+                {h.activeIdeas.length > 0 && (
+                  <div className="flex items-center gap-3 px-1 pb-1">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-500 hover:text-gray-700 select-none">
+                      <input type="checkbox"
+                        checked={selectedIdeas.size === h.activeIdeas.length && h.activeIdeas.length > 0}
+                        onChange={toggleSelectAllIdeas}
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+                      {selectedIdeas.size === h.activeIdeas.length ? "Deselect all" : `Select all (${h.activeIdeas.length})`}
+                    </label>
+                    {selectedIdeas.size > 0 && (
+                      <span className="text-xs text-brand-600 font-medium">{selectedIdeas.size} selected</span>
+                    )}
+                  </div>
+                )}
                 {h.activeIdeas.map((idea) => (
-                  <IdeaRow key={idea.id} idea={idea} busy={h.actionId === idea.id}
-                    onApprove={() => handleApprove(idea)} onArchive={() => h.archive(idea.id)}
-                    onDelete={() => h.deleteIdea(idea.id)} onRate={(r) => handleRate(idea, r)} />
+                  <div key={idea.id} className="flex items-start gap-2">
+                    <input type="checkbox"
+                      checked={selectedIdeas.has(idea.id)}
+                      onChange={() => toggleIdeaSelect(idea.id)}
+                      className="mt-4 h-3.5 w-3.5 shrink-0 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+                    <div className="flex-1 min-w-0">
+                      <IdeaRow idea={idea} busy={h.actionId === idea.id}
+                        onApprove={() => handleApprove(idea)} onArchive={() => h.archive(idea.id)}
+                        onDelete={() => h.deleteIdea(idea.id)} onRate={(r) => handleRate(idea, r)} />
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
@@ -244,6 +286,24 @@ export default function IdeasPage() {
           </>
         )}
       </div>
+      {/* Sticky bulk action bar */}
+      {selectedIdeas.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 shadow-xl">
+          <span className="text-sm font-semibold text-gray-800">
+            <CheckSquare className="inline h-4 w-4 mr-1 text-brand-600" />
+            {selectedIdeas.size} idea{selectedIdeas.size !== 1 ? "s" : ""} selected
+          </span>
+          <div className="h-5 w-px bg-gray-200" />
+          <button onClick={sendToBulk}
+            className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700">
+            <Layers className="h-3.5 w-3.5" /> Send to Bulk Generate
+          </button>
+          <button onClick={() => setSelectedIdeas(new Set())}
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100">
+            Cancel
+          </button>
+        </div>
+      )}
     </div>
   );
 }

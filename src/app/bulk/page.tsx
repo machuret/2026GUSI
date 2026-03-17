@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Sparkles, Plus, Trash2, CheckCircle2, XCircle, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { CategoryPicker } from "@/components/generate/CategoryPicker";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
@@ -85,10 +86,16 @@ function ResultCard({ result }: ResultCard) {
   );
 }
 
-export default function BulkPage() {
+function BulkPageInner() {
+  const searchParams = useSearchParams();
   const [category, setCategory] = useState("social_media");
   const [topics, setTopics] = useState<string[]>(["", "", ""]);
   const [platform, setPlatform] = useState("");
+
+  useEffect(() => {
+    const incoming = searchParams.getAll("topics").map(t => decodeURIComponent(t)).filter(Boolean);
+    if (incoming.length > 0) setTopics(incoming.slice(0, 20));
+  }, [searchParams]);
   const [tone, setTone] = useState(2);
   const [length, setLength] = useState(2);
   const [audience, setAudience] = useState("");
@@ -326,5 +333,13 @@ export default function BulkPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function BulkPage() {
+  return (
+    <Suspense fallback={null}>
+      <BulkPageInner />
+    </Suspense>
   );
 }
