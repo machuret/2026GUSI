@@ -21,9 +21,10 @@ interface Props {
   companyDNA?: string;
   selected?: boolean;
   onToggleSelect?: () => void;
+  duplicateOf?: string;
 }
 
-export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onToggleSelect }: Props) {
+export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onToggleSelect, duplicateOf }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Grant>>({ ...grant });
@@ -154,6 +155,11 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
                 )}
                 {grant.aiResearched && (
                   <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">⬡ AI Filled</span>
+                )}
+                {duplicateOf && (
+                  <span className="inline-flex items-center gap-0.5 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700" title={`Possible duplicate of: ${duplicateOf}`}>
+                    ⚠ Duplicate
+                  </span>
                 )}
                 {grant.crmStatus && (
                   <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold border ${

@@ -1,7 +1,7 @@
 ﻿"use client";
 
-import { useState } from "react";
-import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus, AlertTriangle, ShieldCheck } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus, AlertTriangle, ShieldCheck, Copy } from "lucide-react";
 import Link from "next/link";
 import { useGrants, type Grant } from "@/hooks/useGrants";
 import { authFetch } from "@/lib/authFetch";
@@ -9,6 +9,7 @@ import { exportToCsv } from "@/lib/exportCsv";
 import { GrantRow } from "./components/GrantRow";
 import { AddGrantModal } from "./components/AddGrantModal";
 import { GrantSearchModal } from "./components/GrantSearchModal";
+import { fuzzyMatchesExisting } from "@/lib/fuzzyMatch";
 
 export default function GrantsPage() {
   const { grants, loading, error, companyDNA, updateGrant: updateGrantRaw, deleteGrant, addGrant, fetchGrants, patchGrantsLocal, removeGrantsLocal } = useGrants();
@@ -33,6 +34,7 @@ export default function GrantsPage() {
   const [rankProgress, setRankProgress]       = useState<{ done: number; total: number } | null>(null);
   const [deletingExpired, setDeletingExpired] = useState(false);
   const [crmFilter, setCrmFilter] = useState<"all" | "in" | "out">("all");
+  const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false);
   const [perPage, setPerPage] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -227,6 +229,7 @@ export default function GrantsPage() {
       const matchSearch = !search || g.name.toLowerCase().includes(q) || (g.founder ?? "").toLowerCase().includes(q) || (g.notes ?? "").toLowerCase().includes(q);
       const matchDecision = decisionFilter === "All" || g.decision === decisionFilter;
       const matchCrm = crmFilter === "all" || (crmFilter === "in" ? !!g.crmStatus : !g.crmStatus);
+      const matchDuplicates = !showDuplicatesOnly || duplicateMap.has(g.id);
       let matchDeadline = true;
       if (deadlineFilter === "active") {
         matchDeadline = !g.deadlineDate || new Date(g.deadlineDate).getTime() >= now;
@@ -237,7 +240,7 @@ export default function GrantsPage() {
       } else if (deadlineFilter !== "all" && !g.deadlineDate) {
         matchDeadline = false;
       }
-      return matchSearch && matchDecision && matchDeadline && matchCrm;
+      return matchSearch && matchDecision && matchDeadline && matchCrm && matchDuplicates;
     })
     .sort((a, b) => {
       let av: string | number = 0, bv: string | number = 0;
@@ -283,6 +286,24 @@ export default function GrantsPage() {
   };
 
   const existingNames = new Set(grants.map((g) => g.name.toLowerCase()));
+
+  // Build duplicate map: id -> name of the grant it duplicates
+  const duplicateMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (let i = 0; i < grants.length; i++) {
+      for (let j = i + 1; j < grants.length; j++) {
+        const a = grants[i];
+        const b = grants[j];
+        if (map.has(a.id) && map.has(b.id)) continue;
+        const match = fuzzyMatchesExisting(a.name, new Set([b.name.toLowerCase()]));
+        if (match) {
+          if (!map.has(b.id)) map.set(b.id, a.name);
+          if (!map.has(a.id)) map.set(a.id, b.name);
+        }
+      }
+    }
+    return map;
+  }, [grants]);
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -510,6 +531,21 @@ export default function GrantsPage() {
           )}
         </div>
         <div className="flex flex-shrink-0 gap-1.5 items-center">
+          {duplicateMap.size > 0 && (
+            <button
+              onClick={() => { setShowDuplicatesOnly(v => !v); setCurrentPage(1); }}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
+                showDuplicatesOnly
+                  ? "bg-amber-500 text-white"
+                  : "bg-amber-50 text-amber-700 border border-amber-300 hover:bg-amber-100"
+              }`}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Duplicates ({Math.floor(duplicateMap.size / 2)} pairs)
+            </button>
+          )}
+        </div>
+        <div className="flex flex-shrink-0 gap-1.5 items-center">
           <span className="text-xs text-gray-400 font-medium">CRM:</span>
           {([["all", "All"], ["out", "Not in CRM"], ["in", "In CRM"]] as const).map(([val, label]) => (
             <button key={val} onClick={() => { setCrmFilter(val); setCurrentPage(1); }}
@@ -523,6 +559,38 @@ export default function GrantsPage() {
           ))}
         </div>
       </div>
+
+      {/* Duplicates warning banner */}
+      {duplicateMap.size > 0 && !showDuplicatesOnly && (
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <Copy className="h-4 w-4 text-amber-500 shrink-0" />
+          <p className="text-sm text-amber-800 font-medium">
+            {Math.floor(duplicateMap.size / 2)} possible duplicate pair{Math.floor(duplicateMap.size / 2) !== 1 ? "s" : ""} detected in your grant list
+          </p>
+          <button
+            onClick={() => { setShowDuplicatesOnly(true); setCurrentPage(1); }}
+            className="ml-auto rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+          >
+            Review duplicates
+          </button>
+        </div>
+      )}
+
+      {/* Duplicates action banner */}
+      {showDuplicatesOnly && duplicateMap.size > 0 && (
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <Copy className="h-4 w-4 text-amber-500 shrink-0" />
+          <p className="text-sm text-amber-800 font-medium">
+            Showing {filtered.length} grant{filtered.length !== 1 ? "s" : ""} involved in duplicate pairs — select the ones to keep and delete the rest
+          </p>
+          <button
+            onClick={() => setSelected(new Set(filtered.map(g => g.id)))}
+            className="ml-auto rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 whitespace-nowrap"
+          >
+            Select all
+          </button>
+        </div>
+      )}
 
       {/* Expired batch action banner */}
       {deadlineFilter === "expired" && filtered.length > 0 && (
@@ -602,7 +670,8 @@ export default function GrantsPage() {
             <tbody>
               {pageItems.map((grant) => (
                 <GrantRow key={grant.id} grant={grant} onUpdate={updateGrant} onDelete={deleteGrant} companyDNA={companyDNA}
-                  selected={selected.has(grant.id)} onToggleSelect={() => toggleSelect(grant.id)} />
+                  selected={selected.has(grant.id)} onToggleSelect={() => toggleSelect(grant.id)}
+                  duplicateOf={duplicateMap.get(grant.id)} />
               ))}
             </tbody>
           </table>
