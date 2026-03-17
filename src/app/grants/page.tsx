@@ -578,17 +578,95 @@ export default function GrantsPage() {
 
       {/* Duplicates action banner */}
       {showDuplicatesOnly && duplicateMap.size > 0 && (
-        <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <Copy className="h-4 w-4 text-amber-500 shrink-0" />
-          <p className="text-sm text-amber-800 font-medium">
-            Showing {filtered.length} grant{filtered.length !== 1 ? "s" : ""} involved in duplicate pairs — select the ones to keep and delete the rest
-          </p>
-          <button
-            onClick={() => setSelected(new Set(filtered.map(g => g.id)))}
-            className="ml-auto rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 whitespace-nowrap"
-          >
-            Select all
-          </button>
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-2">
+          <div className="flex items-center gap-3">
+            <Copy className="h-4 w-4 text-amber-500 shrink-0" />
+            <p className="text-sm text-amber-800 font-medium">
+              {filtered.length} grant{filtered.length !== 1 ? "s" : ""} in {Math.floor(duplicateMap.size / 2)} duplicate pair{Math.floor(duplicateMap.size / 2) !== 1 ? "s" : ""} — the older entry in each pair is pre-selected for deletion
+            </p>
+            <button
+              onClick={() => setShowDuplicatesOnly(false)}
+              className="ml-auto rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 whitespace-nowrap"
+            >
+              Back to all
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                // For each pair, keep the newer (later createdAt), select the older for deletion
+                const pairsSeen = new Set<string>();
+                const toDelete = new Set<string>();
+                for (const [idA, nameB] of Array.from(duplicateMap.entries())) {
+                  if (pairsSeen.has(idA)) continue;
+                  // Find the paired grant (the one whose name matches nameB)
+                  const idB = grants.find(g => g.name === nameB && g.id !== idA)?.id;
+                  if (!idB) continue;
+                  pairsSeen.add(idA);
+                  pairsSeen.add(idB);
+                  const gA = grants.find(g => g.id === idA)!;
+                  const gB = grants.find(g => g.id === idB)!;
+                  // Keep newer, delete older
+                  const older = new Date(gA.createdAt) <= new Date(gB.createdAt) ? gA : gB;
+                  toDelete.add(older.id);
+                }
+                setSelected(toDelete);
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+            >
+              <CheckSquare className="h-3.5 w-3.5" /> Auto-select older duplicates
+            </button>
+            <button
+              onClick={async () => {
+                // Build delete set: older of each pair
+                const pairsSeen = new Set<string>();
+                const toDelete: string[] = [];
+                for (const [idA, nameB] of Array.from(duplicateMap.entries())) {
+                  if (pairsSeen.has(idA)) continue;
+                  const idB = grants.find(g => g.name === nameB && g.id !== idA)?.id;
+                  if (!idB) continue;
+                  pairsSeen.add(idA);
+                  pairsSeen.add(idB);
+                  const gA = grants.find(g => g.id === idA)!;
+                  const gB = grants.find(g => g.id === idB)!;
+                  const older = new Date(gA.createdAt) <= new Date(gB.createdAt) ? gA : gB;
+                  toDelete.push(older.id);
+                }
+                if (toDelete.length === 0) return;
+                if (!confirm(`Delete ${toDelete.length} older duplicate grant${toDelete.length !== 1 ? "s" : ""}, keeping the newer entry in each pair?`)) return;
+                setBulkBusy(true);
+                try {
+                  const res = await authFetch("/api/grants/bulk-delete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ids: toDelete }),
+                  });
+                  const result = await res.json();
+                  if (result.success) {
+                    removeGrantsLocal(toDelete);
+                    setShowDuplicatesOnly(false);
+                    setMsg(`✓ Removed ${toDelete.length} duplicate grant${toDelete.length !== 1 ? "s" : ""}`);
+                  } else {
+                    setMsg(`Failed: ${result.error ?? "unknown error"}`);
+                  }
+                } catch {
+                  setMsg("Network error — could not delete duplicates.");
+                }
+                setBulkBusy(false);
+              }}
+              disabled={bulkBusy}
+              className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              Delete older duplicates ({Math.floor(duplicateMap.size / 2)})
+            </button>
+            <button
+              onClick={() => setSelected(new Set(filtered.map(g => g.id)))}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+            >
+              Select all {filtered.length}
+            </button>
+          </div>
         </div>
       )}
 
