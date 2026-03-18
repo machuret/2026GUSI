@@ -39,6 +39,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (authError) return authError;
 
     const body = await req.json();
+    console.log(`[PATCH /api/grants/${id.slice(0,8)}] body:`, JSON.stringify(body));
     const data = updateSchema.parse(body);
 
     const { data: existing, error: fetchError } = await db
@@ -47,9 +48,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .eq("id", id)
       .maybeSingle();
 
-    if (fetchError) throw fetchError;
-    if (!existing) return NextResponse.json({ error: "Grant not found" }, { status: 404 });
-    if (existing.companyId !== DEMO_COMPANY_ID) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (fetchError) { console.error(`[PATCH] fetchError:`, fetchError); throw fetchError; }
+    if (!existing) { console.error(`[PATCH] Grant not found: ${id}`); return NextResponse.json({ error: "Grant not found" }, { status: 404 }); }
+    if (existing.companyId !== DEMO_COMPANY_ID) { console.error(`[PATCH] Forbidden: companyId=${existing.companyId}`); return NextResponse.json({ error: "Forbidden" }, { status: 403 }); }
 
     const { data: grant, error } = await db
       .from("Grant")
@@ -58,7 +59,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) { console.error(`[PATCH] DB update error:`, error); throw error; }
+    console.log(`[PATCH /api/grants/${id.slice(0,8)}] SUCCESS crmStatus=${grant?.crmStatus}`);
     return NextResponse.json({ success: true, grant });
   } catch (error) {
     return handleApiError(error, "Update Grant");
