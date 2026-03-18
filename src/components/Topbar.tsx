@@ -21,6 +21,7 @@ const ROUTE_LABELS: Record<string, { title: string; section?: string }> = {
   "/grants":              { title: "Grants",            section: "Grants" },
   "/grants/crm":          { title: "Grants CRM",        section: "Grants" },
   "/grants/builder":      { title: "Grant Builder",     section: "Grants" },
+  "/grants/finished":     { title: "Finished Grants",   section: "Grants" },
   "/grants/profile":      { title: "Grant Profile",     section: "Grants" },
   "/grants/crawler":      { title: "Grant Crawler",     section: "Grants" },
   "/leads":               { title: "Leads",             section: "Leads" },

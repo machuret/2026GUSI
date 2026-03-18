@@ -38,6 +38,7 @@ import {
   Star,
   Hash,
   PlayCircle,
+  CheckCircle2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -94,11 +95,12 @@ const videosNav = [
 ];
 
 const grantsNav = [
-  { href: "/grants",         label: "Grants",        icon: Trophy },
-  { href: "/grants/crm",     label: "Grants CRM",    icon: KanbanSquare },
-  { href: "/grants/builder", label: "Grant Builder", icon: PenLine },
-  { href: "/grants/profile", label: "Grant Profile", icon: UserCheck },
-  { href: "/grants/crawler", label: "Grant Crawler", icon: Rss },
+  { href: "/grants",          label: "Grants",          icon: Trophy },
+  { href: "/grants/crm",      label: "Grants CRM",      icon: KanbanSquare },
+  { href: "/grants/builder",  label: "Grant Builder",   icon: PenLine },
+  { href: "/grants/finished", label: "Finished Grants", icon: CheckCircle2 },
+  { href: "/grants/profile",  label: "Grant Profile",   icon: UserCheck },
+  { href: "/grants/crawler",  label: "Grant Crawler",   icon: Rss },
 ];
 
 const leadsNav = [
