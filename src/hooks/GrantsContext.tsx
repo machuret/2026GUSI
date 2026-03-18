@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, edgeFn } from "@/lib/authFetch";
 
 export interface Grant {
   id: string;
@@ -65,7 +65,7 @@ export function GrantsProvider({ children }: { children: ReactNode }) {
     else setLoading(true);
     setError(null);
     try {
-      const res = await authFetch("/api/grants/bootstrap");
+      const res = await authFetch(edgeFn("grant-bootstrap"));
       if (!res.ok) throw new Error(`Failed to load grants (${res.status})`);
       const data = await res.json();
 
@@ -116,7 +116,7 @@ export function GrantsProvider({ children }: { children: ReactNode }) {
 
   const updateGrant = useCallback(async (id: string, data: Partial<Grant>): Promise<{ success: boolean; grant?: Grant; error?: string }> => {
     try {
-      const res = await authFetch(`/api/grants/${id}`, {
+      const res = await authFetch(`${edgeFn("grant-crud")}?id=${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -142,7 +142,7 @@ export function GrantsProvider({ children }: { children: ReactNode }) {
     // Apply optimistically
     setGrants((prev) => prev.map((g) => g.id === id ? { ...g, ...data } : g));
     try {
-      const res = await authFetch(`/api/grants/${id}`, {
+      const res = await authFetch(`${edgeFn("grant-crud")}?id=${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -170,7 +170,7 @@ export function GrantsProvider({ children }: { children: ReactNode }) {
 
   const deleteGrant = useCallback(async (id: string) => {
     try {
-      const res = await authFetch(`/api/grants/${id}`, { method: "DELETE" });
+      const res = await authFetch(`${edgeFn("grant-crud")}?id=${id}`, { method: "DELETE" });
       const result = await res.json();
       if (result.success) {
         setGrants((prev) => prev.filter((g) => g.id !== id));

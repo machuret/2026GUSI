@@ -1,5 +1,13 @@
 import { createClient } from "@/lib/supabase/client";
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+/** Build the full URL for a Supabase Edge Function */
+export function edgeFn(name: string) {
+  return `${SUPABASE_URL}/functions/v1/${name}`;
+}
+
 // Singleton so auto-refresh listener stays alive
 let _client: ReturnType<typeof createClient> | null = null;
 function getBrowserClient() {
@@ -41,11 +49,13 @@ export async function getAccessToken(): Promise<string | null> {
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = await getAccessToken();
   if (!token) console.warn(`[authFetch] No token for ${options.method ?? "GET"} ${url}`);
+  const isSupabase = url.startsWith(SUPABASE_URL);
   return fetch(url, {
     ...options,
     headers: {
       ...(options.headers ?? {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(isSupabase ? { apikey: SUPABASE_ANON_KEY } : {}),
     },
   });
 }

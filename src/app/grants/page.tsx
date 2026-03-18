@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus, AlertTriangle, ShieldCheck, Copy } from "lucide-react";
 import Link from "next/link";
 import { useGrantsContext, type Grant } from "@/hooks/GrantsContext";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, edgeFn } from "@/lib/authFetch";
 import { toast } from "sonner";
 import { exportToCsv } from "@/lib/exportCsv";
 import { GrantRow } from "./components/GrantRow";
@@ -49,7 +49,7 @@ export default function GrantsPage() {
     if (!confirm(`Add ${ids.length} grant${ids.length !== 1 ? "s" : ""} to CRM?`)) return;
     setBulkBusy(true);
     try {
-      const res = await authFetch("/api/grants/bulk-update", {
+      const res = await authFetch(edgeFn("grant-bulk-update"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids, data: { crmStatus: "Researching" } }),
@@ -78,7 +78,7 @@ export default function GrantsPage() {
     if (!confirm(`Delete ${ids.length} grant${ids.length !== 1 ? "s" : ""}? This cannot be undone.`)) return;
     setBulkBusy(true);
     try {
-      const res = await authFetch("/api/grants/bulk-delete", {
+      const res = await authFetch(edgeFn("grant-bulk-delete"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids }),

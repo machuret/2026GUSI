@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { X, Trash2, Loader2, Copy } from "lucide-react";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, edgeFn } from "@/lib/authFetch";
 import { fuzzyMatchesExisting } from "@/lib/fuzzyMatch";
 import type { Grant } from "@/hooks/GrantsContext";
 
@@ -74,7 +74,7 @@ export function DuplicatesModal({ grants, onClose, onDeleted }: Props) {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await authFetch("/api/grants/bulk-delete", {
+      const res = await authFetch(edgeFn("grant-bulk-delete"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids }),
