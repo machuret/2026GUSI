@@ -49,8 +49,8 @@ serve(async (req: Request) => {
     const ids = body.ids as string[];
     const data = body.data as Record<string, unknown>;
 
-    if (!Array.isArray(ids) || ids.length === 0 || ids.length > 100) {
-      return json({ error: "ids must be an array of 1-100 strings" }, 400);
+    if (!Array.isArray(ids) || ids.length === 0 || ids.length > 500) {
+      return json({ error: "ids must be an array of 1-500 strings" }, 400);
     }
     if (!data || typeof data !== "object") {
       return json({ error: "data must be an object" }, 400);

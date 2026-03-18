@@ -45,8 +45,8 @@ serve(async (req: Request) => {
     const body = await req.json();
     const ids = body.ids as string[];
 
-    if (!Array.isArray(ids) || ids.length === 0 || ids.length > 100) {
-      return json({ error: "ids must be an array of 1-100 strings" }, 400);
+    if (!Array.isArray(ids) || ids.length === 0 || ids.length > 500) {
+      return json({ error: "ids must be an array of 1-500 strings" }, 400);
     }
 
     const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
