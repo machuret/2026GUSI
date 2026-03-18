@@ -6,7 +6,7 @@ import {
   ArrowLeft, Plus, Trash2, Loader2, Save, X, BookOpen,
   ChevronDown, ChevronUp, Tag, PenLine, FileText, Search,
 } from "lucide-react";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, edgeFn } from "@/lib/authFetch";
 
 interface GrantExample {
   id: string;
@@ -74,7 +74,7 @@ export default function GrantExamplesPage() {
 
   const fetchExamples = useCallback(async () => {
     try {
-      const res = await authFetch("/api/grants/examples");
+      const res = await authFetch(edgeFn("grant-examples"));
       const data = await res.json();
       setExamples(data.examples ?? []);
     } catch { /* ignore */ }
@@ -101,7 +101,7 @@ export default function GrantExamplesPage() {
     setSaving(true);
     setSaveError(null);
     try {
-      const res = await authFetch("/api/grants/examples", {
+      const res = await authFetch(edgeFn("grant-examples"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -123,7 +123,7 @@ export default function GrantExamplesPage() {
   const handleUpdate = async (id: string) => {
     setEditSaving(true);
     try {
-      const res = await authFetch(`/api/grants/examples/${id}`, {
+      const res = await authFetch(`${edgeFn("grant-examples")}?id=${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editForm),
@@ -142,7 +142,7 @@ export default function GrantExamplesPage() {
     if (!confirm("Delete this example?")) return;
     setDeletingId(id);
     try {
-      await authFetch(`/api/grants/examples/${id}`, { method: "DELETE" });
+      await authFetch(`${edgeFn("grant-examples")}?id=${id}`, { method: "DELETE" });
       setExamples((prev) => prev.filter((e) => e.id !== id));
       if (expandedId === id) setExpandedId(null);
     } catch { /* ignore */ }

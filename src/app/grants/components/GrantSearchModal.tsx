@@ -7,7 +7,7 @@ import {
   RefreshCw, EyeOff, Eye,
 } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, edgeFn } from "@/lib/authFetch";
 import type { Grant } from "@/hooks/GrantsContext";
 import {
   type SearchResult,
@@ -110,7 +110,7 @@ export function GrantSearchModal({ onClose, onAdded, companyDNA, existingNames }
   const doAdd = async (result: SearchResult, idx: number): Promise<boolean> => {
     setAdding((p) => ({ ...p, [idx]: true }));
     try {
-      const res = await authFetch("/api/grants", {
+      const res = await authFetch(edgeFn("grant-create"), {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           companyId: DEMO_COMPANY_ID,

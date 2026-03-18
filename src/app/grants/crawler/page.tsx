@@ -11,7 +11,7 @@ import { useGrantsContext } from "@/hooks/GrantsContext";
 import {
   KNOWN_GRANT_SITES, GRANT_SITE_CATEGORIES, GRANT_SITE_REGIONS, type GrantSite,
 } from "@/lib/grantSites";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, edgeFn } from "@/lib/authFetch";
 import { CrawlResultCard, type CrawledGrant } from "./components/CrawlResultCard";
 import { fuzzyMatchesExisting } from "@/lib/fuzzyMatch";
 
@@ -85,7 +85,7 @@ export default function GrantCrawlerPage() {
   const handleAdd = async (grant: CrawledGrant, idx: number) => {
     setAdding((p) => ({ ...p, [idx]: true })); setAddError(null);
     try {
-      const res = await authFetch("/api/grants", {
+      const res = await authFetch(edgeFn("grant-create"), {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           companyId: DEMO_COMPANY_ID, name: grant.name, founder: grant.founder, url: grant.url,
