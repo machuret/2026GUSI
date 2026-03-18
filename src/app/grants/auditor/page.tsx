@@ -5,9 +5,10 @@ import Link from "next/link";
 import {
   ArrowLeft, ShieldCheck, Loader2, ChevronDown, ChevronUp,
   CheckCircle, AlertTriangle, XCircle, Info, Trophy, PenLine,
-  KanbanSquare, UserCheck, Rss, Settings, BookOpen,
+  KanbanSquare, UserCheck, Rss, Settings, BookOpen, Sparkles,
+  Clock, Zap,
 } from "lucide-react";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, edgeFn } from "@/lib/authFetch";
 
 interface SavedDraft {
   id: string;
@@ -28,6 +29,23 @@ interface AuditResult {
   summary: string;
   sectionAudits: SectionAudit[];
   topRecommendations: string[];
+}
+
+interface SavedAudit {
+  id: string;
+  draftId: string;
+  grantName: string;
+  overallScore: number;
+  overallVerdict: string;
+  summary: string;
+  improvedAt: string | null;
+  createdAt: string;
+}
+
+interface ImproveChange {
+  section: string;
+  changesSummary: string;
+  scoreBefore: number;
 }
 
 const verdictColor = (v: string) => {
@@ -51,15 +69,28 @@ const scoreBarColor = (s: number) => {
   return "bg-red-500";
 };
 
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
 export default function GrantAuditorPage() {
   const [drafts, setDrafts] = useState<SavedDraft[]>([]);
   const [loadingDrafts, setLoadingDrafts] = useState(true);
   const [selectedDraftId, setSelectedDraftId] = useState<string>("");
   const [auditing, setAuditing] = useState(false);
   const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
+  const [auditId, setAuditId] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [hasCustomPrompt, setHasCustomPrompt] = useState(false);
+
+  // Saved audits
+  const [savedAudits, setSavedAudits] = useState<SavedAudit[]>([]);
+  const [loadingAudits, setLoadingAudits] = useState(true);
+
+  // Improve
+  const [improving, setImproving] = useState(false);
+  const [improveResult, setImproveResult] = useState<{ changes: ImproveChange[]; message: string } | null>(null);
+  const [improveError, setImproveError] = useState<string | null>(null);
 
   const fetchDrafts = useCallback(async () => {
     try {
@@ -69,6 +100,15 @@ export default function GrantAuditorPage() {
       if (data.drafts?.length > 0) setSelectedDraftId(data.drafts[0].id);
     } catch { /* ignore */ }
     finally { setLoadingDrafts(false); }
+  }, []);
+
+  const fetchSavedAudits = useCallback(async () => {
+    try {
+      const res = await authFetch(edgeFn("grant-audit"));
+      const data = await res.json();
+      setSavedAudits(data.audits ?? []);
+    } catch { /* ignore */ }
+    finally { setLoadingAudits(false); }
   }, []);
 
   const checkPrompt = useCallback(async () => {
@@ -81,16 +121,20 @@ export default function GrantAuditorPage() {
 
   useEffect(() => {
     fetchDrafts();
+    fetchSavedAudits();
     checkPrompt();
-  }, [fetchDrafts, checkPrompt]);
+  }, [fetchDrafts, fetchSavedAudits, checkPrompt]);
 
   const runAudit = async () => {
     if (!selectedDraftId) return;
     setAuditing(true);
     setAuditResult(null);
+    setAuditId(null);
     setAuditError(null);
+    setImproveResult(null);
+    setImproveError(null);
     try {
-      const res  = await authFetch("/api/grants/audit", {
+      const res = await authFetch(edgeFn("grant-audit"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ draftId: selectedDraftId }),
@@ -98,11 +142,36 @@ export default function GrantAuditorPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Audit failed");
       setAuditResult(data.audit);
+      setAuditId(data.auditId ?? null);
       setExpandedSection(null);
+      fetchSavedAudits();
     } catch (err) {
       setAuditError(err instanceof Error ? err.message : "Audit failed");
     } finally {
       setAuditing(false);
+    }
+  };
+
+  const runImprove = async () => {
+    if (!auditId) return;
+    if (!confirm("This will rewrite all flagged sections in your draft based on the audit findings. Continue?")) return;
+    setImproving(true);
+    setImproveResult(null);
+    setImproveError(null);
+    try {
+      const res = await authFetch(edgeFn("grant-improve"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ auditId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Improve failed");
+      setImproveResult({ changes: data.changes ?? [], message: data.message ?? "Done" });
+      fetchSavedAudits();
+    } catch (err) {
+      setImproveError(err instanceof Error ? err.message : "Improve failed");
+    } finally {
+      setImproving(false);
     }
   };
 
@@ -147,7 +216,7 @@ export default function GrantAuditorPage() {
             <ShieldCheck className="h-7 w-7 text-amber-600" /> Grant Auditor
           </h1>
           <p className="mt-1 text-gray-500">
-            AI-powered accuracy check — verifies your draft against your vault documents and grant profile
+            AI-powered accuracy check — audit your draft, then auto-improve every section
           </p>
         </div>
         <Link
@@ -191,7 +260,7 @@ export default function GrantAuditorPage() {
               <label className="mb-1 block text-xs font-medium text-gray-600">Draft</label>
               <select
                 value={selectedDraftId}
-                onChange={(e) => { setSelectedDraftId(e.target.value); setAuditResult(null); setAuditError(null); }}
+                onChange={(e) => { setSelectedDraftId(e.target.value); setAuditResult(null); setAuditId(null); setAuditError(null); setImproveResult(null); }}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               >
                 {drafts.map((d) => (
@@ -215,10 +284,38 @@ export default function GrantAuditorPage() {
         )}
       </div>
 
+      {/* Saved audits history */}
+      {!loadingAudits && savedAudits.length > 0 && !auditResult && (
+        <div className="rounded-xl border border-gray-200 bg-white p-6 mb-6">
+          <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Clock className="h-4 w-4 text-gray-400" /> Saved Audits
+          </h2>
+          <div className="space-y-2">
+            {savedAudits.map((a) => (
+              <div key={a.id} className="flex items-center gap-3 rounded-lg border border-gray-100 px-4 py-3 hover:bg-gray-50">
+                <div className={`shrink-0 text-lg font-bold w-10 ${scoreColor(a.overallScore)}`}>{a.overallScore}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{a.grantName}</p>
+                  <p className="text-xs text-gray-400">{fmtDate(a.createdAt)}</p>
+                </div>
+                <div className={`shrink-0 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${verdictColor(a.overallVerdict)}`}>
+                  {a.overallVerdict}
+                </div>
+                {a.improvedAt && (
+                  <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                    <Zap className="h-3 w-3" /> Improved
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Audit results */}
       {auditResult && (
         <div className="space-y-5">
-          {/* Overall */}
+          {/* Overall + Improve button */}
           <div className="rounded-xl border border-gray-200 bg-white p-6">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
@@ -232,13 +329,64 @@ export default function GrantAuditorPage() {
                 </div>
               </div>
             </div>
-            <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
+            <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden mb-4">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${scoreBarColor(auditResult.overallScore)}`}
                 style={{ width: `${auditResult.overallScore}%` }}
               />
             </div>
+
+            {/* IMPROVE button */}
+            {auditId && (
+              <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+                <button
+                  onClick={runImprove}
+                  disabled={improving}
+                  className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-2.5 text-sm font-semibold text-white shadow-md hover:from-emerald-700 hover:to-teal-700 disabled:opacity-60 transition-all"
+                >
+                  {improving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {improving ? "Improving sections…" : "Improve Draft"}
+                </button>
+                <p className="text-xs text-gray-400">
+                  AI will rewrite all flagged sections using your audit findings, vault documents, and profile data
+                </p>
+              </div>
+            )}
           </div>
+
+          {/* Improve result */}
+          {improveResult && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+              <h3 className="text-sm font-semibold text-emerald-900 mb-3 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-emerald-600" /> {improveResult.message}
+              </h3>
+              {improveResult.changes.length > 0 && (
+                <div className="space-y-2">
+                  {improveResult.changes.map((c, i) => (
+                    <div key={i} className="flex items-start gap-3 rounded-lg bg-white border border-emerald-100 px-4 py-3">
+                      <div className="shrink-0">
+                        <span className={`text-sm font-bold ${scoreColor(c.scoreBefore)}`}>{c.scoreBefore}</span>
+                        <span className="text-gray-300 mx-1">&rarr;</span>
+                        <span className="text-sm font-bold text-emerald-600">Fixed</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900">{c.section}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{c.changesSummary}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="mt-3 text-xs text-emerald-700">
+                Your draft has been updated. Go to{" "}
+                <Link href="/grants/builder" className="font-semibold underline">Grant Builder</Link>{" "}
+                to review the improved sections, or run another audit to verify the improvements.
+              </p>
+            </div>
+          )}
+          {improveError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{improveError}</div>
+          )}
 
           {/* Top recommendations */}
           {auditResult.topRecommendations?.length > 0 && (
