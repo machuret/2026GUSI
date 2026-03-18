@@ -271,6 +271,18 @@ export default function GrantsCrmPage() {
   const { grants, loading, companyDNA, updateGrant } = useGrants();
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
+  const [crmMsg, setCrmMsg] = useState<string | null>(null);
+
+  const showCrmMsg = (msg: string) => { setCrmMsg(msg); setTimeout(() => setCrmMsg(null), 6000); };
+
+  // Wrapper that shows an error toast when updateGrant fails
+  const safeUpdate = useCallback(async (id: string, data: Partial<Grant>) => {
+    const result = await updateGrant(id, data);
+    if (!result.success) {
+      showCrmMsg(`⚠ Update failed: ${result.error ?? "unknown error"} — try refreshing the page`);
+    }
+    return result;
+  }, [updateGrant]);
 
   // ── Mass Research ────────────────────────────────────────────────────────
   const [massResearching, setMassResearching] = useState(false);
@@ -312,11 +324,17 @@ export default function GrantsCrmPage() {
     if (crmGrants.length === 0) return;
     if (!confirm(`Remove all ${crmGrants.length} grants from CRM? This only clears their CRM status — the grants themselves are not deleted.`)) return;
     setResetting(true);
+    let ok = 0; let failed = 0;
     for (const g of crmGrants) {
-      try { await updateGrant(g.id, { crmStatus: null }); } catch { /* continue */ }
+      try {
+        const r = await safeUpdate(g.id, { crmStatus: null });
+        if (r.success) ok++; else failed++;
+      } catch { failed++; }
     }
+    if (failed > 0) showCrmMsg(`⚠ ${failed} of ${crmGrants.length} grants failed to remove from CRM`);
+    else showCrmMsg(`✓ Removed all ${ok} grants from CRM`);
     setResetting(false);
-  }, [grants, updateGrant]);
+  }, [grants, safeUpdate]);
 
   const crmGrants = grants.filter((g) => g.crmStatus != null);
   const filtered = crmGrants.filter((g) => {
@@ -335,11 +353,11 @@ export default function GrantsCrmPage() {
     const grant = grants.find((g) => g.id === draggableId);
     if (!grant || grant.crmStatus === newStatus) return;
     setDragError(null);
-    const res = await updateGrant(draggableId, { crmStatus: newStatus });
+    const res = await safeUpdate(draggableId, { crmStatus: newStatus });
     if (!res.success) {
       setDragError(`Failed to move "${grant.name.slice(0, 40)}" — please try again`);
     }
-  }, [grants, updateGrant]);
+  }, [grants, safeUpdate]);
 
   const totalInCrm = crmGrants.length;
   const submittedCount = crmGrants.filter((g) => g.crmStatus === "Submitted").length;
@@ -409,6 +427,13 @@ export default function GrantsCrmPage() {
           </Link>
         </div>
       </div>
+
+      {/* Toast message */}
+      {crmMsg && (
+        <div className={`mb-4 rounded-xl border px-4 py-3 text-sm font-medium ${crmMsg.startsWith("✓") ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+          {crmMsg}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -531,7 +556,7 @@ export default function GrantsCrmPage() {
                     <td className="px-3 py-3">
                       <select
                         value={grant.crmStatus ?? ""}
-                        onChange={(e) => updateGrant(grant.id, { crmStatus: e.target.value as CrmStatus })}
+                        onChange={(e) => safeUpdate(grant.id, { crmStatus: e.target.value as CrmStatus })}
                         className={`w-full rounded-lg border px-2 py-1 text-xs font-medium focus:outline-none ${colMeta ? `${colMeta.bg} ${colMeta.color} ${colMeta.border}` : "border-gray-200"}`}
                       >
                         {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -560,7 +585,7 @@ export default function GrantsCrmPage() {
                         <Link href={`/grants/builder?grantId=${grant.id}`} className="rounded p-1 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600" title="Write Application">
                           <PenLine className="h-3.5 w-3.5" />
                         </Link>
-                        <button onClick={() => updateGrant(grant.id, { crmStatus: null })} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-500" title="Remove from CRM">
+                        <button onClick={() => safeUpdate(grant.id, { crmStatus: null })} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-500" title="Remove from CRM">
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -622,7 +647,7 @@ export default function GrantsCrmPage() {
                                   >
                                     <GrantCrmCard
                                       grant={grant}
-                                      onUpdate={updateGrant}
+                                      onUpdate={safeUpdate}
                                       companyDNA={companyDNA}
                                     />
                                   </div>

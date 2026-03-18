@@ -98,17 +98,24 @@ export function useGrants() {
 
   useEffect(() => { fetchGrants(); }, [fetchGrants]);
 
-  const updateGrant = useCallback(async (id: string, data: Partial<Grant>): Promise<{ success: boolean; grant?: Grant }> => {
-    const res = await authFetch(`/api/grants/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const result = await res.json();
-    if (result.success) {
-      setGrants((prev) => prev.map((g) => g.id === id ? { ...g, ...result.grant } : g));
+  const updateGrant = useCallback(async (id: string, data: Partial<Grant>): Promise<{ success: boolean; grant?: Grant; error?: string }> => {
+    try {
+      const res = await authFetch(`/api/grants/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setGrants((prev) => prev.map((g) => g.id === id ? { ...g, ...result.grant } : g));
+      } else {
+        console.error(`[useGrants] updateGrant failed for ${id}:`, result.error ?? res.status);
+      }
+      return result;
+    } catch (err) {
+      console.error(`[useGrants] updateGrant network error for ${id}:`, err);
+      return { success: false, error: "Network error" };
     }
-    return result;
   }, []);
 
   const deleteGrant = useCallback(async (id: string) => {
