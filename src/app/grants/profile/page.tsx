@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Save, Loader2, CheckCircle, Target, Building2, MapPin, DollarSign, Tag, Star, ArrowLeft, Trophy, PenLine, Rss, KanbanSquare, ShieldCheck, User } from "lucide-react";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, edgeFn } from "@/lib/authFetch";
 
 const ORG_TYPES = ["Non-profit / Charity", "Social Enterprise", "SME (Small-Medium Business)", "Startup", "University / Research Institute", "Government / Council", "Indigenous Organisation", "Other"];
 const SECTORS = ["Health & Medical", "Education & Training", "Technology & Innovation", "Environment & Sustainability", "Arts & Culture", "Community Services", "Agriculture & Food", "Export & Trade", "Manufacturing", "Other"];
@@ -88,7 +88,7 @@ export default function GrantProfilePage() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    authFetch("/api/grant-profile")
+    authFetch(edgeFn("grant-profile"))
       .then((r) => {
         if (!r.ok) throw new Error(`API ${r.status}`);
         return r.json();
@@ -120,7 +120,7 @@ export default function GrantProfilePage() {
     setSaved(false);
     setSaveError(null);
     try {
-      const res = await authFetch("/api/grant-profile", {
+      const res = await authFetch(edgeFn("grant-profile"), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profile),
