@@ -282,11 +282,12 @@ serve(async (req: Request) => {
       }
     }
 
-    // 6. Save improved sections as updated draft
+    // 6. Save improved sections as updated draft + mark as published
     const { error: updateErr } = await db
       .from("GrantDraft")
       .update({
         sections: improved,
+        published: true,
         updatedAt: new Date().toISOString(),
       })
       .eq("id", audit.draftId);

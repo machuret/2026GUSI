@@ -13,6 +13,7 @@ import { authFetch, edgeFn } from "@/lib/authFetch";
 interface SavedDraft {
   id: string;
   grantName: string;
+  published?: boolean;
   updatedAt: string;
 }
 
@@ -98,8 +99,9 @@ export default function GrantAuditorPage() {
     try {
       const res  = await authFetch("/api/grants/drafts");
       const data = await res.json();
-      setDrafts(data.drafts ?? []);
-      if (data.drafts?.length > 0) setSelectedDraftId(data.drafts[0].id);
+      const unpublished = (data.drafts ?? []).filter((d: SavedDraft) => !d.published);
+      setDrafts(unpublished);
+      if (unpublished.length > 0) setSelectedDraftId(unpublished[0].id);
     } catch { /* ignore */ }
     finally { setLoadingDrafts(false); }
   }, []);
@@ -170,6 +172,7 @@ export default function GrantAuditorPage() {
       if (!res.ok) throw new Error(data.error || "Improve failed");
       setImproveResult({ changes: data.changes ?? [], message: data.message ?? "Done" });
       fetchSavedAudits();
+      fetchDrafts();
     } catch (err) {
       setImproveError(err instanceof Error ? err.message : "Improve failed");
     } finally {
