@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireEdgeAuth } from "@/lib/edgeAuth";

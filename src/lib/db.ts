@@ -13,7 +13,12 @@ export const db = new Proxy({} as SupabaseClient, {
       _db = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        { auth: { persistSession: false } }
+        {
+          auth: { persistSession: false },
+          global: {
+            fetch: (url, init) => fetch(url, { ...init, cache: "no-store" }),
+          },
+        }
       );
     }
     return (_db as unknown as Record<string | symbol, unknown>)[prop];
