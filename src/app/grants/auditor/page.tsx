@@ -38,6 +38,8 @@ interface SavedAudit {
   overallScore: number;
   overallVerdict: string;
   summary: string;
+  sectionAudits: SectionAudit[];
+  topRecommendations: string[];
   improvedAt: string | null;
   createdAt: string;
 }
@@ -290,9 +292,26 @@ export default function GrantAuditorPage() {
           <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Clock className="h-4 w-4 text-gray-400" /> Saved Audits
           </h2>
+          <p className="text-xs text-gray-400 mb-3">Click an audit to view details and improve the draft</p>
           <div className="space-y-2">
             {savedAudits.map((a) => (
-              <div key={a.id} className="flex items-center gap-3 rounded-lg border border-gray-100 px-4 py-3 hover:bg-gray-50">
+              <button
+                key={a.id}
+                onClick={() => {
+                  setAuditResult({
+                    overallScore: a.overallScore,
+                    overallVerdict: a.overallVerdict as AuditResult["overallVerdict"],
+                    summary: a.summary,
+                    sectionAudits: a.sectionAudits ?? [],
+                    topRecommendations: a.topRecommendations ?? [],
+                  });
+                  setAuditId(a.id);
+                  setSelectedDraftId(a.draftId);
+                  setImproveResult(null);
+                  setImproveError(null);
+                }}
+                className="w-full flex items-center gap-3 rounded-lg border border-gray-100 px-4 py-3 hover:bg-gray-50 hover:border-amber-200 transition-colors text-left"
+              >
                 <div className={`shrink-0 text-lg font-bold w-10 ${scoreColor(a.overallScore)}`}>{a.overallScore}</div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{a.grantName}</p>
@@ -306,7 +325,7 @@ export default function GrantAuditorPage() {
                     <Zap className="h-3 w-3" /> Improved
                   </span>
                 )}
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -315,6 +334,15 @@ export default function GrantAuditorPage() {
       {/* Audit results */}
       {auditResult && (
         <div className="space-y-5">
+          {/* Back button */}
+          {savedAudits.length > 0 && (
+            <button
+              onClick={() => { setAuditResult(null); setAuditId(null); setImproveResult(null); setImproveError(null); }}
+              className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-brand-600"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back to saved audits
+            </button>
+          )}
           {/* Overall + Improve button */}
           <div className="rounded-xl border border-gray-200 bg-white p-6">
             <div className="flex items-start justify-between gap-4 mb-4">

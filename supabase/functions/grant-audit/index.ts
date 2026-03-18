@@ -177,7 +177,7 @@ serve(async (req: Request) => {
     if (req.method === "GET") {
       const { data, error } = await db
         .from("GrantAudit")
-        .select("id, draftId, grantName, overallScore, overallVerdict, summary, improvedAt, createdAt")
+        .select("id, draftId, grantName, overallScore, overallVerdict, summary, sectionAudits, topRecommendations, improvedAt, createdAt")
         .eq("companyId", DEMO_COMPANY_ID)
         .order("createdAt", { ascending: false })
         .limit(50);
