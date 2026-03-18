@@ -25,12 +25,22 @@ function json(data: unknown, status = 200) {
 
 async function verifyAuth(req: Request) {
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader) return null;
+  if (!authHeader) {
+    console.error("[verifyAuth] No Authorization header");
+    return null;
+  }
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
   });
   const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return null;
+  if (error) {
+    console.error("[verifyAuth] getUser error:", error.message, "anonKey present:", !!SUPABASE_ANON_KEY, "url:", SUPABASE_URL);
+    return null;
+  }
+  if (!user) {
+    console.error("[verifyAuth] No user returned");
+    return null;
+  }
   return user;
 }
 
@@ -73,6 +83,13 @@ function cleanProfileData(body: Record<string, unknown>): Record<string, unknown
         )
       : [];
   }
+  if ("contacts" in body) {
+    clean.contacts = Array.isArray(body.contacts)
+      ? body.contacts.filter((c: unknown) =>
+          c && typeof c === "object" && typeof (c as Record<string,unknown>).name === "string"
+        )
+      : [];
+  }
 
   return clean;
 }
@@ -101,23 +118,40 @@ serve(async (req: Request) => {
     if (req.method === "PUT") {
       const body = await req.json();
       const data = cleanProfileData(body);
+      const now = new Date().toISOString();
 
-      const { data: saved, error } = await db
+      // Try UPDATE first
+      const { data: updated, error: updateErr } = await db
         .from("GrantProfile")
-        .upsert(
-          { ...data, companyId: DEMO_COMPANY_ID, updatedAt: new Date().toISOString() },
-          { onConflict: "companyId" }
-        )
+        .update({ ...data, updatedAt: now })
+        .eq("companyId", DEMO_COMPANY_ID)
         .select()
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        console.error("[grant-profile] DB error:", error);
-        throw error;
+      if (updateErr) {
+        console.error("[grant-profile] UPDATE error:", updateErr);
+        throw updateErr;
       }
 
-      console.log(`[grant-profile] Saved profile for ${DEMO_COMPANY_ID}`);
-      return json({ success: true, profile: saved });
+      // If no existing row, INSERT
+      if (!updated) {
+        const { data: inserted, error: insertErr } = await db
+          .from("GrantProfile")
+          .insert({ ...data, companyId: DEMO_COMPANY_ID, updatedAt: now })
+          .select()
+          .single();
+
+        if (insertErr) {
+          console.error("[grant-profile] INSERT error:", insertErr);
+          throw insertErr;
+        }
+
+        console.log(`[grant-profile] Inserted new profile for ${DEMO_COMPANY_ID}`);
+        return json({ success: true, profile: inserted });
+      }
+
+      console.log(`[grant-profile] Updated profile for ${DEMO_COMPANY_ID}`);
+      return json({ success: true, profile: updated });
     }
 
     return json({ error: "Method not allowed" }, 405);

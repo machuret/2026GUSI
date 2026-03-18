@@ -41,26 +41,28 @@ async function verifyAuth(req: Request) {
 // ── Context helpers ──────────────────────────────────────────────────────────
 
 function buildProfileContext(profile: Record<string, unknown>): string {
-  const lines = [
-    profile.contactName    ? `Contact Name: ${profile.contactName}` : null,
-    profile.contactRole    ? `Contact Role: ${profile.contactRole}` : null,
-    profile.orgType
-      ? `Organisation Type: ${profile.orgType}${profile.orgType2 ? ` / ${profile.orgType2}` : ""}`
-      : null,
-    profile.sector
-      ? `Sector: ${profile.sector}${profile.subSector ? ` / ${profile.subSector}` : ""}`
-      : null,
-    profile.stage         ? `Stage: ${profile.stage}` : null,
-    profile.teamSize      ? `Team Size: ${profile.teamSize}` : null,
-    profile.annualRevenue  ? `Annual Revenue: ${profile.annualRevenue}` : null,
-    profile.location
-      ? `Location: ${profile.location}, ${profile.country ?? "United States"}`
-      : null,
-    profile.missionStatement ? `\nMission Statement:\n${profile.missionStatement}` : null,
-    profile.keyActivities    ? `\nKey Activities:\n${profile.keyActivities}` : null,
-    profile.uniqueStrengths  ? `\nUnique Strengths:\n${profile.uniqueStrengths}` : null,
-    profile.pastGrantsWon    ? `\nPast Grants Won:\n${profile.pastGrantsWon}` : null,
-  ].filter(Boolean);
+  const contacts = profile.contacts as { name: string; role?: string; email?: string; phone?: string }[] | null;
+  const lines: string[] = [];
+  if (contacts?.length) {
+    lines.push(`Contacts / Founders:`);
+    contacts.forEach((c, i) => {
+      const parts = [c.name, c.role, c.email, c.phone].filter(Boolean).join(" | ");
+      lines.push(`  ${i + 1}. ${parts}`);
+    });
+  } else {
+    if (profile.contactName) lines.push(`Contact Name: ${profile.contactName}`);
+    if (profile.contactRole) lines.push(`Contact Role: ${profile.contactRole}`);
+  }
+  if (profile.orgType) lines.push(`Organisation Type: ${profile.orgType}${profile.orgType2 ? ` / ${profile.orgType2}` : ""}`);
+  if (profile.sector) lines.push(`Sector: ${profile.sector}${profile.subSector ? ` / ${profile.subSector}` : ""}`);
+  if (profile.stage) lines.push(`Stage: ${profile.stage}`);
+  if (profile.teamSize) lines.push(`Team Size: ${profile.teamSize}`);
+  if (profile.annualRevenue) lines.push(`Annual Revenue: ${profile.annualRevenue}`);
+  if (profile.location) lines.push(`Location: ${profile.location}, ${profile.country ?? "United States"}`);
+  if (profile.missionStatement) lines.push(`\nMission Statement:\n${profile.missionStatement}`);
+  if (profile.keyActivities) lines.push(`\nKey Activities:\n${profile.keyActivities}`);
+  if (profile.uniqueStrengths) lines.push(`\nUnique Strengths:\n${profile.uniqueStrengths}`);
+  if (profile.pastGrantsWon) lines.push(`\nPast Grants Won:\n${profile.pastGrantsWon}`);
 
   const extraDocs = profile.extraDocs as { title: string; content: string }[] | null;
   if (extraDocs?.length) {

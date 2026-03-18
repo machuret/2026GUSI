@@ -13,7 +13,15 @@ const REVENUES = ["Pre-revenue", "Under $250k", "$250k–$500k", "$500k–$1M", 
 const DURATIONS = ["Under 6 months", "6–12 months", "1–2 years", "2+ years", "Any"];
 const FOCUS_AREA_OPTIONS = ["R&D / Innovation", "Export & International", "Training & Workforce", "Capital Equipment", "Marketing & Promotion", "Environmental / Sustainability", "Community Impact", "Digital Transformation", "Product Development", "Research & Collaboration"];
 
+interface ContactPerson {
+  name: string;
+  role?: string;
+  email?: string;
+  phone?: string;
+}
+
 interface GrantProfile {
+  contacts?: ContactPerson[];
   contactName?: string;
   contactRole?: string;
   contactEmail?: string;
@@ -46,6 +54,7 @@ interface GrantProfile {
 }
 
 const EMPTY: GrantProfile = {
+  contacts: [],
   contactName: "", contactRole: "", contactEmail: "", contactPhone: "", contactAddress: "",
   orgType: "", orgType2: "", sector: "", subSector: "", location: "", country: "United States",
   stage: "", teamSize: "", annualRevenue: "", yearFounded: "",
@@ -116,6 +125,19 @@ export default function GrantProfilePage() {
   const set = (key: keyof GrantProfile, value: unknown) =>
     setProfile((p) => ({ ...p, [key]: value }));
 
+  // ── Contacts helpers ──────────────────────────────────────────────────────
+  const addContact = () => {
+    set("contacts", [...(profile.contacts ?? []), { name: "", role: "", email: "", phone: "" }]);
+  };
+  const updateContact = (idx: number, field: keyof ContactPerson, value: string) => {
+    const updated = (profile.contacts ?? []).map((c, i) => i === idx ? { ...c, [field]: value } : c);
+    set("contacts", updated);
+  };
+  const removeContact = (idx: number) => {
+    if (!confirm("Remove this contact?")) return;
+    set("contacts", (profile.contacts ?? []).filter((_, i) => i !== idx));
+  };
+
   const toggleFocus = (area: string) => {
     const current = profile.focusAreas ?? [];
     set("focusAreas", current.includes(area) ? current.filter((a) => a !== area) : [...current, area]);
@@ -132,7 +154,9 @@ export default function GrantProfilePage() {
         body: JSON.stringify(profile),
       });
       if (res.ok) { setSaved(true); setTimeout(() => setSaved(false), 3000); }
-      else {
+      else if (res.status === 401) {
+        window.location.href = "/login?next=/grants/profile";
+      } else {
         const data = await res.json().catch(() => ({}));
         setSaveError(data.error || `Save failed (${res.status})`);
       }
@@ -261,30 +285,86 @@ export default function GrantProfilePage() {
       </div>
 
       <div className="space-y-5">
-        {/* Contact Person */}
-        <Section icon={User} title="Grant Contact Person">
-          <p className="text-sm text-gray-500">The person responsible for submitting grant applications. Used in the Contact Details section of your applications.</p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className={labelCls}>Full Name</label>
-              <input className={inputCls} placeholder="e.g. Jane Smith" value={profile.contactName ?? ""} onChange={(e) => set("contactName", e.target.value)} />
-            </div>
-            <div>
-              <label className={labelCls}>Role / Title</label>
-              <input className={inputCls} placeholder="e.g. CEO, Grants Manager" value={profile.contactRole ?? ""} onChange={(e) => set("contactRole", e.target.value)} />
-            </div>
-            <div>
-              <label className={labelCls}>Email Address</label>
-              <input type="email" className={inputCls} placeholder="e.g. jane@organisation.com" value={profile.contactEmail ?? ""} onChange={(e) => set("contactEmail", e.target.value)} />
-            </div>
-            <div>
-              <label className={labelCls}>Phone Number</label>
-              <input type="tel" className={inputCls} placeholder="e.g. +1 (555) 123-4567" value={profile.contactPhone ?? ""} onChange={(e) => set("contactPhone", e.target.value)} />
-            </div>
+        {/* Contacts */}
+        <Section icon={User} title="Grant Contacts">
+          <p className="text-sm text-gray-500">Add all founders and contact people for grant applications. The first contact is used as the primary applicant.</p>
+
+          {(profile.contacts ?? []).length === 0 && (
+            <p className="text-sm text-gray-400 italic">No contacts added yet. Click below to add your first founder or contact person.</p>
+          )}
+
+          <div className="space-y-4">
+            {(profile.contacts ?? []).map((contact, idx) => (
+              <div key={idx} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    {idx === 0 ? "Primary Contact" : `Contact ${idx + 1}`}
+                  </span>
+                  <button
+                    onClick={() => removeContact(idx)}
+                    className="rounded p-1 text-gray-400 hover:text-red-500 hover:bg-white transition-colors"
+                    title="Remove contact"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className={labelCls}>Full Name <span className="text-red-400">*</span></label>
+                    <input
+                      className={inputCls}
+                      placeholder="e.g. Jane Smith"
+                      value={contact.name}
+                      onChange={(e) => updateContact(idx, "name", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Role / Title</label>
+                    <input
+                      className={inputCls}
+                      placeholder="e.g. Co-Founder & CEO"
+                      value={contact.role ?? ""}
+                      onChange={(e) => updateContact(idx, "role", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Email Address</label>
+                    <input
+                      type="email"
+                      className={inputCls}
+                      placeholder="e.g. jane@organisation.com"
+                      value={contact.email ?? ""}
+                      onChange={(e) => updateContact(idx, "email", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Phone Number</label>
+                    <input
+                      type="tel"
+                      className={inputCls}
+                      placeholder="e.g. +1 (555) 123-4567"
+                      value={contact.phone ?? ""}
+                      onChange={(e) => updateContact(idx, "phone", e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-          <div>
-            <label className={labelCls}>Mailing Address</label>
-            <textarea rows={2} className={inputCls} placeholder="e.g. 123 Main St, San Francisco, CA 94102, USA" value={profile.contactAddress ?? ""} onChange={(e) => set("contactAddress", e.target.value)} />
+
+          <button
+            onClick={addContact}
+            className="flex items-center gap-2 rounded-lg border-2 border-dashed border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-500 hover:border-brand-400 hover:text-brand-600 w-full justify-center transition-colors"
+          >
+            <Plus className="h-4 w-4" /> Add Contact Person
+          </button>
+
+          <div className="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3">
+            <p className="text-xs text-amber-700">
+              <strong>Mailing address</strong> — add this in the{" "}
+              <button onClick={() => document.getElementById('extra-docs-section')?.scrollIntoView({ behavior: 'smooth' })} className="underline font-semibold">Extra Info &amp; Documents</button>{" "}
+              section as a document titled &quot;Mailing Address&quot; if needed.
+            </p>
           </div>
         </Section>
 

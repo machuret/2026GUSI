@@ -47,8 +47,23 @@ export async function getAccessToken(): Promise<string | null> {
  * Use this for calls to edge routes that require requireEdgeAuth().
  */
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const token = await getAccessToken();
-  if (!token) console.warn(`[authFetch] No token for ${options.method ?? "GET"} ${url}`);
+  let token = await getAccessToken();
+
+  // If no token, try one forced refresh before giving up
+  if (!token) {
+    try {
+      const supabase = getBrowserClient();
+      const { data } = await supabase.auth.refreshSession();
+      token = data.session?.access_token ?? null;
+    } catch {
+      // ignore refresh error
+    }
+  }
+
+  if (!token) {
+    console.warn(`[authFetch] No token for ${options.method ?? "GET"} ${url} — session may have expired`);
+  }
+
   const isSupabase = url.startsWith(SUPABASE_URL);
   return fetch(url, {
     ...options,

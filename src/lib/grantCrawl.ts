@@ -29,50 +29,40 @@ export async function crawlGrantUrl(url: string, maxChars = 8000): Promise<strin
  * Includes orgType2 (secondary org type) when set.
  */
 export function buildProfileContext(profile: Record<string, unknown>): string {
-  const lines = [
-    profile.contactName   ? `Contact Name: ${profile.contactName}` : null,
-    profile.contactRole   ? `Contact Role: ${profile.contactRole}` : null,
-    profile.contactEmail  ? `Contact Email: ${profile.contactEmail}` : null,
-    profile.contactPhone  ? `Contact Phone: ${profile.contactPhone}` : null,
-    profile.contactAddress ? `Contact Address: ${profile.contactAddress}` : null,
-    profile.orgType
-      ? `Organisation Type: ${profile.orgType}${profile.orgType2 ? ` / ${profile.orgType2}` : ""}`
-      : null,
-    profile.sector
-      ? `Sector: ${profile.sector}${profile.subSector ? ` / ${profile.subSector}` : ""}`
-      : null,
-    profile.stage        ? `Stage: ${profile.stage}` : null,
-    profile.teamSize     ? `Team Size: ${profile.teamSize}` : null,
-    profile.annualRevenue ? `Annual Revenue: ${profile.annualRevenue}` : null,
-    profile.location
-      ? `Location: ${profile.location}, ${profile.country ?? "United States"}`
-      : null,
-    profile.yearFounded  ? `Year Founded: ${profile.yearFounded}` : null,
-    (profile.focusAreas as string[] | null)?.length
-      ? `Focus Areas: ${(profile.focusAreas as string[]).join(", ")}`
-      : null,
-    profile.targetFundingMin != null || profile.targetFundingMax != null
-      ? `Target Funding: $${profile.targetFundingMin ?? 0} – $${profile.targetFundingMax ?? "Any"}`
-      : null,
-    profile.preferredDuration ? `Preferred Duration: ${profile.preferredDuration}` : null,
-    profile.isRegisteredCharity ? "Registered Charity: Yes" : null,
-    profile.hasEIN              ? "Has EIN: Yes" : null,
-    profile.indigenousOwned     ? "Indigenous-owned: Yes" : null,
-    profile.womanOwned          ? "Woman-owned: Yes" : null,
-    profile.regionalOrRural     ? "Regional/Rural: Yes" : null,
-    profile.missionStatement
-      ? `\nMission Statement:\n${profile.missionStatement}`
-      : null,
-    profile.keyActivities
-      ? `\nKey Activities:\n${profile.keyActivities}`
-      : null,
-    profile.uniqueStrengths
-      ? `\nUnique Strengths:\n${profile.uniqueStrengths}`
-      : null,
-    profile.pastGrantsWon
-      ? `\nPast Grants Won:\n${profile.pastGrantsWon}`
-      : null,
-  ].filter(Boolean);
+  const contacts = profile.contacts as { name: string; role?: string; email?: string; phone?: string }[] | null;
+  const lines: (string | null)[] = [];
+  if (contacts?.length) {
+    lines.push(`Contacts / Founders:`);
+    contacts.forEach((c, i) => {
+      const parts = [c.name, c.role, c.email, c.phone].filter(Boolean).join(" | ");
+      lines.push(`  ${i + 1}. ${parts}`);
+    });
+  } else {
+    if (profile.contactName)    lines.push(`Contact Name: ${profile.contactName}`);
+    if (profile.contactRole)    lines.push(`Contact Role: ${profile.contactRole}`);
+    if (profile.contactEmail)   lines.push(`Contact Email: ${profile.contactEmail}`);
+    if (profile.contactPhone)   lines.push(`Contact Phone: ${profile.contactPhone}`);
+    if (profile.contactAddress) lines.push(`Contact Address: ${profile.contactAddress}`);
+  }
+  if (profile.orgType) lines.push(`Organisation Type: ${profile.orgType}${profile.orgType2 ? ` / ${profile.orgType2}` : ""}`);
+  if (profile.sector) lines.push(`Sector: ${profile.sector}${profile.subSector ? ` / ${profile.subSector}` : ""}`);
+  if (profile.stage) lines.push(`Stage: ${profile.stage}`);
+  if (profile.teamSize) lines.push(`Team Size: ${profile.teamSize}`);
+  if (profile.annualRevenue) lines.push(`Annual Revenue: ${profile.annualRevenue}`);
+  if (profile.location) lines.push(`Location: ${profile.location}, ${profile.country ?? "United States"}`);
+  if (profile.yearFounded) lines.push(`Year Founded: ${profile.yearFounded}`);
+  if ((profile.focusAreas as string[] | null)?.length) lines.push(`Focus Areas: ${(profile.focusAreas as string[]).join(", ")}`);
+  if (profile.targetFundingMin != null || profile.targetFundingMax != null) lines.push(`Target Funding: $${profile.targetFundingMin ?? 0} – $${profile.targetFundingMax ?? "Any"}`);
+  if (profile.preferredDuration) lines.push(`Preferred Duration: ${profile.preferredDuration}`);
+  if (profile.isRegisteredCharity) lines.push("Registered Charity: Yes");
+  if (profile.hasEIN) lines.push("Has EIN: Yes");
+  if (profile.indigenousOwned) lines.push("Indigenous-owned: Yes");
+  if (profile.womanOwned) lines.push("Woman-owned: Yes");
+  if (profile.regionalOrRural) lines.push("Regional/Rural: Yes");
+  if (profile.missionStatement) lines.push(`\nMission Statement:\n${profile.missionStatement}`);
+  if (profile.keyActivities) lines.push(`\nKey Activities:\n${profile.keyActivities}`);
+  if (profile.uniqueStrengths) lines.push(`\nUnique Strengths:\n${profile.uniqueStrengths}`);
+  if (profile.pastGrantsWon) lines.push(`\nPast Grants Won:\n${profile.pastGrantsWon}`);
 
   // Append extra documents (capability statements, initiative pages, etc.)
   const extraDocs = profile.extraDocs as { title: string; content: string }[] | null;
