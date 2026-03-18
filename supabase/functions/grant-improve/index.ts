@@ -61,6 +61,14 @@ function buildProfileContext(profile: Record<string, unknown>): string {
     profile.uniqueStrengths  ? `\nUnique Strengths:\n${profile.uniqueStrengths}` : null,
     profile.pastGrantsWon    ? `\nPast Grants Won:\n${profile.pastGrantsWon}` : null,
   ].filter(Boolean);
+
+  const extraDocs = profile.extraDocs as { title: string; content: string }[] | null;
+  if (extraDocs?.length) {
+    for (const doc of extraDocs) {
+      lines.push(`\n--- ${doc.title} ---\n${doc.content}`);
+    }
+  }
+
   return lines.length > 0 ? `## GRANT PROFILE\n${lines.join("\n")}` : "";
 }
 

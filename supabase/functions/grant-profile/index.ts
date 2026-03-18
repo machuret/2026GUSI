@@ -43,7 +43,7 @@ const STRING_FIELDS = [
   "pastGrantsWon", "uniqueStrengths",
 ];
 const BOOL_FIELDS = [
-  "isRegisteredCharity", "hasABN", "hasACN",
+  "isRegisteredCharity", "hasEIN",
   "indigenousOwned", "womanOwned", "regionalOrRural",
 ];
 const NUM_FIELDS = ["targetFundingMin", "targetFundingMax"];
@@ -65,6 +65,13 @@ function cleanProfileData(body: Record<string, unknown>): Record<string, unknown
   }
   if ("focusAreas" in body) {
     clean.focusAreas = Array.isArray(body.focusAreas) ? body.focusAreas.filter((a: unknown) => typeof a === "string") : [];
+  }
+  if ("extraDocs" in body) {
+    clean.extraDocs = Array.isArray(body.extraDocs)
+      ? body.extraDocs.filter((d: unknown) =>
+          d && typeof d === "object" && typeof (d as Record<string,unknown>).title === "string" && typeof (d as Record<string,unknown>).content === "string"
+        )
+      : [];
   }
 
   return clean;

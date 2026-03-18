@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Save, Loader2, CheckCircle, Target, Building2, MapPin, DollarSign, Tag, Star, ArrowLeft, Trophy, PenLine, Rss, KanbanSquare, ShieldCheck, User } from "lucide-react";
+import { Save, Loader2, CheckCircle, Target, Building2, MapPin, DollarSign, Tag, Star, ArrowLeft, Trophy, PenLine, Rss, KanbanSquare, ShieldCheck, User, FileText, Plus, Trash2, Sparkles, X } from "lucide-react";
 import { authFetch, edgeFn } from "@/lib/authFetch";
 
 const ORG_TYPES = ["Non-profit / Charity", "Social Enterprise", "SME (Small-Medium Business)", "Startup", "University / Research Institute", "Government / Council", "Indigenous Organisation", "Other"];
@@ -42,6 +42,7 @@ interface GrantProfile {
   keyActivities?: string;
   pastGrantsWon?: string;
   uniqueStrengths?: string;
+  extraDocs?: { title: string; content: string }[];
 }
 
 const EMPTY: GrantProfile = {
@@ -52,6 +53,7 @@ const EMPTY: GrantProfile = {
   isRegisteredCharity: false, hasEIN: false,
   indigenousOwned: false, womanOwned: false, regionalOrRural: false,
   missionStatement: "", keyActivities: "", pastGrantsWon: "", uniqueStrengths: "",
+  extraDocs: [],
 };
 
 function Section({ icon: Icon, title, children }: { icon: React.ElementType; title: string; children: React.ReactNode }) {
@@ -85,6 +87,11 @@ export default function GrantProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [aiFilling, setAiFilling] = useState(false);
+  const [aiMsg, setAiMsg] = useState<string | null>(null);
+  const [editingDocIdx, setEditingDocIdx] = useState<number | null>(null);
+  const [newDocTitle, setNewDocTitle] = useState("");
+  const [newDocContent, setNewDocContent] = useState("");
 
   useEffect(() => {
     authFetch(edgeFn("grant-profile"))
@@ -136,6 +143,59 @@ export default function GrantProfilePage() {
     }
   };
 
+  // ── Extra docs helpers ─────────────────────────────────────────────────────
+  const addExtraDoc = () => {
+    if (!newDocTitle.trim() || !newDocContent.trim()) return;
+    const docs = [...(profile.extraDocs ?? []), { title: newDocTitle.trim(), content: newDocContent.trim() }];
+    set("extraDocs", docs);
+    setNewDocTitle("");
+    setNewDocContent("");
+  };
+
+  const updateExtraDoc = (idx: number, field: "title" | "content", value: string) => {
+    const docs = [...(profile.extraDocs ?? [])];
+    docs[idx] = { ...docs[idx], [field]: value };
+    set("extraDocs", docs);
+  };
+
+  const removeExtraDoc = (idx: number) => {
+    if (!confirm(`Delete "${(profile.extraDocs ?? [])[idx]?.title}"?`)) return;
+    const docs = (profile.extraDocs ?? []).filter((_, i) => i !== idx);
+    set("extraDocs", docs);
+    if (editingDocIdx === idx) setEditingDocIdx(null);
+  };
+
+  // ── AI auto-fill from Vault ───────────────────────────────────────────────
+  const handleAiFill = async () => {
+    if (!confirm("Use AI to fill empty profile fields from your Vault documents?\n\nThis will only fill fields that are currently empty — existing values won't be overwritten.")) return;
+    setAiFilling(true);
+    setAiMsg(null);
+    try {
+      const res = await authFetch("/api/grants/profile-autofill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profile) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "AI fill failed");
+      if (data.profile) {
+        setProfile((prev) => {
+          const merged = { ...prev };
+          for (const [k, v] of Object.entries(data.profile)) {
+            const key = k as keyof GrantProfile;
+            const current = merged[key];
+            if (v && (!current || (typeof current === "string" && !current.trim()))) {
+              (merged as Record<string, unknown>)[key] = v;
+            }
+          }
+          return merged;
+        });
+        setAiMsg(`Filled ${data.filledCount ?? 0} field(s) from Vault`);
+        setTimeout(() => setAiMsg(null), 4000);
+      }
+    } catch (err) {
+      setAiMsg(`Error: ${err instanceof Error ? err.message : "Failed"}`);
+    } finally {
+      setAiFilling(false);
+    }
+  };
+
   const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
   const selectCls = inputCls;
   const labelCls = "block text-sm font-medium text-gray-700 mb-1";
@@ -179,14 +239,25 @@ export default function GrantProfilePage() {
           <h1 className="text-3xl font-bold text-gray-900">Grant Profile</h1>
           <p className="mt-1 text-gray-500">Define your eligibility criteria so the system can rank and match grants intelligently</p>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <CheckCircle className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-          {saving ? "Saving…" : saved ? "Saved!" : "Save Profile"}
-        </button>
+        <div className="flex items-center gap-2">
+          {aiMsg && <span className={`text-xs font-medium ${aiMsg.startsWith("Error") ? "text-red-600" : "text-emerald-600"}`}>{aiMsg}</span>}
+          <button
+            onClick={handleAiFill}
+            disabled={aiFilling}
+            className="flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-4 py-2.5 text-sm font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-60"
+          >
+            {aiFilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {aiFilling ? "Filling…" : "AI Auto-fill"}
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <CheckCircle className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+            {saving ? "Saving…" : saved ? "Saved!" : "Save Profile"}
+          </button>
+        </div>
       </div>
 
       <div className="space-y-5">
@@ -359,6 +430,83 @@ export default function GrantProfilePage() {
           <div>
             <label className={labelCls}>Past Grants Won (optional)</label>
             <textarea rows={2} className={inputCls} placeholder="List any grants you've previously been awarded — helps AI understand your track record" value={profile.pastGrantsWon ?? ""} onChange={(e) => set("pastGrantsWon", e.target.value)} />
+          </div>
+        </Section>
+
+        {/* Extra Info / Documents */}
+        <Section icon={FileText} title="Extra Info &amp; Documents">
+          <p className="text-sm text-gray-500">
+            Paste supporting documents here (e.g. Capability Statement, Global Health Initiatives page).
+            These are stored in Supabase and fed into the AI when writing grants.
+          </p>
+
+          {/* Existing docs */}
+          {(profile.extraDocs ?? []).map((doc, idx) => (
+            <div key={idx} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="flex items-center justify-between mb-2">
+                {editingDocIdx === idx ? (
+                  <input
+                    className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm font-semibold mr-2 focus:border-brand-500 focus:outline-none"
+                    value={doc.title}
+                    onChange={(e) => updateExtraDoc(idx, "title", e.target.value)}
+                  />
+                ) : (
+                  <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-brand-500" /> {doc.title}
+                  </h3>
+                )}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setEditingDocIdx(editingDocIdx === idx ? null : idx)}
+                    className="rounded p-1 text-gray-400 hover:text-brand-600 hover:bg-white"
+                    title={editingDocIdx === idx ? "Done editing" : "Edit"}
+                  >
+                    {editingDocIdx === idx ? <X className="h-3.5 w-3.5" /> : <PenLine className="h-3.5 w-3.5" />}
+                  </button>
+                  <button onClick={() => removeExtraDoc(idx)} className="rounded p-1 text-gray-400 hover:text-red-500 hover:bg-white" title="Delete">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+              {editingDocIdx === idx ? (
+                <textarea
+                  rows={10}
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  value={doc.content}
+                  onChange={(e) => updateExtraDoc(idx, "content", e.target.value)}
+                />
+              ) : (
+                <p className="text-xs text-gray-500 line-clamp-3 whitespace-pre-wrap">{doc.content.slice(0, 300)}{doc.content.length > 300 ? "…" : ""}</p>
+              )}
+              <p className="mt-1 text-[10px] text-gray-400">{doc.content.length.toLocaleString()} characters</p>
+            </div>
+          ))}
+
+          {/* Add new doc */}
+          <div className="rounded-lg border-2 border-dashed border-gray-200 p-4 space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 flex items-center gap-1.5">
+              <Plus className="h-3.5 w-3.5" /> Add Document
+            </h4>
+            <input
+              className={inputCls}
+              placeholder="Document title — e.g. GUSI Capability Statement"
+              value={newDocTitle}
+              onChange={(e) => setNewDocTitle(e.target.value)}
+            />
+            <textarea
+              rows={6}
+              className={inputCls}
+              placeholder="Paste your document content here…"
+              value={newDocContent}
+              onChange={(e) => setNewDocContent(e.target.value)}
+            />
+            <button
+              onClick={addExtraDoc}
+              disabled={!newDocTitle.trim() || !newDocContent.trim()}
+              className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-40"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add Document
+            </button>
           </div>
         </Section>
       </div>

@@ -73,5 +73,14 @@ export function buildProfileContext(profile: Record<string, unknown>): string {
       ? `\nPast Grants Won:\n${profile.pastGrantsWon}`
       : null,
   ].filter(Boolean);
+
+  // Append extra documents (capability statements, initiative pages, etc.)
+  const extraDocs = profile.extraDocs as { title: string; content: string }[] | null;
+  if (extraDocs?.length) {
+    for (const doc of extraDocs) {
+      lines.push(`\n--- ${doc.title} ---\n${doc.content}`);
+    }
+  }
+
   return `## GRANT PROFILE\n${lines.join("\n")}`;
 }
