@@ -135,6 +135,7 @@ export async function POST(req: NextRequest) {
       vault,
       { data: allExamples },
       lessons,
+      { data: funderTemplates },
     ] = await Promise.all([
       db.from("Grant").select("*").eq("id", grantId).maybeSingle(),
       db.from("GrantProfile").select("*").eq("companyId", DEMO_COMPANY_ID).maybeSingle(),
@@ -142,6 +143,7 @@ export async function POST(req: NextRequest) {
       getVaultContext(DEMO_COMPANY_ID),
       db.from("GrantExample").select("*").eq("companyId", DEMO_COMPANY_ID).order("updatedAt", { ascending: false }).limit(20),
       getLessonsContext({ companyId: DEMO_COMPANY_ID, contentType: "grant" }),
+      db.from("FunderTemplate").select("*").eq("companyId", DEMO_COMPANY_ID),
     ]);
 
     if (grantErr || !grant) {
@@ -180,10 +182,30 @@ export async function POST(req: NextRequest) {
       return `## REFERENCE EXAMPLES (real grant applications — study the tone, structure, and specificity)\n\n${blocks.join("\n\n---\n\n")}`;
     }
 
+    // ── Build funder template block ────────────────────────────────────────
+    let funderTemplateBlock = "";
+    if (funderTemplates && funderTemplates.length > 0 && grant.founder) {
+      const funderName = (grant.founder as string).toLowerCase();
+      const match = funderTemplates.find(
+        (t: Record<string, unknown>) =>
+          typeof t.funderName === "string" &&
+          (t.funderName.toLowerCase() === funderName || funderName.includes(t.funderName.toLowerCase()) || t.funderName.toLowerCase().includes(funderName))
+      );
+      if (match) {
+        const parts = [`## FUNDER TEMPLATE — ${match.funderName}\nThis funder has a known preference profile. Apply these insights throughout the application.`];
+        if (match.preferences) parts.push(`What this funder loves:\n${match.preferences}`);
+        if (match.patterns) parts.push(`Winning patterns from past applications:\n${match.patterns}`);
+        if (match.avoid) parts.push(`What to AVOID with this funder:\n${match.avoid}`);
+        if (match.notes) parts.push(`Additional notes:\n${match.notes}`);
+        funderTemplateBlock = parts.join("\n\n");
+      }
+    }
+
     // ── Assemble master context block ──────────────────────────────────────
     const contextParts: string[] = [
       buildGrantContext(grant as Record<string, unknown>),
       profile ? buildProfileContext(profile as Record<string, unknown>) : "",
+      funderTemplateBlock,
       company.block,
       vault.block,
       lessons.block,

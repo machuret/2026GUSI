@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles, Loader2, Copy, RefreshCw, CheckCircle, Download, Save, FileUp, FileDown } from "lucide-react";
+import { Sparkles, Loader2, Copy, RefreshCw, CheckCircle, Download, Save, FileUp, FileDown, RotateCcw } from "lucide-react";
 import { SECTION_META, SectionName, wordCount } from "./types";
 
 interface Props {
@@ -16,6 +16,7 @@ interface Props {
   onCopySection: (key: string, text: string) => void;
   onCopyAll: () => void;
   onRegenSection: (s: SectionName) => void;
+  onRegenAll: () => void;
   onEditSection: (s: SectionName, value: string) => void;
   onDownload: () => void;
   onDownloadPdf: () => void;
@@ -29,7 +30,7 @@ interface Props {
 export default function DocumentPanel({
   enabledList, sections, generatingSection, generating,
   copied, saving, saveMsg, totalWords, grantName,
-  onCopySection, onCopyAll, onRegenSection, onEditSection,
+  onCopySection, onCopyAll, onRegenSection, onRegenAll, onEditSection,
   onDownload, onDownloadPdf, exportingPdf, onSaveDraft, onExportDoc, exportingDoc, hasSections,
 }: Props) {
   if (!hasSections && !generating) {
@@ -62,6 +63,15 @@ export default function DocumentPanel({
                 {saveMsg}
               </span>
             )}
+            <button
+              onClick={onRegenAll}
+              disabled={!!generatingSection || generating}
+              title="Regenerate all sections with current custom instructions"
+              className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-40"
+            >
+              {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+              Regen All
+            </button>
             <button
               onClick={onCopyAll}
               className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"

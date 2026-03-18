@@ -204,6 +204,28 @@ export default function GrantBuilderPage() {
     setSaving(true);
     setSaveMsg(null);
     try {
+      // Snapshot existing draft before overwriting (version history)
+      const existingDraft = drafts.find((d) => d.grantId === selectedGrant.id);
+      if (existingDraft) {
+        try {
+          await authFetch("/api/grants/draft-history", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              draftId: existingDraft.id,
+              grantId: existingDraft.grantId,
+              grantName: existingDraft.grantName,
+              sections: Object.fromEntries(
+                Object.entries(existingDraft).filter(([k]) => k === "sections")
+              ).sections ?? sections,
+              brief: existingDraft.brief ?? brief,
+              tone: existingDraft.tone ?? tone,
+              length: existingDraft.length ?? length,
+              label: new Date().toLocaleString("en-AU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+            }),
+          });
+        } catch { /* non-critical */ }
+      }
       const res  = await authFetch("/api/grants/drafts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -251,12 +273,85 @@ export default function GrantBuilderPage() {
     setActiveTab("builder");
   }, []);
 
+  // ── Restore snapshot from history ─────────────────────────────────────────
+  const restoreSnapshot = useCallback((snapshot: { sections: Record<string, string>; brief: Record<string, unknown> | null; tone: string; length: string; grantId: string }) => {
+    setSelectedGrantId(snapshot.grantId);
+    setSections(snapshot.sections);
+    setBrief(snapshot.brief as WritingBrief | null);
+    setTone((snapshot.tone as Tone) ?? "first_person");
+    setLength((snapshot.length as Length) ?? "standard");
+    setSaved(false);
+    setActiveTab("builder");
+  }, []);
+
   // ── Delete draft ───────────────────────────────────────────────────────────
   const deleteDraft = useCallback(async (draftId: string) => {
     if (!confirm("Delete this draft?")) return;
     await authFetch(`/api/grants/drafts/${draftId}`, { method: "DELETE" });
     setDrafts((prev) => prev.filter((d) => d.id !== draftId));
   }, []);
+
+  // ── Regen all sections (snapshot first, then re-run generateAll) ──────────
+  const regenAll = useCallback(async () => {
+    if (!selectedGrantId || !brief) return;
+    if (!confirm("Regenerate ALL sections with the current custom instructions?\n\nA snapshot of the current draft will be saved first so you can restore it.")) return;
+    // Snapshot current draft before overwriting
+    const existingDraft = drafts.find((d) => d.grantId === selectedGrantId);
+    if (existingDraft && hasSections) {
+      try {
+        await authFetch("/api/grants/draft-history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            draftId: existingDraft.id,
+            grantId: existingDraft.grantId,
+            grantName: existingDraft.grantName,
+            sections,
+            brief,
+            tone,
+            length,
+            label: "Before Regen All",
+          }),
+        });
+      } catch { /* non-critical */ }
+    }
+    // Clear and regenerate
+    setSections({});
+    setProgress(0);
+    setGenError(null);
+    setGenerating(true);
+    abortRef.current = false;
+    const currentSections: Record<string, string> = {};
+    for (let i = 0; i < enabledList.length; i++) {
+      if (abortRef.current) break;
+      const section = enabledList[i];
+      setGeneratingSection(section);
+      try {
+        const prev: Record<string, string> = {};
+        for (let j = 0; j < i; j++) {
+          const ps = enabledList[j];
+          if (currentSections[ps]) prev[ps] = currentSections[ps];
+        }
+        const ci = customInstructions[section]?.trim() || undefined;
+        const res = await authFetch("/api/grants/write", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ grantId: selectedGrantId, mode: "section", section, brief, tone, length, previousSections: prev, customInstructions: ci }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Section failed");
+        currentSections[section] = data.content;
+        setSections((p) => ({ ...p, [section]: data.content }));
+        setSaved(false);
+      } catch (err) {
+        setGenError(`Failed on "${section}": ${err instanceof Error ? err.message : "Error"}`);
+        break;
+      }
+      setProgress(i + 1);
+    }
+    setGeneratingSection(null);
+    setGenerating(false);
+  }, [selectedGrantId, brief, enabledList, tone, length, customInstructions, drafts, sections, hasSections]);
 
   // ── Re-do draft (delete + switch to builder for that grant) ────────────────
   const redoDraft = useCallback(async (draft: SavedDraft) => {
@@ -523,6 +618,7 @@ export default function GrantBuilderPage() {
           onRedo={redoDraft}
           onBulkExport={bulkExportDrafts}
           exportingIds={exportingIds}
+          onRestoreSnapshot={restoreSnapshot}
         />
       )}
 
@@ -572,6 +668,7 @@ export default function GrantBuilderPage() {
             onCopySection={copySection}
             onCopyAll={copyAll}
             onRegenSection={regenSection}
+            onRegenAll={regenAll}
             onEditSection={(s, val) => { setSections((prev) => ({ ...prev, [s]: val })); setSaved(false); }}
             onDownload={() => downloadTxt(selectedGrant?.name ?? "grant", sections, enabledList)}
             onDownloadPdf={async () => {

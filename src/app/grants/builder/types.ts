@@ -19,6 +19,28 @@ export interface SavedDraft {
   grantName: string;
   tone: string;
   length: string;
+  brief?: Record<string, unknown> | null;
+  sections?: Record<string, string>;
+  updatedAt: string;
+}
+
+export interface DraftSnapshot {
+  id: string;
+  draftId: string;
+  grantName: string;
+  tone: string;
+  length: string;
+  snapshotAt: string;
+  label?: string | null;
+}
+
+export interface FunderTemplate {
+  id: string;
+  funderName: string;
+  preferences?: string;
+  patterns?: string;
+  avoid?: string;
+  notes?: string;
   updatedAt: string;
 }
 

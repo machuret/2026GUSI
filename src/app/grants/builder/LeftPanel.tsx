@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Sparkles, Loader2, RefreshCw, CheckCircle, AlertCircle,
   ChevronDown, ChevronUp, Lightbulb, Target, MessageSquarePlus, AlertTriangle, Filter,
+  Building2, Plus, Trash2, Pencil, X,
 } from "lucide-react";
 import {
-  ALL_SECTIONS, SECTION_META, SectionName, Grant, WritingBrief, Tone, Length,
+  ALL_SECTIONS, SECTION_META, SectionName, Grant, WritingBrief, Tone, Length, FunderTemplate,
 } from "./types";
+import { authFetch } from "@/lib/authFetch";
 
 interface Props {
   grants: Grant[];
@@ -54,6 +56,49 @@ export default function LeftPanel({
 }: Props) {
   const [ciOpen, setCiOpen] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+
+  // ── Funder Templates ──────────────────────────────────────────────────────
+  const [templates, setTemplates] = useState<FunderTemplate[]>([]);
+  const [tmplOpen, setTmplOpen] = useState(false);
+  const [editingTmpl, setEditingTmpl] = useState<FunderTemplate | null>(null);
+  const [newTmpl, setNewTmpl] = useState<Partial<FunderTemplate>>({});
+  const [addingTmpl, setAddingTmpl] = useState(false);
+  const [savingTmpl, setSavingTmpl] = useState(false);
+
+  useEffect(() => {
+    authFetch("/api/grants/funder-templates")
+      .then(r => r.json())
+      .then(d => setTemplates(d.templates ?? []))
+      .catch(() => {});
+  }, []);
+
+  const saveTmpl = async (tmpl: Partial<FunderTemplate>) => {
+    if (!tmpl.funderName?.trim()) return;
+    setSavingTmpl(true);
+    try {
+      const res = await authFetch("/api/grants/funder-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tmpl),
+      });
+      const d = await res.json();
+      if (d.template) {
+        setTemplates(prev => {
+          const idx = prev.findIndex(t => t.id === d.template.id);
+          return idx >= 0 ? prev.map((t, i) => i === idx ? d.template : t) : [...prev, d.template];
+        });
+      }
+      setEditingTmpl(null);
+      setAddingTmpl(false);
+      setNewTmpl({});
+    } finally { setSavingTmpl(false); }
+  };
+
+  const deleteTmpl = async (id: string, name: string) => {
+    if (!confirm(`Delete template for "${name}"?`)) return;
+    await authFetch(`/api/grants/funder-templates?id=${id}`, { method: "DELETE" });
+    setTemplates(prev => prev.filter(t => t.id !== id));
+  };
   const [fCountry, setFCountry] = useState("");
   const [fDifficulty, setFDifficulty] = useState("");
   const [fMinFit, setFMinFit] = useState("");
@@ -338,6 +383,84 @@ export default function LeftPanel({
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Funder Templates */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4">
+        <button
+          onClick={() => setTmplOpen(v => !v)}
+          className="flex w-full items-center justify-between"
+        >
+          <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-indigo-500" /> Funder Templates
+            {templates.length > 0 && (
+              <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">{templates.length}</span>
+            )}
+          </h2>
+          {tmplOpen ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+        </button>
+        {tmplOpen && (
+          <div className="mt-3 space-y-3">
+            <p className="text-xs text-gray-400">Store per-funder preferences. Automatically injected when that funder is selected.</p>
+            {templates.map(t => (
+              <div key={t.id} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                {editingTmpl?.id === t.id ? (
+                  <div className="space-y-2">
+                    <input
+                      className="w-full rounded border border-gray-300 px-2 py-1 text-xs font-semibold focus:border-indigo-400 focus:outline-none"
+                      value={editingTmpl.funderName}
+                      onChange={e => setEditingTmpl({...editingTmpl, funderName: e.target.value})}
+                      placeholder="Funder name"
+                    />
+                    <textarea rows={2} className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none resize-y" placeholder="What this funder loves…" value={editingTmpl.preferences ?? ""} onChange={e => setEditingTmpl({...editingTmpl, preferences: e.target.value})} />
+                    <textarea rows={2} className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none resize-y" placeholder="Winning patterns from past applications…" value={editingTmpl.patterns ?? ""} onChange={e => setEditingTmpl({...editingTmpl, patterns: e.target.value})} />
+                    <textarea rows={2} className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none resize-y" placeholder="What to AVOID with this funder…" value={editingTmpl.avoid ?? ""} onChange={e => setEditingTmpl({...editingTmpl, avoid: e.target.value})} />
+                    <textarea rows={2} className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none resize-y" placeholder="Extra notes…" value={editingTmpl.notes ?? ""} onChange={e => setEditingTmpl({...editingTmpl, notes: e.target.value})} />
+                    <div className="flex gap-2">
+                      <button onClick={() => saveTmpl(editingTmpl)} disabled={savingTmpl} className="flex-1 rounded-lg bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60">
+                        {savingTmpl ? <Loader2 className="h-3 w-3 animate-spin mx-auto" /> : "Save"}
+                      </button>
+                      <button onClick={() => setEditingTmpl(null)} className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-500 hover:bg-gray-100"><X className="h-3 w-3" /></button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-gray-800 truncate">{t.funderName}</p>
+                      {t.preferences && <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-2">{t.preferences}</p>}
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <button onClick={() => setEditingTmpl(t)} className="rounded p-1 text-gray-400 hover:text-indigo-600"><Pencil className="h-3 w-3" /></button>
+                      <button onClick={() => deleteTmpl(t.id, t.funderName)} className="rounded p-1 text-gray-400 hover:text-red-500"><Trash2 className="h-3 w-3" /></button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+            {addingTmpl ? (
+              <div className="space-y-2 rounded-lg border-2 border-dashed border-indigo-200 bg-indigo-50/30 p-3">
+                <input className="w-full rounded border border-gray-300 px-2 py-1 text-xs font-semibold focus:border-indigo-400 focus:outline-none" placeholder="Funder name (e.g. Gates Foundation)" value={newTmpl.funderName ?? ""} onChange={e => setNewTmpl({...newTmpl, funderName: e.target.value})} />
+                <textarea rows={2} className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none resize-y" placeholder="What this funder loves (language, evidence types, focus areas)…" value={newTmpl.preferences ?? ""} onChange={e => setNewTmpl({...newTmpl, preferences: e.target.value})} />
+                <textarea rows={2} className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none resize-y" placeholder="Winning patterns from past applications…" value={newTmpl.patterns ?? ""} onChange={e => setNewTmpl({...newTmpl, patterns: e.target.value})} />
+                <textarea rows={2} className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none resize-y" placeholder="What to AVOID with this funder…" value={newTmpl.avoid ?? ""} onChange={e => setNewTmpl({...newTmpl, avoid: e.target.value})} />
+                <textarea rows={2} className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-400 focus:outline-none resize-y" placeholder="Extra notes…" value={newTmpl.notes ?? ""} onChange={e => setNewTmpl({...newTmpl, notes: e.target.value})} />
+                <div className="flex gap-2">
+                  <button onClick={() => saveTmpl(newTmpl)} disabled={savingTmpl || !newTmpl.funderName?.trim()} className="flex-1 rounded-lg bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60">
+                    {savingTmpl ? <Loader2 className="h-3 w-3 animate-spin mx-auto" /> : "Add Template"}
+                  </button>
+                  <button onClick={() => { setAddingTmpl(false); setNewTmpl({}); }} className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-500 hover:bg-gray-100"><X className="h-3 w-3" /></button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setAddingTmpl(true)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-gray-200 py-2 text-xs font-medium text-gray-400 hover:border-indigo-300 hover:text-indigo-600"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add Funder Template
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Options */}
