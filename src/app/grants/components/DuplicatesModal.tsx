@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { X, Trash2, Loader2, Copy } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import { fuzzyMatchesExisting } from "@/lib/fuzzyMatch";
-import type { Grant } from "@/hooks/useGrants";
+import type { Grant } from "@/hooks/GrantsContext";
 
 interface Props {
   grants: Grant[];

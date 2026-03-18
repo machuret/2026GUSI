@@ -1,4 +1,4 @@
-import type { Grant as FullGrant } from "@/hooks/useGrants";
+import type { Grant as FullGrant } from "@/hooks/GrantsContext";
 
 export type Grant = Pick<FullGrant, "id" | "name" | "founder" | "amount" | "deadlineDate" | "matchScore" | "aiVerdict" | "url" | "decision" | "crmStatus" | "aiBrief" | "geographicScope" | "complexityLabel" | "fitScore">;
 

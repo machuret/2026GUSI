@@ -1,7 +1,7 @@
 "use client";
 
 import { Sparkles, Loader2 } from "lucide-react";
-import type { Grant } from "@/hooks/useGrants";
+import type { Grant } from "@/hooks/GrantsContext";
 import { GEO_SCOPES, PROJECT_DURATIONS, inputCls, labelCls } from "./grantTypes";
 import { FitStars } from "./GrantBadges";
 

@@ -7,7 +7,7 @@ import {
   FileText, Loader2, Save, Sparkles, FlaskConical, PenLine, KanbanSquare, ChevronsRight, MoreHorizontal,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
-import type { Grant } from "@/hooks/useGrants";
+import type { Grant } from "@/hooks/GrantsContext";
 import type { GrantAnalysis } from "./grantTypes";
 import { FitBadge, DecisionBadge, EffortBadge, DeadlineBadge } from "./GrantBadges";
 import { GrantFormFields } from "./GrantFormFields";

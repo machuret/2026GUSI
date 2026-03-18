@@ -7,7 +7,7 @@ import {
   Rss, Search, Info, Zap, Trophy, PenLine, UserCheck, KanbanSquare, Link2,
 } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
-import { useGrants } from "@/hooks/useGrants";
+import { useGrantsContext } from "@/hooks/GrantsContext";
 import {
   KNOWN_GRANT_SITES, GRANT_SITE_CATEGORIES, GRANT_SITE_REGIONS, type GrantSite,
 } from "@/lib/grantSites";
@@ -32,7 +32,7 @@ function CategoryBadge({ cat }: { cat: string }) {
 }
 
 export default function GrantCrawlerPage() {
-  const { grants, addGrant } = useGrants();
+  const { grants, addGrant } = useGrantsContext();
   const existingNames = new Set(grants.map((g) => g.name.toLowerCase()));
 
   const [regionFilter, setRegionFilter] = useState("All");

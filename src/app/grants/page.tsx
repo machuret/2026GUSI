@@ -3,8 +3,9 @@
 import { useState, useMemo } from "react";
 import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus, AlertTriangle, ShieldCheck, Copy } from "lucide-react";
 import Link from "next/link";
-import { useGrants, type Grant } from "@/hooks/useGrants";
+import { useGrantsContext, type Grant } from "@/hooks/GrantsContext";
 import { authFetch } from "@/lib/authFetch";
+import { toast } from "sonner";
 import { exportToCsv } from "@/lib/exportCsv";
 import { GrantRow } from "./components/GrantRow";
 import { AddGrantModal } from "./components/AddGrantModal";
@@ -13,8 +14,7 @@ import { DuplicatesModal } from "./components/DuplicatesModal";
 import { fuzzyMatchesExisting } from "@/lib/fuzzyMatch";
 
 export default function GrantsPage() {
-  const { grants, loading, error, companyDNA, updateGrant: updateGrantRaw, deleteGrant, addGrant, fetchGrants, patchGrantsLocal, removeGrantsLocal } = useGrants();
-  const updateGrant = async (id: string, d: Partial<Grant>) => { return await updateGrantRaw(id, d); };
+  const { grants, loading, error, companyDNA, updateGrant, deleteGrant, addGrant, fetchGrants, patchGrantsLocal, removeGrantsLocal } = useGrantsContext();
   const [showAdd, setShowAdd] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState("");
@@ -24,7 +24,6 @@ export default function GrantsPage() {
   const [sortAsc, setSortAsc] = useState(false);
   const [ranking, setRanking] = useState(false);
   const [scoring, setScoring] = useState(false);
-  const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkAnalysing, setBulkAnalysing] = useState(false);
@@ -49,7 +48,6 @@ export default function GrantsPage() {
     const ids = Array.from(selected);
     if (!confirm(`Add ${ids.length} grant${ids.length !== 1 ? "s" : ""} to CRM?`)) return;
     setBulkBusy(true);
-    setActionMsg(null);
     try {
       const res = await authFetch("/api/grants/bulk-update", {
         method: "POST",
@@ -61,15 +59,15 @@ export default function GrantsPage() {
         patchGrantsLocal(ids, { crmStatus: "Researching" as Grant["crmStatus"] });
         const actual = result.updated ?? ids.length;
         if (actual < ids.length) {
-          setMsg(`⚠ Only ${actual} of ${ids.length} grants updated in DB — check Vercel logs`);
+          toast.warning(`Only ${actual} of ${ids.length} grants updated in DB — check Vercel logs`);
         } else {
-          setMsg(`✓ Added ${actual} grant${actual !== 1 ? "s" : ""} to CRM`);
+          toast.success(`Added ${actual} grant${actual !== 1 ? "s" : ""} to CRM`);
         }
       } else {
-        setMsg(`Failed to add to CRM: ${result.error ?? "unknown error"}`);
+        toast.error(`Failed to add to CRM: ${result.error ?? "unknown error"}`);
       }
     } catch {
-      setMsg("Network error — could not add to CRM. Please try again.");
+      toast.error("Network error — could not add to CRM. Please try again.");
     }
     setSelected(new Set());
     setBulkBusy(false);
@@ -79,7 +77,6 @@ export default function GrantsPage() {
     const ids = Array.from(selected);
     if (!confirm(`Delete ${ids.length} grant${ids.length !== 1 ? "s" : ""}? This cannot be undone.`)) return;
     setBulkBusy(true);
-    setActionMsg(null);
     try {
       const res = await authFetch("/api/grants/bulk-delete", {
         method: "POST",
@@ -89,12 +86,12 @@ export default function GrantsPage() {
       const result = await res.json();
       if (result.success) {
         removeGrantsLocal(ids);
-        setMsg(`✓ Deleted ${ids.length} grant${ids.length !== 1 ? "s" : ""}`);
+        toast.success(`Deleted ${ids.length} grant${ids.length !== 1 ? "s" : ""}`);
       } else {
-        setMsg(`Failed to delete: ${result.error ?? "unknown error"}`);
+        toast.error(`Failed to delete: ${result.error ?? "unknown error"}`);
       }
     } catch {
-      setMsg("Network error — could not delete. Please try again.");
+      toast.error("Network error — could not delete. Please try again.");
     }
     setSelected(new Set());
     setBulkBusy(false);
@@ -107,30 +104,24 @@ export default function GrantsPage() {
 
   const handleRank = async () => {
     setRanking(true);
-    setActionMsg(null);
     const total = grants.length;
     setRankProgress({ done: 0, total });
     try {
       const res = await authFetch("/api/grants/rank", { method: "POST" });
       const data = await res.json();
-      if (!res.ok) { setMsg(data.error ?? "Ranking failed"); return; }
+      if (!res.ok) { toast.error(data.error ?? "Ranking failed"); return; }
       setRankProgress({ done: total, total });
-      setMsg(`✓ Ranked ${data.ranked} grants by profile match`);
+      toast.success(`Ranked ${data.ranked} grants by profile match`);
       await fetchGrants();
       setSortField("matchScore");
       setSortAsc(false);
-    } catch { setMsg("Ranking failed — try again"); }
+    } catch { toast.error("Ranking failed — try again"); }
     finally { setRanking(false); setRankProgress(null); }
   };
 
-  const setMsg = (msg: string) => {
-    setActionMsg(msg);
-    setTimeout(() => setActionMsg(null), 5000);
-  };
 
   const handleScoreComplexity = async () => {
     setScoring(true);
-    setActionMsg(null);
     const ids = selected.size > 0 ? Array.from(selected) : grants.map((g) => g.id);
     const BATCH = 20;
     const totalBatches = Math.ceil(ids.length / BATCH);
@@ -154,9 +145,9 @@ export default function GrantsPage() {
         // Only count as errors if the whole batch failed (batchScored=0)
         setScoreProgress({ done: Math.min(i + BATCH, ids.length), total: ids.length, errors });
       }
-      setMsg(`✓ Complexity scored ${scored} of ${ids.length} grants${errors > 0 ? ` (${errors} failed)` : ""}`);
+      toast.success(`Complexity scored ${scored} of ${ids.length} grants${errors > 0 ? ` (${errors} failed)` : ""}`);
       await fetchGrants();
-    } catch { setMsg("Scoring failed — try again"); }
+    } catch { toast.error("Scoring failed — try again"); }
     finally { setScoring(false); setScoreProgress(null); }
   };
 
@@ -168,11 +159,11 @@ export default function GrantsPage() {
       if (!g) return false;
       return !g.deadlineDate || new Date(g.deadlineDate).getTime() >= nowMs;
     });
-    if (ids.length === 0) { setMsg("No active grants to analyse (all selected grants have expired deadlines)"); return; }
+    if (ids.length === 0) { toast.warning("No active grants to analyse (all selected grants have expired deadlines)"); return; }
     const skipped = allIds.length - ids.length;
     const skipNote = skipped > 0 ? ` (${skipped} expired skipped)` : "";
     if (!confirm(`Run AI Fit analysis on ${ids.length} grant${ids.length !== 1 ? "s" : ""}${skipNote}? This may take a while.`)) return;
-    setBulkAnalysing(true); setActionMsg(null);
+    setBulkAnalysing(true);
     setAnalyseProgress({ done: 0, total: ids.length, errors: 0 });
     let ok = 0;
     let errors = 0;
@@ -189,7 +180,8 @@ export default function GrantsPage() {
       setAnalyseProgress({ done: i + 1, total: ids.length, errors });
     }
     await fetchGrants();
-    setMsg(ok > 0 ? `✓ AI Fit analysed ${ok} of ${ids.length} grants${errors > 0 ? ` (${errors} failed)` : ""}` : `Analysis failed for all ${ids.length} grants — check Company Info or Grant Profile`);
+    if (ok > 0) toast.success(`AI Fit analysed ${ok} of ${ids.length} grants${errors > 0 ? ` (${errors} failed)` : ""}`);
+    else toast.error(`Analysis failed for all ${ids.length} grants — check Company Info or Grant Profile`);
     setSelected(new Set());
     setBulkAnalysing(false);
     setAnalyseProgress(null);
@@ -200,17 +192,16 @@ export default function GrantsPage() {
     const expiredIds = grants
       .filter(g => g.deadlineDate && new Date(g.deadlineDate).getTime() < staleThreshold)
       .map(g => g.id);
-    if (expiredIds.length === 0) { setMsg("No stale grants found (expired > 12 months)"); return; }
+    if (expiredIds.length === 0) { toast.info("No stale grants found (expired > 12 months)"); return; }
     if (!confirm(`Permanently delete ${expiredIds.length} grant${expiredIds.length !== 1 ? "s" : ""} expired over 12 months? Recently expired grants will be kept.`)) return;
-    setDeletingExpired(true); setActionMsg(null);
+    setDeletingExpired(true);
     let ok = 0;
     let fail = 0;
     for (const id of expiredIds) {
       try { const r = await deleteGrant(id); if (r.success) ok++; else fail++; } catch { fail++; }
     }
-    setMsg(ok > 0
-      ? `✓ Deleted ${ok} expired grant${ok !== 1 ? "s" : ""}${fail > 0 ? ` (${fail} failed)` : ""}`
-      : `Failed to delete expired grants — try again`);
+    if (ok > 0) toast.success(`Deleted ${ok} expired grant${ok !== 1 ? "s" : ""}${fail > 0 ? ` (${fail} failed)` : ""}`);
+    else toast.error("Failed to delete expired grants — try again");
     setDeadlineFilter("all");
     setDeletingExpired(false);
   };
@@ -323,7 +314,7 @@ export default function GrantsPage() {
         <DuplicatesModal
           grants={grants}
           onClose={() => setShowDuplicatesModal(false)}
-          onDeleted={(ids) => { removeGrantsLocal(ids); setMsg(`✓ Removed ${ids.length} duplicate grant${ids.length !== 1 ? "s" : ""}`); }}
+          onDeleted={(ids) => { removeGrantsLocal(ids); toast.success(`Removed ${ids.length} duplicate grant${ids.length !== 1 ? "s" : ""}`); }}
         />
       )}
 
@@ -421,7 +412,6 @@ export default function GrantsPage() {
           {bulkAnalysing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
           {bulkAnalysing ? "Analysing…" : selected.size > 0 ? `AI Fit (${selected.size} selected)` : "AI Fit (all)"}
         </button>
-        {actionMsg && <span className="text-sm text-brand-700 font-medium">{actionMsg}</span>}
       </div>
 
       {/* Progress bars */}
@@ -599,12 +589,13 @@ export default function GrantsPage() {
             <button
               onClick={async () => {
                 if (!confirm(`Permanently delete all ${filtered.length} expired grant${filtered.length !== 1 ? "s" : ""}?`)) return;
-                setBulkBusy(true); setActionMsg(null);
+                setBulkBusy(true);
                 let ok = 0;
                 for (const g of filtered) {
                   try { const r = await deleteGrant(g.id); if (r.success) ok++; } catch { /* skip */ }
                 }
-                setMsg(ok > 0 ? `✓ Deleted ${ok} expired grant${ok !== 1 ? "s" : ""}` : "Failed to delete — try again");
+                if (ok > 0) toast.success(`Deleted ${ok} expired grant${ok !== 1 ? "s" : ""}`);
+                else toast.error("Failed to delete — try again");
                 setSelected(new Set());
                 setBulkBusy(false);
                 if (ok > 0) setDeadlineFilter("active");

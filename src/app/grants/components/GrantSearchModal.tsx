@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { authFetch } from "@/lib/authFetch";
-import type { Grant } from "@/hooks/useGrants";
+import type { Grant } from "@/hooks/GrantsContext";
 import {
   type SearchResult,
   GEO_SCOPES, ORG_TYPES, FUNDING_SIZES, DEADLINE_URGENCIES,

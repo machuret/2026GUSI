@@ -7,9 +7,9 @@ import {
   ChevronDown, ChevronUp, StickyNote, FlaskConical, X,
   Bell, LayoutList, Columns2, AlertTriangle,
 } from "lucide-react";
-import { useGrants } from "@/hooks/useGrants";
+import { useGrantsContext, type Grant } from "@/hooks/GrantsContext";
 import { authFetch } from "@/lib/authFetch";
-import type { Grant } from "@/hooks/useGrants";
+import { toast } from "sonner";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 
 type CrmStatus = "Researching" | "Pipeline" | "Active" | "Submitted" | "Won" | "Lost";
@@ -268,21 +268,18 @@ function GrantCrmCard({
 }
 
 export default function GrantsCrmPage() {
-  const { grants, loading, companyDNA, updateGrant } = useGrants();
+  const { grants, loading, companyDNA, optimisticUpdate } = useGrantsContext();
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
-  const [crmMsg, setCrmMsg] = useState<string | null>(null);
 
-  const showCrmMsg = (msg: string) => { setCrmMsg(msg); setTimeout(() => setCrmMsg(null), 6000); };
-
-  // Wrapper that shows an error toast when updateGrant fails
+  // Optimistic wrapper: instant UI update, rolls back + toast on failure
   const safeUpdate = useCallback(async (id: string, data: Partial<Grant>) => {
-    const result = await updateGrant(id, data);
+    const result = await optimisticUpdate(id, data);
     if (!result.success) {
-      showCrmMsg(`⚠ Update failed: ${result.error ?? "unknown error"} — try refreshing the page`);
+      toast.error(`Update failed: ${result.error ?? "unknown error"} — try refreshing the page`);
     }
     return result;
-  }, [updateGrant]);
+  }, [optimisticUpdate]);
 
   // ── Mass Research ────────────────────────────────────────────────────────
   const [massResearching, setMassResearching] = useState(false);
@@ -331,8 +328,8 @@ export default function GrantsCrmPage() {
         if (r.success) ok++; else failed++;
       } catch { failed++; }
     }
-    if (failed > 0) showCrmMsg(`⚠ ${failed} of ${crmGrants.length} grants failed to remove from CRM`);
-    else showCrmMsg(`✓ Removed all ${ok} grants from CRM`);
+    if (failed > 0) toast.error(`${failed} of ${crmGrants.length} grants failed to remove from CRM`);
+    else toast.success(`Removed all ${ok} grants from CRM`);
     setResetting(false);
   }, [grants, safeUpdate]);
 
@@ -427,13 +424,6 @@ export default function GrantsCrmPage() {
           </Link>
         </div>
       </div>
-
-      {/* Toast message */}
-      {crmMsg && (
-        <div className={`mb-4 rounded-xl border px-4 py-3 text-sm font-medium ${crmMsg.startsWith("✓") ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
-          {crmMsg}
-        </div>
-      )}
 
       {/* Stats */}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { X, Save, Loader2 } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { authFetch } from "@/lib/authFetch";
-import type { Grant } from "@/hooks/useGrants";
+import type { Grant } from "@/hooks/GrantsContext";
 import { EMPTY_FORM } from "./grantTypes";
 import { GrantFormFields } from "./GrantFormFields";
 
