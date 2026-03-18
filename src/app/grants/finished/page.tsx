@@ -17,7 +17,16 @@ interface Grant {
   url?: string | null;
   amount?: string | null;
   deadlineDate?: string | null;
+  howToApply?: string | null;
+  geographicScope?: string | null;
+  eligibility?: string | null;
+  projectDuration?: string | null;
+  fitScore?: number | null;
   matchScore?: number | null;
+  submissionEffort?: string | null;
+  notes?: string | null;
+  aiScore?: number | null;
+  aiVerdict?: string | null;
   crmStatus?: string | null;
   crmNotes?: string | null;
   updatedAt: string;
@@ -46,6 +55,155 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
 }
 
+async function exportGrantPdf(
+  grant: Grant,
+  draft: Draft | undefined,
+  audit: Audit | null,
+) {
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const mL = 20, mR = 20, mT = 25, mB = 20;
+  const usable = W - mL - mR;
+  let y = mT;
+
+  const newPage = () => { doc.addPage(); y = mT; };
+  const need = (n: number) => { if (y + n > H - mB) newPage(); };
+
+  // ── COVER PAGE ──────────────────────────────────────────────
+  // Accent bar
+  doc.setFillColor(16, 185, 129); // emerald-500
+  doc.rect(0, 0, W, 6, "F");
+
+  y = 30;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(120);
+  doc.text("GRANT APPLICATION", mL, y);
+  y += 10;
+
+  // Grant name
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(24);
+  doc.setTextColor(20);
+  const titleLines = doc.splitTextToSize(grant.name, usable) as string[];
+  for (const line of titleLines) { doc.text(line, mL, y); y += 10; }
+  y += 4;
+
+  // Divider
+  doc.setDrawColor(200);
+  doc.line(mL, y, W - mR, y);
+  y += 10;
+
+  // Info rows helper
+  const infoRow = (label: string, value: string | null | undefined) => {
+    if (!value?.trim()) return;
+    need(14);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(label.toUpperCase(), mL, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(30);
+    const lines = doc.splitTextToSize(value, usable) as string[];
+    for (const l of lines) { doc.text(l, mL, y); y += 4.5; }
+    y += 4;
+  };
+
+  infoRow("Funder / Organisation", grant.founder);
+  infoRow("Grant URL", grant.url);
+  infoRow("Funding Amount", grant.amount);
+  infoRow("Deadline", grant.deadlineDate ? fmtDate(grant.deadlineDate) : null);
+  infoRow("Geographic Scope", grant.geographicScope);
+  infoRow("Eligibility", grant.eligibility);
+  infoRow("Project Duration", grant.projectDuration);
+  infoRow("How to Apply", grant.howToApply);
+  infoRow("Submission Effort", grant.submissionEffort);
+  infoRow("Notes", grant.notes);
+
+  // Audit score box
+  if (audit) {
+    need(20);
+    y += 4;
+    doc.setDrawColor(200);
+    doc.setFillColor(245, 245, 245);
+    doc.roundedRect(mL, y, usable, 18, 3, 3, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(16, 185, 129);
+    doc.text(`Audit Score: ${audit.overallScore}/100  —  ${audit.overallVerdict}`, mL + 5, y + 7);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100);
+    if (audit.improvedAt) {
+      doc.text(`Improved on ${fmtDate(audit.improvedAt)}`, mL + 5, y + 13);
+    }
+    y += 24;
+  }
+
+  // Generation date
+  need(10);
+  y += 4;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(150);
+  doc.text(`Generated: ${new Date().toLocaleString("en-AU", { timeZone: "Australia/Sydney" })}`, mL, y);
+
+  // ── SECTION PAGES ───────────────────────────────────────────
+  if (draft?.sections) {
+    newPage();
+    const entries = Object.entries(draft.sections);
+    for (const [name, text] of entries) {
+      if (!text?.trim()) continue;
+
+      // Section heading
+      need(16);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(16, 120, 90);
+      doc.text(name, mL, y);
+      y += 2;
+      doc.setDrawColor(16, 185, 129);
+      doc.line(mL, y, mL + Math.min(doc.getTextWidth(name), usable), y);
+      y += 7;
+
+      // Section body
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(30);
+      const paragraphs = text.split(/\n\n+/);
+      for (const para of paragraphs) {
+        const lines = doc.splitTextToSize(para.replace(/\n/g, " "), usable) as string[];
+        for (const line of lines) {
+          need(5);
+          doc.text(line, mL, y);
+          y += 4.5;
+        }
+        y += 3;
+      }
+      y += 6;
+    }
+  }
+
+  // ── PAGE NUMBERS ────────────────────────────────────────────
+  const total = doc.getNumberOfPages();
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Page ${i} of ${total}`, W / 2, H - 10, { align: "center" });
+    // Footer line
+    doc.setDrawColor(220);
+    doc.line(mL, H - 14, W - mR, H - 14);
+  }
+
+  doc.save(`grant-${grant.name.toLowerCase().replace(/\s+/g, "-")}.pdf`);
+}
+
 function wordCount(text: string) {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
@@ -68,6 +226,7 @@ export default function FinishedGrantsPage() {
   const [audits, setAudits] = useState<Audit[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [exportingId, setExportingId] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -258,6 +417,18 @@ export default function FinishedGrantsPage() {
 
                   {/* Actions */}
                   <div className="shrink-0 flex items-center gap-2">
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setExportingId(grant.id);
+                        try { await exportGrantPdf(grant, draft, audit); } finally { setExportingId(null); }
+                      }}
+                      disabled={exportingId === grant.id}
+                      className="rounded-lg border border-brand-200 bg-brand-50 p-2 text-brand-600 hover:bg-brand-100 disabled:opacity-50"
+                      title="Export PDF"
+                    >
+                      {exportingId === grant.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                    </button>
                     {grant.url && (
                       <a
                         href={grant.url}
@@ -349,6 +520,17 @@ export default function FinishedGrantsPage() {
 
                     {/* Action bar */}
                     <div className="mt-4 pt-3 border-t border-gray-200 flex items-center gap-2">
+                      <button
+                        onClick={async () => {
+                          setExportingId(grant.id);
+                          try { await exportGrantPdf(grant, draft, audit); } finally { setExportingId(null); }
+                        }}
+                        disabled={exportingId === grant.id}
+                        className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                      >
+                        {exportingId === grant.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+                        Export PDF
+                      </button>
                       <Link
                         href={`/grants/builder?grantId=${grant.id}`}
                         className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700"
