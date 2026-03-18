@@ -16,7 +16,7 @@ const MODEL             = "gpt-4o";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
 };
 
 function json(data: unknown, status = 200) {
@@ -307,6 +307,20 @@ serve(async (req: Request) => {
 
       console.log(`[grant-audit] Audit complete for "${grantName}" — score ${audit.overallScore}, saved as ${saved?.id}`);
       return json({ success: true, audit, auditId: saved?.id ?? null });
+    }
+
+    // DELETE — remove a saved audit by ID
+    if (req.method === "DELETE") {
+      const url = new URL(req.url);
+      const auditId = url.searchParams.get("id");
+      if (!auditId) return json({ error: "id is required" }, 400);
+      const { error } = await db
+        .from("GrantAudit")
+        .delete()
+        .eq("id", auditId)
+        .eq("companyId", DEMO_COMPANY_ID);
+      if (error) throw error;
+      return json({ success: true });
     }
 
     return json({ error: "Method not allowed" }, 405);

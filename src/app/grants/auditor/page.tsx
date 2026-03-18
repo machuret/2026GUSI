@@ -6,7 +6,7 @@ import {
   ArrowLeft, ShieldCheck, Loader2, ChevronDown, ChevronUp,
   CheckCircle, AlertTriangle, XCircle, Info, Trophy, PenLine,
   KanbanSquare, UserCheck, Rss, Settings, BookOpen, Sparkles,
-  Clock, Zap,
+  Clock, Zap, Trash2,
 } from "lucide-react";
 import { authFetch, edgeFn } from "@/lib/authFetch";
 
@@ -113,6 +113,15 @@ export default function GrantAuditorPage() {
       setSavedAudits(data.audits ?? []);
     } catch { /* ignore */ }
     finally { setLoadingAudits(false); }
+  }, []);
+
+  const deleteAudit = useCallback(async (auditId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Delete this saved audit?")) return;
+    try {
+      await authFetch(`${edgeFn("grant-audit")}?id=${auditId}`, { method: "DELETE" });
+      setSavedAudits((prev) => prev.filter((a) => a.id !== auditId));
+    } catch { /* ignore */ }
   }, []);
 
   const checkPrompt = useCallback(async () => {
@@ -298,37 +307,48 @@ export default function GrantAuditorPage() {
           <p className="text-xs text-gray-400 mb-3">Click an audit to view details and improve the draft</p>
           <div className="space-y-2">
             {savedAudits.map((a) => (
-              <button
+              <div
                 key={a.id}
-                onClick={() => {
-                  setAuditResult({
-                    overallScore: a.overallScore,
-                    overallVerdict: a.overallVerdict as AuditResult["overallVerdict"],
-                    summary: a.summary,
-                    sectionAudits: a.sectionAudits ?? [],
-                    topRecommendations: a.topRecommendations ?? [],
-                  });
-                  setAuditId(a.id);
-                  setSelectedDraftId(a.draftId);
-                  setImproveResult(null);
-                  setImproveError(null);
-                }}
-                className="w-full flex items-center gap-3 rounded-lg border border-gray-100 px-4 py-3 hover:bg-gray-50 hover:border-amber-200 transition-colors text-left"
+                className="group w-full flex items-center gap-3 rounded-lg border border-gray-100 px-4 py-3 hover:bg-gray-50 hover:border-amber-200 transition-colors"
               >
-                <div className={`shrink-0 text-lg font-bold w-10 ${scoreColor(a.overallScore)}`}>{a.overallScore}</div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{a.grantName}</p>
-                  <p className="text-xs text-gray-400">{fmtDate(a.createdAt)}</p>
-                </div>
-                <div className={`shrink-0 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${verdictColor(a.overallVerdict)}`}>
-                  {a.overallVerdict}
-                </div>
-                {a.improvedAt && (
-                  <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                    <Zap className="h-3 w-3" /> Improved
-                  </span>
-                )}
-              </button>
+                <button
+                  onClick={() => {
+                    setAuditResult({
+                      overallScore: a.overallScore,
+                      overallVerdict: a.overallVerdict as AuditResult["overallVerdict"],
+                      summary: a.summary,
+                      sectionAudits: a.sectionAudits ?? [],
+                      topRecommendations: a.topRecommendations ?? [],
+                    });
+                    setAuditId(a.id);
+                    setSelectedDraftId(a.draftId);
+                    setImproveResult(null);
+                    setImproveError(null);
+                  }}
+                  className="flex flex-1 min-w-0 items-center gap-3 text-left"
+                >
+                  <div className={`shrink-0 text-lg font-bold w-10 ${scoreColor(a.overallScore)}`}>{a.overallScore}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{a.grantName}</p>
+                    <p className="text-xs text-gray-400">{fmtDate(a.createdAt)}</p>
+                  </div>
+                  <div className={`shrink-0 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${verdictColor(a.overallVerdict)}`}>
+                    {a.overallVerdict}
+                  </div>
+                  {a.improvedAt && (
+                    <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      <Zap className="h-3 w-3" /> Improved
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={(e) => deleteAudit(a.id, e)}
+                  className="shrink-0 ml-1 rounded p-1.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-50 transition-all"
+                  title="Delete audit"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             ))}
           </div>
         </div>

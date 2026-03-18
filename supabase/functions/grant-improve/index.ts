@@ -91,6 +91,50 @@ async function getVaultBlock(db: ReturnType<typeof createClient>): Promise<strin
   return `## KNOWLEDGE VAULT\n${chunks.join("\n\n")}`;
 }
 
+async function getFunderTemplateBlock(
+  db: ReturnType<typeof createClient>,
+  funderName: string | null
+): Promise<string> {
+  if (!funderName) return "";
+  const { data: templates } = await db
+    .from("FunderTemplate")
+    .select("funderName, preferences, patterns, avoid, notes")
+    .eq("companyId", DEMO_COMPANY_ID);
+  if (!templates?.length) return "";
+  const lower = funderName.toLowerCase();
+  const match = templates.find(
+    (t: Record<string, unknown>) =>
+      typeof t.funderName === "string" &&
+      (t.funderName.toLowerCase() === lower ||
+        lower.includes(t.funderName.toLowerCase()) ||
+        t.funderName.toLowerCase().includes(lower))
+  );
+  if (!match) return "";
+  const parts = [`## FUNDER TEMPLATE — ${match.funderName}\nApply these insights when rewriting to ensure alignment with this funder's preferences.`];
+  if (match.preferences) parts.push(`What this funder loves:\n${match.preferences}`);
+  if (match.patterns) parts.push(`Winning patterns:\n${match.patterns}`);
+  if (match.avoid) parts.push(`What to AVOID:\n${match.avoid}`);
+  if (match.notes) parts.push(`Notes:\n${match.notes}`);
+  return parts.join("\n\n");
+}
+
+async function crawlUrl(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { "User-Agent": "Mozilla/5.0" } });
+    if (!res.ok) return "";
+    const html = await res.text();
+    return html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 4000);
+  } catch {
+    return "";
+  }
+}
+
 // ── OpenAI caller ────────────────────────────────────────────────────────────
 
 async function callOpenAI(opts: {
@@ -200,24 +244,55 @@ serve(async (req: Request) => {
       section: string; score: number; issues: string[]; improvements: string[];
     }>) ?? [];
 
-    // 3. Load grant metadata, profile, vault in parallel
+    // 3. Load grant metadata, profile, vault, funder template in parallel
     let grantDetails = "";
+    let grantFunder: string | null = null;
+    let grantUrl: string | null = null;
+    let briefBlock = "";
     const [grantRes, { data: profile }, vaultBlock] = await Promise.all([
       draft.grantId
-        ? db.from("Grant").select("name, eligibility, founder, amount, geographicScope").eq("id", draft.grantId).maybeSingle()
+        ? db.from("Grant").select("name, eligibility, founder, amount, geographicScope, howToApply, url").eq("id", draft.grantId).maybeSingle()
         : Promise.resolve({ data: null }),
       db.from("GrantProfile").select("*").eq("companyId", DEMO_COMPANY_ID).maybeSingle(),
       getVaultBlock(db),
     ]);
     if (grantRes.data) {
       const g = grantRes.data;
+      grantFunder = g.founder ?? null;
+      grantUrl = g.url ?? null;
       grantDetails = [
-        `Grant: ${g.name}`, g.founder ? `Funder: ${g.founder}` : null,
-        g.amount ? `Amount: ${g.amount}` : null,
-        g.eligibility ? `Eligibility: ${g.eligibility}` : null,
+        `Grant: ${g.name}`,
+        g.founder       ? `Funder: ${g.founder}` : null,
+        g.amount        ? `Amount: ${g.amount}` : null,
+        g.eligibility   ? `Eligibility: ${g.eligibility}` : null,
+        g.geographicScope ? `Geographic Scope: ${g.geographicScope}` : null,
+        g.howToApply    ? `How to Apply: ${g.howToApply}` : null,
       ].filter(Boolean).join("\n");
     }
     const profileBlock = profile ? buildProfileContext(profile as Record<string, unknown>) : "";
+
+    // Load funder template + crawl grant URL + load brief in parallel
+    const [funderTemplateBlock, crawledContent] = await Promise.all([
+      getFunderTemplateBlock(db, grantFunder),
+      grantUrl ? crawlUrl(grantUrl) : Promise.resolve(""),
+    ]);
+
+    // Load strategic brief from the saved audit's draft (if stored on the GrantDraft)
+    const { data: draftWithBrief } = await db
+      .from("GrantDraft")
+      .select("brief")
+      .eq("id", audit.draftId)
+      .maybeSingle();
+    if (draftWithBrief?.brief && typeof draftWithBrief.brief === "object") {
+      const b = draftWithBrief.brief as Record<string, unknown>;
+      const parts = ["## STRATEGIC WRITING BRIEF (maintain alignment with these)"];
+      if (Array.isArray(b.funderPriorities)) parts.push(`Funder Priorities: ${(b.funderPriorities as string[]).join(", ")}`);
+      if (Array.isArray(b.keyThemes)) parts.push(`Key Themes: ${(b.keyThemes as string[]).join(", ")}`);
+      if (b.winningAngle) parts.push(`Winning Angle: ${b.winningAngle}`);
+      if (b.toneGuidance) parts.push(`Tone Guidance: ${b.toneGuidance}`);
+      if (Array.isArray(b.keywordsToUse)) parts.push(`Keywords to use: ${(b.keywordsToUse as string[]).join(", ")}`);
+      briefBlock = parts.join("\n");
+    }
 
     // 4. Identify sections that need improvement (score < 90 or have issues)
     const toImprove = sectionAudits.filter(
@@ -255,8 +330,11 @@ serve(async (req: Request) => {
           : "",
         `## TOP-LEVEL RECOMMENDATIONS:\n${(audit.topRecommendations as string[]).map((r, i) => `${i + 1}. ${r}`).join("\n")}`,
         grantDetails ? `## GRANT DETAILS\n${grantDetails}` : "",
+        briefBlock,
+        funderTemplateBlock,
         profileBlock,
         vaultBlock,
+        crawledContent ? `## LIVE GRANT PAGE (use to mirror funder language):\n${crawledContent}` : "",
         otherSections ? `## OTHER SECTIONS (for coherence — do not repeat):\n${otherSections}` : "",
         `## ORIGINAL SECTION TEXT:\n${original}`,
       ].filter(Boolean).join("\n\n");
