@@ -32,7 +32,6 @@ export const ALL_SECTIONS = [
   "Evaluation Plan",
   "Budget & Budget Narrative",
   "Sustainability Plan",
-  "Appendices & Supporting Documents",
   "Contact Details",
 ] as const;
 
@@ -51,7 +50,6 @@ export const SECTION_META: Record<SectionName, { icon: string; hint: string }> =
   "Evaluation Plan":                   { icon: "📊",  hint: "Quantitative + qualitative metrics, reporting cadence" },
   "Budget & Budget Narrative":         { icon: "💰",  hint: "Line-item costs + justification for every dollar" },
   "Sustainability Plan":               { icon: "🌱",  hint: "Revenue model, partnerships, post-grant continuation" },
-  "Appendices & Supporting Documents": { icon: "📎",  hint: "Biosketches, letters of support, legal docs, financials" },
   "Contact Details":                    { icon: "📞",  hint: "Your name, position, organisation, contact information" },
 };
 

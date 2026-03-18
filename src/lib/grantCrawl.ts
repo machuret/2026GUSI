@@ -45,7 +45,7 @@ export function buildProfileContext(profile: Record<string, unknown>): string {
     profile.teamSize     ? `Team Size: ${profile.teamSize}` : null,
     profile.annualRevenue ? `Annual Revenue: ${profile.annualRevenue}` : null,
     profile.location
-      ? `Location: ${profile.location}, ${profile.country ?? "Australia"}`
+      ? `Location: ${profile.location}, ${profile.country ?? "United States"}`
       : null,
     profile.yearFounded  ? `Year Founded: ${profile.yearFounded}` : null,
     (profile.focusAreas as string[] | null)?.length
@@ -56,7 +56,7 @@ export function buildProfileContext(profile: Record<string, unknown>): string {
       : null,
     profile.preferredDuration ? `Preferred Duration: ${profile.preferredDuration}` : null,
     profile.isRegisteredCharity ? "Registered Charity: Yes" : null,
-    profile.hasABN              ? "Has ABN: Yes" : null,
+    profile.hasEIN              ? "Has EIN: Yes" : null,
     profile.indigenousOwned     ? "Indigenous-owned: Yes" : null,
     profile.womanOwned          ? "Woman-owned: Yes" : null,
     profile.regionalOrRural     ? "Regional/Rural: Yes" : null,

@@ -34,8 +34,7 @@ interface GrantProfile {
   targetFundingMax?: number | null;
   preferredDuration?: string;
   isRegisteredCharity?: boolean;
-  hasABN?: boolean;
-  hasACN?: boolean;
+  hasEIN?: boolean;
   indigenousOwned?: boolean;
   womanOwned?: boolean;
   regionalOrRural?: boolean;
@@ -47,10 +46,10 @@ interface GrantProfile {
 
 const EMPTY: GrantProfile = {
   contactName: "", contactRole: "", contactEmail: "", contactPhone: "", contactAddress: "",
-  orgType: "", orgType2: "", sector: "", subSector: "", location: "", country: "Australia",
+  orgType: "", orgType2: "", sector: "", subSector: "", location: "", country: "United States",
   stage: "", teamSize: "", annualRevenue: "", yearFounded: "",
   focusAreas: [], targetFundingMin: null, targetFundingMax: null, preferredDuration: "",
-  isRegisteredCharity: false, hasABN: true, hasACN: false,
+  isRegisteredCharity: false, hasEIN: false,
   indigenousOwned: false, womanOwned: false, regionalOrRural: false,
   missionStatement: "", keyActivities: "", pastGrantsWon: "", uniqueStrengths: "",
 };
@@ -209,12 +208,12 @@ export default function GrantProfilePage() {
             </div>
             <div>
               <label className={labelCls}>Phone Number</label>
-              <input type="tel" className={inputCls} placeholder="e.g. +61 400 000 000" value={profile.contactPhone ?? ""} onChange={(e) => set("contactPhone", e.target.value)} />
+              <input type="tel" className={inputCls} placeholder="e.g. +1 (555) 123-4567" value={profile.contactPhone ?? ""} onChange={(e) => set("contactPhone", e.target.value)} />
             </div>
           </div>
           <div>
             <label className={labelCls}>Mailing Address</label>
-            <textarea rows={2} className={inputCls} placeholder="e.g. 123 Main St, Melbourne VIC 3000, Australia" value={profile.contactAddress ?? ""} onChange={(e) => set("contactAddress", e.target.value)} />
+            <textarea rows={2} className={inputCls} placeholder="e.g. 123 Main St, San Francisco, CA 94102, USA" value={profile.contactAddress ?? ""} onChange={(e) => set("contactAddress", e.target.value)} />
           </div>
         </Section>
 
@@ -258,11 +257,11 @@ export default function GrantProfilePage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className={labelCls}>State / Region</label>
-              <input className={inputCls} placeholder="e.g. Victoria, NSW, Queensland" value={profile.location ?? ""} onChange={(e) => set("location", e.target.value)} />
+              <input className={inputCls} placeholder="e.g. California, New York, Texas" value={profile.location ?? ""} onChange={(e) => set("location", e.target.value)} />
             </div>
             <div>
               <label className={labelCls}>Country</label>
-              <input className={inputCls} placeholder="Australia" value={profile.country ?? ""} onChange={(e) => set("country", e.target.value)} />
+              <input className={inputCls} placeholder="United States" value={profile.country ?? ""} onChange={(e) => set("country", e.target.value)} />
             </div>
           </div>
           <div className="flex flex-wrap gap-4 pt-1">
@@ -298,9 +297,8 @@ export default function GrantProfilePage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-4 pt-1">
-            <Toggle label="Registered Charity / DGR" checked={!!profile.isRegisteredCharity} onChange={() => set("isRegisteredCharity", !profile.isRegisteredCharity)} />
-            <Toggle label="Has ABN" checked={!!profile.hasABN} onChange={() => set("hasABN", !profile.hasABN)} />
-            <Toggle label="Has ACN (incorporated company)" checked={!!profile.hasACN} onChange={() => set("hasACN", !profile.hasACN)} />
+            <Toggle label="Registered 501(c)(3) Non-profit" checked={!!profile.isRegisteredCharity} onChange={() => set("isRegisteredCharity", !profile.isRegisteredCharity)} />
+            <Toggle label="Has EIN (Employer Identification Number)" checked={!!profile.hasEIN} onChange={() => set("hasEIN", !profile.hasEIN)} />
           </div>
         </Section>
 
@@ -308,11 +306,11 @@ export default function GrantProfilePage() {
         <Section icon={DollarSign} title="Funding Preferences">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
-              <label className={labelCls}>Min Grant Amount (AUD)</label>
+              <label className={labelCls}>Min Grant Amount (USD)</label>
               <input type="number" className={inputCls} placeholder="e.g. 10000" value={profile.targetFundingMin ?? ""} onChange={(e) => set("targetFundingMin", e.target.value ? parseInt(e.target.value) : null)} />
             </div>
             <div>
-              <label className={labelCls}>Max Grant Amount (AUD)</label>
+              <label className={labelCls}>Max Grant Amount (USD)</label>
               <input type="number" className={inputCls} placeholder="e.g. 500000" value={profile.targetFundingMax ?? ""} onChange={(e) => set("targetFundingMax", e.target.value ? parseInt(e.target.value) : null)} />
             </div>
             <div>

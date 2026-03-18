@@ -54,7 +54,7 @@ function buildProfileContext(profile: Record<string, unknown>): string {
     profile.teamSize      ? `Team Size: ${profile.teamSize}` : null,
     profile.annualRevenue  ? `Annual Revenue: ${profile.annualRevenue}` : null,
     profile.location
-      ? `Location: ${profile.location}, ${profile.country ?? "Australia"}`
+      ? `Location: ${profile.location}, ${profile.country ?? "United States"}`
       : null,
     profile.missionStatement ? `\nMission Statement:\n${profile.missionStatement}` : null,
     profile.keyActivities    ? `\nKey Activities:\n${profile.keyActivities}` : null,
