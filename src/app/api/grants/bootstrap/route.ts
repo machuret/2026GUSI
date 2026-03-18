@@ -46,6 +46,12 @@ export async function GET(req: NextRequest) {
       company: company ?? null,
       info: companyInfo ?? null,
       profile: profile ?? null,
+    }, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "CDN-Cache-Control": "no-store",
+        "Vercel-CDN-Cache-Control": "no-store",
+      },
     });
   } catch (err) {
     return handleApiError(err, "Grants Bootstrap");
