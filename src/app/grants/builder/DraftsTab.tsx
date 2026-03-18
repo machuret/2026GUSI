@@ -1,18 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Trash2, FileUp, Loader2 } from "lucide-react";
+import { BookOpen, Trash2, FileUp, Loader2, RefreshCw } from "lucide-react";
 import { SavedDraft, fmtDate } from "./types";
 
 interface Props {
   drafts: SavedDraft[];
   onLoad: (id: string) => void;
   onDelete: (id: string) => void;
+  onRedo: (draft: SavedDraft) => void;
   onBulkExport: (ids: string[]) => Promise<void>;
   exportingIds: Set<string>;
 }
 
-export default function DraftsTab({ drafts, onLoad, onDelete, onBulkExport, exportingIds }: Props) {
+export default function DraftsTab({ drafts, onLoad, onDelete, onRedo, onBulkExport, exportingIds }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const toggle = (id: string) => setSelected((prev) => {
@@ -78,6 +79,9 @@ export default function DraftsTab({ drafts, onLoad, onDelete, onBulkExport, expo
               <td className="px-3 py-3">
                 <div className="flex items-center gap-3">
                   <button onClick={() => onLoad(d.id)} className="text-xs text-brand-600 hover:underline font-medium">Load</button>
+                  <button onClick={() => onRedo(d)} className="text-amber-400 hover:text-amber-600 transition-colors" title="Re-do from scratch">
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </button>
                   <button
                     onClick={() => onBulkExport([d.id])}
                     disabled={exportingIds.has(d.id)}

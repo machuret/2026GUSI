@@ -258,6 +258,21 @@ export default function GrantBuilderPage() {
     setDrafts((prev) => prev.filter((d) => d.id !== draftId));
   }, []);
 
+  // ── Re-do draft (delete + switch to builder for that grant) ────────────────
+  const redoDraft = useCallback(async (draft: SavedDraft) => {
+    if (!confirm(`Re-do "${draft.grantName}" from scratch?\n\nThis will delete the current draft and let you regenerate it.`)) return;
+    await authFetch(`/api/grants/drafts/${draft.id}`, { method: "DELETE" });
+    setDrafts((prev) => prev.filter((d) => d.id !== draft.id));
+    setSelectedGrantId(draft.grantId);
+    setSections({});
+    setBrief(null);
+    setCustomInstructions({});
+    setGenError(null);
+    setProgress(0);
+    setSaved(false);
+    setActiveTab("builder");
+  }, []);
+
   // ── Mass generate all CRM grants ─────────────────────────────────────────────
   const massGenerateCRM = useCallback(async () => {
     const allCrmGrants = grants.filter(g => !!g.crmStatus);
@@ -505,6 +520,7 @@ export default function GrantBuilderPage() {
           drafts={drafts}
           onLoad={loadDraft}
           onDelete={deleteDraft}
+          onRedo={redoDraft}
           onBulkExport={bulkExportDrafts}
           exportingIds={exportingIds}
         />

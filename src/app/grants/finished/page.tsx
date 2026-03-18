@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   ArrowLeft, CheckCircle2, Trophy, PenLine, ShieldCheck,
   ExternalLink, Loader2, Download, FileDown, Sparkles,
-  Clock, ChevronDown, ChevronUp, FileText, FileType,
+  Clock, ChevronDown, ChevronUp, FileText, FileType, Trash2,
 } from "lucide-react";
 import { authFetch, edgeFn } from "@/lib/authFetch";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
@@ -80,6 +80,32 @@ export default function FinishedGrantsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [exportingDocxId, setExportingDocxId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const deleteFinishedGrant = async (grant: Grant, draftId?: string) => {
+    if (!confirm(`Delete finished grant "${grant.name}"?\n\nThis will remove the draft and reset its CRM status back to Built.`)) return;
+    setDeletingId(grant.id);
+    try {
+      // Delete the draft if it exists
+      if (draftId) {
+        await authFetch(`/api/grants/drafts/${draftId}`, { method: "DELETE" });
+        setDrafts((prev) => prev.filter((d) => d.id !== draftId));
+      }
+      // Reset CRM status back to Built
+      await authFetch(`${edgeFn("grant-crud")}?id=${grant.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ crmStatus: "Built" }),
+      });
+      setGrants((prev) => prev.map((g) => g.id === grant.id ? { ...g, crmStatus: "Built" } : g));
+      if (expandedId === grant.id) setExpandedId(null);
+    } catch (err) {
+      console.error("Failed to delete finished grant:", err);
+      alert("Failed to delete. Please try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     async function load() {
@@ -314,6 +340,14 @@ export default function FinishedGrantsPage() {
                     >
                       <PenLine className="h-4 w-4" />
                     </Link>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteFinishedGrant(grant, draft?.id); }}
+                      disabled={deletingId === grant.id}
+                      className="rounded-lg border border-gray-200 p-2 text-gray-300 hover:text-red-500 hover:border-red-200 disabled:opacity-50"
+                      title="Delete finished grant"
+                    >
+                      {deletingId === grant.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </button>
                     {expanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
                   </div>
                 </button>
@@ -429,6 +463,14 @@ export default function FinishedGrantsPage() {
                           <ExternalLink className="h-3.5 w-3.5" /> Grant Page
                         </a>
                       )}
+                      <button
+                        onClick={() => deleteFinishedGrant(grant, draft?.id)}
+                        disabled={deletingId === grant.id}
+                        className="ml-auto flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-500 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {deletingId === grant.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        Delete
+                      </button>
                     </div>
                   </div>
                 )}
