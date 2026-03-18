@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { handleApiError } from "@/lib/apiHelpers";
 import { getVaultContext } from "@/lib/aiContext";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 
@@ -23,8 +23,6 @@ const FILLABLE_FIELDS = [
 
 export async function POST(req: NextRequest) {
   try {
-    const { response: authError } = await requireAuth();
-    if (authError) return authError;
 
     const currentProfile = await req.json();
 
