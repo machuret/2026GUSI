@@ -7,7 +7,7 @@ import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
 
 const bulkUpdateSchema = z.object({
-  ids: z.array(z.string()).min(1).max(100),
+  ids: z.array(z.string()).min(1).max(500),
   data: z.object({
     crmStatus: z.enum(["Researching", "Pipeline", "Active", "Submitted", "Won", "Lost"]).optional().nullable(),
     decision: z.enum(["Apply", "Maybe", "No", "Rejected"]).optional().nullable(),
