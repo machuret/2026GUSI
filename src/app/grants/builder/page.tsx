@@ -9,7 +9,7 @@ import { DEMO_COMPANY_ID } from "@/lib/constants";
 import {
   ALL_SECTIONS, SectionName, Tone, Length,
   Grant, WritingBrief, SavedDraft,
-  wordCount, downloadTxt,
+  wordCount, downloadTxt, downloadPdf,
 } from "./types";
 import LeftPanel from "./LeftPanel";
 import DocumentPanel from "./DocumentPanel";
@@ -51,6 +51,7 @@ export default function GrantBuilderPage() {
   const [saveMsg,      setSaveMsg]      = useState<string | null>(null);
   const [copied,       setCopied]       = useState<string | null>(null);
   const [exportingDoc, setExportingDoc] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingIds, setExportingIds] = useState<Set<string>>(new Set());
   const [massGenerating, setMassGenerating] = useState(false);
   const [massProgress, setMassProgress] = useState<{ done: number; total: number; current: string } | null>(null);
@@ -549,6 +550,13 @@ export default function GrantBuilderPage() {
             onRegenSection={regenSection}
             onEditSection={(s, val) => { setSections((prev) => ({ ...prev, [s]: val })); setSaved(false); }}
             onDownload={() => downloadTxt(selectedGrant?.name ?? "grant", sections, enabledList)}
+            onDownloadPdf={async () => {
+              setExportingPdf(true);
+              try { await downloadPdf(selectedGrant?.name ?? "grant", sections, enabledList); }
+              catch (err) { alert(`PDF failed: ${err instanceof Error ? err.message : "Unknown error"}`); }
+              finally { setExportingPdf(false); }
+            }}
+            exportingPdf={exportingPdf}
             onSaveDraft={saveDraft}
             onExportDoc={exportDoc}
             exportingDoc={exportingDoc}

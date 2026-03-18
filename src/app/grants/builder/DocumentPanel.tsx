@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles, Loader2, Copy, RefreshCw, CheckCircle, Download, Save, FileUp } from "lucide-react";
+import { Sparkles, Loader2, Copy, RefreshCw, CheckCircle, Download, Save, FileUp, FileDown } from "lucide-react";
 import { SECTION_META, SectionName, wordCount } from "./types";
 
 interface Props {
@@ -18,6 +18,8 @@ interface Props {
   onRegenSection: (s: SectionName) => void;
   onEditSection: (s: SectionName, value: string) => void;
   onDownload: () => void;
+  onDownloadPdf: () => void;
+  exportingPdf: boolean;
   onSaveDraft: () => void;
   onExportDoc: () => void;
   exportingDoc: boolean;
@@ -28,7 +30,7 @@ export default function DocumentPanel({
   enabledList, sections, generatingSection, generating,
   copied, saving, saveMsg, totalWords, grantName,
   onCopySection, onCopyAll, onRegenSection, onEditSection,
-  onDownload, onSaveDraft, onExportDoc, exportingDoc, hasSections,
+  onDownload, onDownloadPdf, exportingPdf, onSaveDraft, onExportDoc, exportingDoc, hasSections,
 }: Props) {
   if (!hasSections && !generating) {
     return (
@@ -72,6 +74,16 @@ export default function DocumentPanel({
               className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
             >
               <Download className="h-3.5 w-3.5" /> Download .txt
+            </button>
+            <button
+              onClick={onDownloadPdf}
+              disabled={exportingPdf}
+              className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+            >
+              {exportingPdf
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <FileDown className="h-3.5 w-3.5" />}
+              {exportingPdf ? "Generating…" : "Download PDF"}
             </button>
             <button
               onClick={onExportDoc}
