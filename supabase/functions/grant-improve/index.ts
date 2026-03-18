@@ -298,6 +298,16 @@ serve(async (req: Request) => {
       .update({ improvedAt: new Date().toISOString() })
       .eq("id", auditId);
 
+    // 7b. Move CRM status to Improved
+    if (draft.grantId) {
+      try {
+        await db
+          .from("Grant")
+          .update({ crmStatus: "Improved", updatedAt: new Date().toISOString() })
+          .eq("id", draft.grantId);
+      } catch { /* non-critical */ }
+    }
+
     // 8. Log AI usage
     try {
       await db.from("AiUsageLog").insert({

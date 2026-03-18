@@ -12,18 +12,20 @@ import { authFetch } from "@/lib/authFetch";
 import { toast } from "sonner";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 
-type CrmStatus = "Researching" | "Pipeline" | "Active" | "Submitted" | "Won" | "Lost";
+type CrmStatus = "Researching" | "Pipeline" | "Active" | "Built" | "Improved" | "Submitted" | "Won" | "Lost";
 type ViewMode = "kanban" | "list";
 
 const COLUMNS: { status: CrmStatus; label: string; color: string; bg: string; border: string }[] = [
   { status: "Researching", label: "🔍 Researching",  color: "text-blue-700",   bg: "bg-blue-50",   border: "border-blue-200" },
   { status: "Pipeline",    label: "📋 Pipeline",     color: "text-purple-700", bg: "bg-purple-50", border: "border-purple-200" },
   { status: "Active",      label: "✍️ Active",       color: "text-brand-700",  bg: "bg-brand-50",  border: "border-brand-200" },
+  { status: "Built",       label: "🏗️ Built",        color: "text-emerald-700",bg: "bg-emerald-50",border: "border-emerald-200" },
+  { status: "Improved",    label: "✨ Improved",     color: "text-teal-700",   bg: "bg-teal-50",   border: "border-teal-200" },
   { status: "Submitted",   label: "📤 Submitted",    color: "text-orange-700", bg: "bg-orange-50", border: "border-orange-200" },
   { status: "Lost",        label: "❌ Lost",         color: "text-gray-500",   bg: "bg-gray-50",   border: "border-gray-200" },
 ];
 
-const STATUS_OPTIONS: CrmStatus[] = ["Researching", "Pipeline", "Active", "Submitted", "Won", "Lost"];
+const STATUS_OPTIONS: CrmStatus[] = ["Researching", "Pipeline", "Active", "Built", "Improved", "Submitted", "Won", "Lost"];
 
 function parseAmount(raw?: string | null): number | null {
   if (!raw) return null;

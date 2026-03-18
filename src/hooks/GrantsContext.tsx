@@ -28,7 +28,7 @@ export interface Grant {
   complexityScore?: number | null;
   complexityLabel?: "Low" | "Medium" | "High" | "Very High" | null;
   complexityNotes?: string | null;
-  crmStatus?: "Researching" | "Pipeline" | "Active" | "Submitted" | "Won" | "Lost" | null;
+  crmStatus?: "Researching" | "Pipeline" | "Active" | "Built" | "Improved" | "Submitted" | "Won" | "Lost" | null;
   crmNotes?: string | null;
   createdAt: string;
   updatedAt: string;

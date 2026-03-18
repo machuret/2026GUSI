@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { FileText, BookOpen, PenLine, Trophy, ShieldCheck, Sparkles, Loader2, X } from "lucide-react";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, edgeFn } from "@/lib/authFetch";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import {
   ALL_SECTIONS, SectionName, Tone, Length,
@@ -217,6 +217,14 @@ export default function GrantBuilderPage() {
       if (!res.ok) throw new Error(data.error || "Save failed");
       setSaveMsg("✓ Draft saved");
       setSaved(true);
+      // Move CRM status to Built (only if not already at a later stage)
+      try {
+        await authFetch(`${edgeFn("grant-crud")}?id=${selectedGrant.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ crmStatus: "Built" }),
+        });
+      } catch { /* non-critical */ }
       const dRes = await authFetch("/api/grants/drafts");
       setDrafts((await dRes.json()).drafts ?? []);
     } catch (err) {
