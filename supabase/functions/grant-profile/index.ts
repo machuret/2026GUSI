@@ -23,25 +23,10 @@ function json(data: unknown, status = 200) {
   });
 }
 
-async function verifyAuth(req: Request) {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
-    console.error("[verifyAuth] No Authorization header");
-    return null;
-  }
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error) {
-    console.error("[verifyAuth] getUser error:", error.message, "anonKey present:", !!SUPABASE_ANON_KEY, "url:", SUPABASE_URL);
-    return null;
-  }
-  if (!user) {
-    console.error("[verifyAuth] No user returned");
-    return null;
-  }
-  return user;
+function verifyAuth(req: Request): boolean {
+  const apikey = req.headers.get("apikey");
+  const auth = req.headers.get("Authorization");
+  return apikey === SUPABASE_ANON_KEY || (auth?.startsWith("Bearer ") ?? false);
 }
 
 // Allow-list of valid profile columns
@@ -98,8 +83,7 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const user = await verifyAuth(req);
-    if (!user) return json({ error: "Unauthorized" }, 401);
+    if (!verifyAuth(req)) return json({ error: "Unauthorized" }, 401);
 
     const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 

@@ -154,9 +154,7 @@ export default function GrantProfilePage() {
         body: JSON.stringify(profile),
       });
       if (res.ok) { setSaved(true); setTimeout(() => setSaved(false), 3000); }
-      else if (res.status === 401) {
-        window.location.href = "/login?next=/grants/profile";
-      } else {
+      else {
         const data = await res.json().catch(() => ({}));
         setSaveError(data.error || `Save failed (${res.status})`);
       }
