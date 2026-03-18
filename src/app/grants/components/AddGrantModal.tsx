@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { X, Save, Loader2 } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, edgeFn } from "@/lib/authFetch";
 import type { Grant } from "@/hooks/GrantsContext";
 import { EMPTY_FORM } from "./grantTypes";
 import { GrantFormFields } from "./GrantFormFields";
@@ -43,7 +43,7 @@ export function AddGrantModal({ onClose, onSaved }: Props) {
     if (!form.name?.trim()) { setError("Grant name is required"); return; }
     setSaving(true); setError(null);
     try {
-      const res = await authFetch("/api/grants", {
+      const res = await authFetch(edgeFn("grant-create"), {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, companyId: DEMO_COMPANY_ID }),
       });
