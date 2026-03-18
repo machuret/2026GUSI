@@ -123,11 +123,11 @@ export default function FinishedGrantsPage() {
   // Stats
   const totalSections = finished.reduce((sum, g) => {
     const d = draftByGrant[g.id];
-    return sum + (d ? Object.keys(d.sections).length : 0);
+    return sum + (d?.sections ? Object.keys(d.sections).length : 0);
   }, 0);
   const totalWords = finished.reduce((sum, g) => {
     const d = draftByGrant[g.id];
-    if (!d) return sum;
+    if (!d?.sections) return sum;
     return sum + Object.values(d.sections).reduce((s, t) => s + wordCount(t), 0);
   }, 0);
   const avgScore = finished.length > 0
@@ -211,8 +211,8 @@ export default function FinishedGrantsPage() {
             const draft = draftByGrant[grant.id];
             const audit = draft ? auditByDraft[draft.id] : null;
             const expanded = expandedId === grant.id;
-            const sectionCount = draft ? Object.keys(draft.sections).length : 0;
-            const words = draft
+            const sectionCount = draft?.sections ? Object.keys(draft.sections).length : 0;
+            const words = draft?.sections
               ? Object.values(draft.sections).reduce((s, t) => s + wordCount(t), 0)
               : 0;
 
@@ -329,7 +329,7 @@ export default function FinishedGrantsPage() {
                       </div>
 
                       {/* Sections preview */}
-                      {draft && (
+                      {draft?.sections && (
                         <div>
                           <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-3">
                             Sections ({sectionCount})
