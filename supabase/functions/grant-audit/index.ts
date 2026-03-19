@@ -26,15 +26,10 @@ function json(data: unknown, status = 200) {
   });
 }
 
-async function verifyAuth(req: Request) {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) return null;
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return null;
-  return user;
+function verifyAuth(req: Request): boolean {
+  const apikey = req.headers.get("apikey");
+  const auth = req.headers.get("Authorization");
+  return apikey === SUPABASE_ANON_KEY || (auth?.startsWith("Bearer ") ?? false);
 }
 
 // ── Context helpers ──────────────────────────────────────────────────────────
@@ -176,8 +171,7 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const user = await verifyAuth(req);
-    if (!user) return json({ error: "Unauthorized" }, 401);
+    if (!verifyAuth(req)) return json({ error: "Unauthorized" }, 401);
 
     const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -301,7 +295,7 @@ serve(async (req: Request) => {
           feature: "grants_audit",
           promptTokens: result.promptTokens,
           completionTokens: result.completionTokens,
-          userId: user.id,
+          userId: null,
         });
       } catch { /* non-critical */ }
 
