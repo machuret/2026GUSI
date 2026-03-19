@@ -1,13 +1,14 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { handleApiError } from "@/lib/apiHelpers";
+import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 
 // GET /api/grants/draft-history?draftId=xxx — list snapshots for a draft
 export async function GET(req: NextRequest) {
   try {
-    const { response: authError } = await requireAuth();
+    const { error: authError } = requireEdgeAuth(req);
     if (authError) return authError;
 
     const draftId = req.nextUrl.searchParams.get("draftId");
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
 // POST /api/grants/draft-history — create a snapshot
 export async function POST(req: NextRequest) {
   try {
-    const { response: authError } = await requireAuth();
+    const { error: authError } = requireEdgeAuth(req);
     if (authError) return authError;
 
     const body = await req.json();

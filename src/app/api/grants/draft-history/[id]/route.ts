@@ -1,13 +1,14 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { handleApiError } from "@/lib/apiHelpers";
+import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 
 // GET /api/grants/draft-history/[id] — load a specific snapshot
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { response: authError } = await requireAuth();
+    const { error: authError } = requireEdgeAuth(_req);
     if (authError) return authError;
 
     const { data, error } = await db
@@ -27,7 +28,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 // DELETE /api/grants/draft-history/[id] — delete a snapshot
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { response: authError } = await requireAuth();
+    const { error: authError } = requireEdgeAuth(_req);
     if (authError) return authError;
 
     const { error } = await db

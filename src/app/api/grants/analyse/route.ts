@@ -3,7 +3,8 @@ export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { handleApiError } from "@/lib/apiHelpers";
+import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
 import { getCompanyContext, getVaultContext } from "@/lib/aiContext";
@@ -21,11 +22,9 @@ export async function POST(req: NextRequest) {
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const isServiceCall = serviceKey && authHeader === `Bearer ${serviceKey}`;
 
-    let authUser: { id: string } | null = null;
     if (!isServiceCall) {
-      const { user, response: authError } = await requireAuth();
+      const { error: authError } = requireEdgeAuth(req);
       if (authError) return authError;
-      authUser = user;
     }
 
     const parsed = bodySchema.safeParse(await req.json());
@@ -139,7 +138,6 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation:
       feature: "grants_analyse",
       promptTokens: result.promptTokens,
       completionTokens: result.completionTokens,
-      userId: authUser?.id,
     });
 
     let analysis: Record<string, unknown>;

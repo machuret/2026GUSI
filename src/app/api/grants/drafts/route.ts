@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { handleApiError } from "@/lib/apiHelpers";
+import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
 
@@ -15,9 +16,9 @@ const saveSchema = z.object({
 });
 
 // GET /api/grants/drafts — list all drafts for this company
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const { response: authError } = await requireAuth();
+    const { error: authError } = requireEdgeAuth(req);
     if (authError) return authError;
 
     const { data, error } = await db
@@ -36,7 +37,7 @@ export async function GET() {
 // POST /api/grants/drafts — upsert draft (one draft per grant)
 export async function POST(req: NextRequest) {
   try {
-    const { response: authError } = await requireAuth();
+    const { error: authError } = requireEdgeAuth(req);
     if (authError) return authError;
 
     const body = await req.json();

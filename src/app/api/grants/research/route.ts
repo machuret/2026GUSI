@@ -3,7 +3,8 @@ export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { handleApiError } from "@/lib/apiHelpers";
+import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
 import { stripHtml } from "@/lib/htmlUtils";
@@ -42,11 +43,9 @@ export async function POST(req: NextRequest) {
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const isServiceCall = serviceKey && authHeader === `Bearer ${serviceKey}`;
 
-    let authUser: { id: string } | null = null;
     if (!isServiceCall) {
-      const { user, response: authError } = await requireAuth();
+      const { error: authError } = requireEdgeAuth(req);
       if (authError) return authError;
-      authUser = user;
     }
 
     const parsed = bodySchema.safeParse(await req.json());
@@ -122,7 +121,6 @@ Fill in as many fields as you can.`;
       feature: "grants_research",
       promptTokens: aiResult.promptTokens,
       completionTokens: aiResult.completionTokens,
-      userId: authUser?.id,
     });
 
     let result: Record<string, unknown>;

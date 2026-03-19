@@ -2,7 +2,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { handleApiError } from "@/lib/apiHelpers";
+import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
 import { getCompanyContext, getVaultContext, getLessonsContext } from "@/lib/aiContext";
@@ -112,11 +113,9 @@ export async function POST(req: NextRequest) {
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const isServiceCall = serviceKey && authHeader === `Bearer ${serviceKey}`;
 
-    let authUser: { id: string } | null = null;
     if (!isServiceCall) {
-      const { user, response: authError } = await requireAuth();
+      const { error: authError } = requireEdgeAuth(req);
       if (authError) return authError;
-      authUser = user;
     }
 
     const body = await req.json();
@@ -258,7 +257,6 @@ Return ONLY valid JSON — no markdown, no explanation:
         feature: "grants_write_brief",
         promptTokens: result.promptTokens,
         completionTokens: result.completionTokens,
-        userId: authUser?.id,
       });
 
       let brief: Record<string, unknown>;
@@ -345,7 +343,6 @@ Write only the section content — no heading, no preamble, no "Here is the sect
       feature: `grants_write_${section.toLowerCase().replace(/[^a-z]/g, "_")}`,
       promptTokens: result.promptTokens,
       completionTokens: result.completionTokens,
-      userId: authUser?.id,
     });
 
     const content = result.content.trim();

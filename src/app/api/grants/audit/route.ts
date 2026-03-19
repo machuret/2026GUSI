@@ -3,7 +3,8 @@ export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAuth, handleApiError } from "@/lib/apiHelpers";
+import { handleApiError } from "@/lib/apiHelpers";
+import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { callOpenAIWithUsage, MODEL_CONFIG } from "@/lib/openai";
 import { logAiUsage } from "@/lib/aiUsage";
 import { getVaultContext } from "@/lib/aiContext";
@@ -44,7 +45,7 @@ Return ONLY valid JSON in this exact format, no markdown:
 // Body: { draftId: string } OR { grantId: string, sections: Record<string,string>, grantName: string }
 export async function POST(req: NextRequest) {
   try {
-    const { response: authError, user } = await requireAuth();
+    const { error: authError } = requireEdgeAuth(req);
     if (authError) return authError;
 
     const body = await req.json();
@@ -147,7 +148,6 @@ export async function POST(req: NextRequest) {
       feature: "grants_audit",
       promptTokens: result.promptTokens,
       completionTokens: result.completionTokens,
-      userId: user?.id,
     });
 
     let audit: Record<string, unknown>;
