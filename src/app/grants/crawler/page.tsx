@@ -52,6 +52,8 @@ export default function GrantCrawlerPage() {
   const [adding, setAdding] = useState<Record<number, boolean>>({});
   const [added, setAdded] = useState<Record<number, boolean>>({});
   const [addError, setAddError] = useState<string | null>(null);
+  const [usedFirecrawl, setUsedFirecrawl] = useState(false);
+  const [crawlTip, setCrawlTip] = useState<string | null>(null);
 
   const filteredSites = useMemo(() => KNOWN_GRANT_SITES.filter((s) => {
     if (regionFilter !== "All" && s.region !== regionFilter) return false;
@@ -62,9 +64,9 @@ export default function GrantCrawlerPage() {
   }), [regionFilter, categoryFilter, siteSearch]);
 
   const crawl = async (url: string, siteName?: string, siteId?: string) => {
-    setCrawling(url); setCrawlError(null); setJsWarning(null);
+    setCrawling(url); setCrawlError(null); setJsWarning(null); setCrawlTip(null);
     setResults([]); setPageTitle(""); setIsPartial(false); setHtmlLength(0);
-    setAdded({}); setLastCrawledUrl(url); setLastCrawledSite(siteName || url);
+    setUsedFirecrawl(false); setAdded({}); setLastCrawledUrl(url); setLastCrawledSite(siteName || url);
     try {
       const res = await authFetch("/api/grants/crawl", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -72,11 +74,13 @@ export default function GrantCrawlerPage() {
       });
       const data = await res.json();
       if (data.jsWarning) setJsWarning(data.jsWarning);
+      if (data.tip) setCrawlTip(data.tip);
       if (data.error) { setCrawlError(data.error); setIsPartial(data.partial ?? false); }
       if (data.grants?.length) {
         setResults(data.grants);
         setPageTitle(data.pageTitle ?? siteName ?? url);
         setHtmlLength(data.htmlLength ?? 0);
+        setUsedFirecrawl(data.usedFirecrawl ?? false);
       }
     } catch { setCrawlError("Network error — could not reach the page."); }
     finally { setCrawling(null); }
@@ -249,6 +253,7 @@ export default function GrantCrawlerPage() {
                   <p className={`text-sm font-medium ${isPartial ? "text-amber-800" : "text-red-800"}`}>{isPartial ? "Partial result" : "Crawl failed"}</p>
                   <p className={`text-xs mt-0.5 ${isPartial ? "text-amber-700" : "text-red-700"}`}>{crawlError}</p>
                   {isPartial && <p className="text-xs mt-1.5 text-amber-600">💡 <strong>Tip:</strong> Try a more specific URL or use the extraction hint to focus on a topic.</p>}
+                  {crawlTip && <p className="text-xs mt-1.5 text-amber-600">⚡ <strong>Upgrade tip:</strong> {crawlTip}</p>}
                 </div>
               </div>
             </div>
@@ -289,6 +294,11 @@ export default function GrantCrawlerPage() {
                 </div>
               </div>
 
+              {usedFirecrawl && (
+                <div className="mb-3 flex items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-teal-700 font-medium">
+                  <Zap className="h-3.5 w-3.5 shrink-0" /> Fetched via Firecrawl — JS rendering &amp; IP rotation applied
+                </div>
+              )}
               {addError && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{addError}</p>}
 
               <div className="space-y-2">
