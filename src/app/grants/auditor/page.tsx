@@ -6,7 +6,7 @@ import {
   ArrowLeft, ShieldCheck, Loader2, ChevronDown, ChevronUp,
   CheckCircle, AlertTriangle, XCircle, Info, Trophy, PenLine,
   KanbanSquare, UserCheck, Rss, Settings, BookOpen, Sparkles,
-  Clock, Zap, Trash2, ChevronsRight,
+  Clock, Zap, Trash2, ChevronsRight, ClipboardList,
 } from "lucide-react";
 import { authFetch, edgeFn } from "@/lib/authFetch";
 
@@ -24,12 +24,20 @@ interface SectionAudit {
   improvements: string[];
 }
 
+interface CriteriaCheck {
+  criterion: string;
+  addressed: boolean;
+  section: string | null;
+  note: string;
+}
+
 interface AuditResult {
   overallScore: number;
   overallVerdict: "Excellent" | "Good" | "Needs Work" | "Poor";
   summary: string;
   sectionAudits: SectionAudit[];
   topRecommendations: string[];
+  criteriaChecks?: CriteriaCheck[];
 }
 
 interface SavedAudit {
@@ -41,6 +49,7 @@ interface SavedAudit {
   summary: string;
   sectionAudits: SectionAudit[];
   topRecommendations: string[];
+  criteriaChecks?: CriteriaCheck[];
   improvedAt: string | null;
   createdAt: string;
 }
@@ -89,6 +98,7 @@ export default function GrantAuditorPage() {
   // Saved audits
   const [savedAudits, setSavedAudits] = useState<SavedAudit[]>([]);
   const [loadingAudits, setLoadingAudits] = useState(true);
+  const [criteriaOpen, setCriteriaOpen] = useState(true);
 
   // Improve
   const [improving, setImproving] = useState(false);
@@ -319,6 +329,7 @@ export default function GrantAuditorPage() {
                       summary: a.summary,
                       sectionAudits: a.sectionAudits ?? [],
                       topRecommendations: a.topRecommendations ?? [],
+                      criteriaChecks: a.criteriaChecks ?? [],
                     });
                     setAuditId(a.id);
                     setSelectedDraftId(a.draftId);
@@ -484,6 +495,42 @@ export default function GrantAuditorPage() {
                   </li>
                 ))}
               </ol>
+            </div>
+          )}
+
+          {/* Criteria Checks panel */}
+          {auditResult.criteriaChecks && auditResult.criteriaChecks.length > 0 && (
+            <div className="rounded-xl border border-violet-200 bg-violet-50 p-5">
+              <button
+                onClick={() => setCriteriaOpen(v => !v)}
+                className="w-full flex items-center justify-between mb-3"
+              >
+                <h3 className="text-sm font-semibold text-violet-900 flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4 text-violet-600" /> Funder Criteria Coverage
+                  <span className="ml-1 rounded-full bg-violet-200 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
+                    {auditResult.criteriaChecks.filter(c => c.addressed).length}/{auditResult.criteriaChecks.length} addressed
+                  </span>
+                </h3>
+                {criteriaOpen ? <ChevronUp className="h-4 w-4 text-violet-400" /> : <ChevronDown className="h-4 w-4 text-violet-400" />}
+              </button>
+              {criteriaOpen && (
+                <div className="space-y-2">
+                  {auditResult.criteriaChecks.map((c, i) => (
+                    <div key={i} className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 ${c.addressed ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
+                      <div className="shrink-0 mt-0.5">
+                        {c.addressed
+                          ? <CheckCircle className="h-4 w-4 text-green-500" />
+                          : <XCircle className="h-4 w-4 text-red-400" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-xs font-semibold ${c.addressed ? "text-green-800" : "text-red-700"}`}>{c.criterion}</p>
+                        {c.note && <p className="text-xs text-gray-500 mt-0.5">{c.note}</p>}
+                        {c.section && <p className="text-[10px] text-gray-400 mt-0.5">→ Addressed in: {c.section}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

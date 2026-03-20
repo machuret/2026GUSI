@@ -8,7 +8,7 @@ import { authFetch, edgeFn } from "@/lib/authFetch";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import {
   ALL_SECTIONS, SectionName, Tone, Length,
-  Grant, WritingBrief, SavedDraft,
+  Grant, WritingBrief, SavedDraft, FunderRequirements,
   wordCount, downloadTxt, downloadPdf,
 } from "./types";
 import LeftPanel from "./LeftPanel";
@@ -36,6 +36,11 @@ export default function GrantBuilderPage() {
   const [briefLoading,   setBriefLoading]   = useState(false);
   const [briefError,     setBriefError]     = useState<string | null>(null);
   const [briefExpanded,  setBriefExpanded]  = useState(true);
+
+  // ── Requirements ───────────────────────────────────────────────────────────
+  const [requirements,        setRequirements]        = useState<FunderRequirements | null>(null);
+  const [requirementsLoading, setRequirementsLoading] = useState(false);
+  const [checkedCriteria,     setCheckedCriteria]     = useState<Set<string>>(new Set());
 
   // ── Generation ─────────────────────────────────────────────────────────────
   const [sections,          setSections]          = useState<Record<string, string>>({});
@@ -94,6 +99,32 @@ export default function GrantBuilderPage() {
       .finally(() => setLoadingGrants(false));
   }, []);
 
+  // ── Requirements fetch ─────────────────────────────────────────────────────
+  const fetchRequirements = useCallback(async (grantId: string) => {
+    setRequirementsLoading(true);
+    try {
+      // Check if already stored on the grant
+      const grant = grants.find((g) => g.id === grantId);
+      const stored = (grant as Record<string, unknown>)?.aiRequirements as FunderRequirements | null;
+      if (stored && Array.isArray(stored.criteria) && stored.criteria.length > 0) {
+        setRequirements(stored);
+        setCheckedCriteria(new Set());
+        return;
+      }
+      const res = await authFetch("/api/grants/write", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grantId, mode: "requirements" }),
+      });
+      const data = await res.json();
+      if (data.requirements) {
+        setRequirements(data.requirements);
+        setCheckedCriteria(new Set());
+      }
+    } catch { /* silently ignore — requirements are optional */ }
+    finally { setRequirementsLoading(false); }
+  }, [grants]);
+
   // ── Brief ──────────────────────────────────────────────────────────────────
   const runBrief = useCallback(async () => {
     if (!selectedGrantId) return;
@@ -107,6 +138,7 @@ export default function GrantBuilderPage() {
         setBrief(grant.aiBrief as unknown as WritingBrief);
         setBriefExpanded(true);
         setBriefLoading(false);
+        fetchRequirements(selectedGrantId);
         return;
       }
 
@@ -119,12 +151,13 @@ export default function GrantBuilderPage() {
       if (!res.ok) throw new Error(data.error || "Brief failed");
       setBrief(data.brief);
       setBriefExpanded(true);
+      fetchRequirements(selectedGrantId);
     } catch (err) {
       setBriefError(err instanceof Error ? err.message : "Brief failed");
     } finally {
       setBriefLoading(false);
     }
-  }, [selectedGrantId, grants]);
+  }, [selectedGrantId, grants, fetchRequirements]);
 
   // ── Generate all ───────────────────────────────────────────────────────────
   const generateAll = useCallback(async () => {
@@ -152,7 +185,7 @@ export default function GrantBuilderPage() {
         const res  = await authFetch("/api/grants/write", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ grantId: selectedGrantId, mode: "section", section, brief, tone, length, previousSections: prev, customInstructions: ci }),
+          body: JSON.stringify({ grantId: selectedGrantId, mode: "section", section, brief, tone, length, previousSections: prev, customInstructions: ci, requirements: requirements ?? undefined }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Section failed");
@@ -185,7 +218,7 @@ export default function GrantBuilderPage() {
       const res  = await authFetch("/api/grants/write", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ grantId: selectedGrantId, mode: "section", section, brief, tone, length, previousSections: prev, customInstructions: ci }),
+        body: JSON.stringify({ grantId: selectedGrantId, mode: "section", section, brief, tone, length, previousSections: prev, customInstructions: ci, requirements: requirements ?? undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
@@ -336,7 +369,7 @@ export default function GrantBuilderPage() {
         const res = await authFetch("/api/grants/write", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ grantId: selectedGrantId, mode: "section", section, brief, tone, length, previousSections: prev, customInstructions: ci }),
+          body: JSON.stringify({ grantId: selectedGrantId, mode: "section", section, brief, tone, length, previousSections: prev, customInstructions: ci, requirements: requirements ?? undefined }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Section failed");
@@ -653,6 +686,14 @@ export default function GrantBuilderPage() {
             doneCount={doneCount}
             customInstructions={customInstructions}
             onCustomInstructions={setCustomInstructions}
+            requirements={requirements}
+            requirementsLoading={requirementsLoading}
+            checkedCriteria={checkedCriteria}
+            onToggleCriteria={(c) => setCheckedCriteria((prev) => {
+              const next = new Set(prev);
+              next.has(c) ? next.delete(c) : next.add(c);
+              return next;
+            })}
           />
 
           <DocumentPanel
@@ -682,6 +723,8 @@ export default function GrantBuilderPage() {
             onExportDoc={exportDoc}
             exportingDoc={exportingDoc}
             hasSections={hasSections}
+            requirements={requirements}
+            checkedCriteria={checkedCriteria}
           />
         </div>
       )}

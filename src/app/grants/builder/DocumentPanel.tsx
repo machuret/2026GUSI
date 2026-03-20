@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Sparkles, Loader2, Copy, RefreshCw, CheckCircle, Download, Save, FileUp, FileDown, RotateCcw, ShieldCheck, ChevronsRight } from "lucide-react";
-import { SECTION_META, SectionName, wordCount } from "./types";
+import { Sparkles, Loader2, Copy, RefreshCw, CheckCircle, Download, Save, FileUp, FileDown, RotateCcw, ShieldCheck, ChevronsRight, ClipboardList } from "lucide-react";
+import { SECTION_META, SectionName, wordCount, FunderRequirements } from "./types";
 
 interface Props {
   enabledList: readonly SectionName[];
@@ -26,6 +26,8 @@ interface Props {
   onExportDoc: () => void;
   exportingDoc: boolean;
   hasSections: boolean;
+  requirements: FunderRequirements | null;
+  checkedCriteria: Set<string>;
 }
 
 export default function DocumentPanel({
@@ -33,7 +35,13 @@ export default function DocumentPanel({
   copied, saving, saveMsg, totalWords, grantName,
   onCopySection, onCopyAll, onRegenSection, onRegenAll, onEditSection,
   onDownload, onDownloadPdf, exportingPdf, onSaveDraft, onExportDoc, exportingDoc, hasSections,
+  requirements, checkedCriteria,
 }: Props) {
+  const totalCriteria = requirements
+    ? requirements.criteria.length + requirements.mandatoryRequirements.length
+    : 0;
+  const coveredCount = totalCriteria > 0 ? checkedCriteria.size : 0;
+  const coveragePct  = totalCriteria > 0 ? Math.round((coveredCount / totalCriteria) * 100) : 0;
   if (!hasSections && !generating) {
     return (
       <div className="flex-1 min-w-0 rounded-xl border border-dashed border-gray-300 py-32 text-center">
@@ -50,7 +58,8 @@ export default function DocumentPanel({
     <div className="flex-1 min-w-0 flex flex-col gap-4">
       {/* Toolbar */}
       {hasSections && (
-        <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-2.5">
+        <div className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5">
+          <div className="flex items-center justify-between">
           <p className="text-xs text-gray-500">
             <span className="font-semibold text-gray-800">{totalWords.toLocaleString()}</span> total words
             &nbsp;·&nbsp;
@@ -115,6 +124,25 @@ export default function DocumentPanel({
               Save draft
             </button>
           </div>
+          </div>
+          {/* Criteria coverage bar */}
+          {totalCriteria > 0 && (
+            <div className="flex items-center gap-3 pt-1 border-t border-gray-100">
+              <ClipboardList className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[10px] font-medium text-violet-700">Funder criteria covered</span>
+                  <span className="text-[10px] font-bold text-violet-700">{coveredCount}/{totalCriteria} ({coveragePct}%)</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${coveragePct >= 80 ? "bg-green-500" : coveragePct >= 50 ? "bg-violet-500" : "bg-amber-400"}`}
+                    style={{ width: `${coveragePct}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

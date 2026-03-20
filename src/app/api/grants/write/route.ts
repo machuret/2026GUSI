@@ -31,6 +31,11 @@ const briefSchema = z.object({
   mode: z.literal("brief"),
 });
 
+const requirementsSchema = z.object({
+  grantId: z.string().min(1),
+  mode: z.literal("requirements"),
+});
+
 const sectionSchema = z.object({
   grantId: z.string().min(1),
   mode: z.literal("section"),
@@ -40,9 +45,10 @@ const sectionSchema = z.object({
   length: z.enum(["concise", "standard", "detailed"]).default("standard"),
   previousSections: z.record(z.string()).optional(),
   customInstructions: z.string().optional(),
+  requirements: z.record(z.unknown()).optional(),
 });
 
-const bodySchema = z.discriminatedUnion("mode", [briefSchema, sectionSchema]);
+const bodySchema = z.discriminatedUnion("mode", [briefSchema, requirementsSchema, sectionSchema]);
 
 const WORD_TARGETS: Record<string, number> = {
   concise: 150,
@@ -68,6 +74,47 @@ const SECTION_INSTRUCTIONS: Record<Section, string> = {
   "Sustainability Plan": "Explain specifically how the project or its outcomes will continue after the grant period ends. Cover: revenue model (earned income, future grants, government contracts, membership fees), partnerships that will sustain the work, plans to scale or embed into ongoing operations, community ownership or handover plans, and any commitments already secured. Be concrete — 'we will seek further funding' is not a sustainability plan.",
   "Contact Details": "Provide the primary contact person for this grant application. Format as: Full Name, Position/Title, Organisation Name, Phone Number, Email Address, Mailing Address. If available, also include a secondary contact. Use the organisation details from the company profile. Present the information in a clear, professional format suitable for a formal grant application.",
 };
+
+/** Build a rich GUSI-specific facts block so AI uses real org details by name */
+function buildGusiFacts(profile: Record<string, unknown> | null, company: { companyName: string; industry: string; website: string }): string {
+  if (!profile && !company.companyName) return "";
+  const lines: string[] = [];
+  const name = company.companyName || "our organisation";
+  lines.push(`Organisation Name: ${name}`);
+  if (company.website)            lines.push(`Website: ${company.website}`);
+  if (profile?.location)          lines.push(`Location: ${profile.location}${profile.country ? `, ${profile.country}` : ""}`);
+  if (profile?.yearFounded)       lines.push(`Year Founded: ${profile.yearFounded}`);
+  if (profile?.teamSize)          lines.push(`Team Size: ${profile.teamSize}`);
+  if (profile?.orgType)           lines.push(`Organisation Type: ${profile.orgType}${profile.orgType2 ? ` / ${profile.orgType2}` : ""}`);
+  if (profile?.sector)            lines.push(`Sector: ${profile.sector}${profile.subSector ? ` / ${profile.subSector}` : ""}`);
+  if (profile?.stage)             lines.push(`Stage: ${profile.stage}`);
+  if (profile?.annualRevenue)     lines.push(`Annual Revenue: ${profile.annualRevenue}`);
+  if (profile?.isRegisteredCharity) lines.push("Registered Charity: Yes");
+  if (profile?.hasEIN)            lines.push("Has EIN (tax-exempt): Yes");
+  if (profile?.womanOwned)        lines.push("Woman-owned: Yes");
+  if (profile?.indigenousOwned)   lines.push("Indigenous-owned: Yes");
+  const areas = profile?.focusAreas as string[] | null;
+  if (areas?.length)              lines.push(`Focus Areas: ${areas.join(", ")}`);
+
+  if (profile?.missionStatement)  lines.push(`\nMission Statement:\n${profile.missionStatement}`);
+  if (profile?.keyActivities)     lines.push(`\nKey Programs & Activities:\n${profile.keyActivities}`);
+  if (profile?.uniqueStrengths)   lines.push(`\nUnique Strengths & Differentiators:\n${profile.uniqueStrengths}`);
+  if (profile?.pastGrantsWon)     lines.push(`\nPast Grants Won (use these as proof of track record):\n${profile.pastGrantsWon}`);
+
+  // Contacts/founders — use real names
+  const contacts = profile?.contacts as { name: string; role?: string; email?: string }[] | null;
+  if (contacts?.length) {
+    lines.push(`\nFounders / Key Contacts:`);
+    contacts.forEach((c) => {
+      const parts = [c.name, c.role, c.email].filter(Boolean).join(" | ");
+      lines.push(`  - ${parts}`);
+    });
+  } else if (profile?.contactName) {
+    lines.push(`\nPrimary Contact: ${profile.contactName}${profile.contactRole ? `, ${profile.contactRole}` : ""}`);
+  }
+
+  return `## GUSI FACTS — USE THESE BY NAME IN EVERY SECTION\nThese are real, verified facts about the applicant organisation. Ground your writing in these specifics:\n\n${lines.join("\n")}`;
+}
 
 function buildGrantContext(grant: Record<string, unknown>): string {
   const lines = [
@@ -155,6 +202,61 @@ export async function POST(req: NextRequest) {
       crawledContent = await crawlGrantUrl(grant.url as string);
     }
 
+    // ── MODE: requirements ─────────────────────────────────────────────────
+    if (mode === "requirements") {
+      if (!crawledContent || crawledContent.length < 100) {
+        return NextResponse.json({
+          success: true,
+          requirements: { criteria: [], wordLimits: {}, evaluationRubric: [], mandatoryRequirements: [] },
+          note: "No crawled content available — requirements could not be extracted.",
+        });
+      }
+
+      const reqSystemPrompt = `You are a grant requirements analyst. Extract structured application requirements from the grant page content provided.
+
+Return ONLY valid JSON:
+{
+  "criteria": ["<evaluation criterion 1>", "<evaluation criterion 2>"],
+  "wordLimits": { "<Section Name>": <word limit as number> },
+  "evaluationRubric": ["<rubric item e.g. Innovation (30%)>"],
+  "mandatoryRequirements": ["<hard requirement e.g. Must be registered non-profit>"]
+}
+
+RULES:
+- criteria: the specific things the funder will assess — extract from headings, scoring guides, FAQs. Up to 12.
+- wordLimits: only include if explicit word/character limits are mentioned for specific sections.
+- evaluationRubric: scoring weights if mentioned (e.g. "Innovation worth 40%").
+- mandatoryRequirements: eligibility hard gates, registration requirements, geography restrictions.
+- If a field has nothing to extract, return an empty array or empty object.
+- Never invent criteria not present in the text.`;
+
+      const reqUserPrompt = `Extract grant application requirements from this grant page.
+Grant: ${grant.name as string}
+Funder: ${(grant.founder as string) ?? "Unknown"}
+
+PAGE CONTENT:
+${crawledContent.slice(0, 12000)}`;
+
+      let requirements: Record<string, unknown> = { criteria: [], wordLimits: {}, evaluationRubric: [], mandatoryRequirements: [] };
+      try {
+        const reqResult = await callOpenAIWithUsage({
+          systemPrompt: reqSystemPrompt,
+          userPrompt: reqUserPrompt,
+          model: MODEL_CONFIG.grantsWrite,
+          maxTokens: 800,
+          temperature: 0,
+          jsonMode: true,
+        });
+        logAiUsage({ model: MODEL_CONFIG.grantsWrite, feature: "grants_requirements", promptTokens: reqResult.promptTokens, completionTokens: reqResult.completionTokens });
+        requirements = JSON.parse(reqResult.content);
+      } catch { /* return empty on failure */ }
+
+      // Persist to Grant record
+      await db.from("Grant").update({ aiRequirements: requirements, updatedAt: new Date().toISOString() }).eq("id", grantId);
+
+      return NextResponse.json({ success: true, requirements });
+    }
+
     // ── Build examples context ──────────────────────────────────────────────
     const examples: Record<string, unknown>[] = allExamples ?? [];
 
@@ -203,6 +305,7 @@ export async function POST(req: NextRequest) {
     // ── Assemble master context block ──────────────────────────────────────
     const contextParts: string[] = [
       buildGrantContext(grant as Record<string, unknown>),
+      buildGusiFacts(profile as Record<string, unknown> | null, company),
       profile ? buildProfileContext(profile as Record<string, unknown>) : "",
       funderTemplateBlock,
       company.block,
@@ -278,7 +381,7 @@ Return ONLY valid JSON — no markdown, no explanation:
     }
 
     // ── MODE: section ──────────────────────────────────────────────────────
-    const { section, brief, tone, length, previousSections, customInstructions } = parsed.data as z.infer<typeof sectionSchema>;
+    const { section, brief, tone, length, previousSections, customInstructions, requirements } = parsed.data as z.infer<typeof sectionSchema>;
 
     // ── Contact Details: build directly from profile fields — no AI needed ──
     if (section === "Contact Details") {
@@ -315,13 +418,22 @@ Return ONLY valid JSON — no markdown, no explanation:
       ? 'Write in first person ("We are…", "Our organisation…", "We will…")'
       : 'Write in third person ("The organisation is…", "The team will…")';
 
+    // Build criteria block from requirements if available
+    const criteria = (requirements?.criteria as string[] | undefined) ?? (grant.aiRequirements as Record<string, unknown> | null)?.criteria as string[] | undefined ?? [];
+    const mandatoryReqs = (requirements?.mandatoryRequirements as string[] | undefined) ?? (grant.aiRequirements as Record<string, unknown> | null)?.mandatoryRequirements as string[] | undefined ?? [];
+    const evalRubric = (requirements?.evaluationRubric as string[] | undefined) ?? (grant.aiRequirements as Record<string, unknown> | null)?.evaluationRubric as string[] | undefined ?? [];
+
+    const criteriaBlock = criteria.length > 0
+      ? `\n\n## FUNDER EVALUATION CRITERIA (your writing MUST address each of these)\n${criteria.map((c: string) => `- ${c}`).join("\n")}${evalRubric.length > 0 ? `\n\nScoring Rubric:\n${evalRubric.map((r: string) => `- ${r}`).join("\n")}` : ""}${mandatoryReqs.length > 0 ? `\n\nMandatory Requirements (hard gates — must be addressed):\n${mandatoryReqs.map((r: string) => `- ${r}`).join("\n")}` : ""}`
+      : "";
+
     const briefBlock = `## STRATEGIC WRITING BRIEF\nFunder Priorities: ${(brief.funderPriorities as string[] | undefined)?.join(", ") ?? "N/A"}
 Key Themes: ${(brief.keyThemes as string[] | undefined)?.join(", ") ?? "N/A"}
 Winning Angle: ${brief.winningAngle ?? "N/A"}
 Tone Guidance: ${brief.toneGuidance ?? "N/A"}
 Keywords to use: ${(brief.keywordsToUse as string[] | undefined)?.join(", ") ?? "N/A"}
 Eligibility Strengths: ${(brief.eligibilityStrengths as string[] | undefined)?.join(", ") ?? "N/A"}
-Eligibility Risks to address: ${(brief.eligibilityRisks as string[] | undefined)?.join(", ") ?? "N/A"}`;
+Eligibility Risks to address: ${(brief.eligibilityRisks as string[] | undefined)?.join(", ") ?? "N/A"}${criteriaBlock}`;
 
     const sectionExamplesBlock = buildExamplesContext(section);
 
@@ -358,7 +470,8 @@ ${briefBlock}
 FULL CONTEXT:
 ${masterContext}
 
-Write only the section content — no heading, no preamble, no "Here is the section:" intro. Just the prose.${sectionExamplesBlock ? `\n\n${sectionExamplesBlock}` : ""}${prevSectionsBlock}`;
+Write only the section content — no heading, no preamble, no "Here is the section:" intro. Just the prose.
+IMPORTANT: Reference the organisation by its real name, mention specific programs, real team members, and real achievements from the GUSI FACTS block — never use placeholders like [Organisation Name].${sectionExamplesBlock ? `\n\n${sectionExamplesBlock}` : ""}${prevSectionsBlock}`;
 
     const result = await callOpenAIWithUsage({
       systemPrompt,

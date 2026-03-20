@@ -13,6 +13,13 @@ export interface WritingBrief {
   keywordsToUse: string[];
 }
 
+export interface FunderRequirements {
+  criteria: string[];
+  wordLimits: Record<string, number>;
+  evaluationRubric: string[];
+  mandatoryRequirements: string[];
+}
+
 export interface SavedDraft {
   id: string;
   grantId: string;

@@ -5,10 +5,10 @@ import { useState, useEffect } from "react";
 import {
   Sparkles, Loader2, RefreshCw, CheckCircle, AlertCircle,
   ChevronDown, ChevronUp, Lightbulb, Target, MessageSquarePlus, AlertTriangle, Filter,
-  Building2, Plus, Trash2, Pencil, X,
+  Building2, Plus, Trash2, Pencil, X, ClipboardList,
 } from "lucide-react";
 import {
-  ALL_SECTIONS, SECTION_META, SectionName, Grant, WritingBrief, Tone, Length, FunderTemplate,
+  ALL_SECTIONS, SECTION_META, SectionName, Grant, WritingBrief, Tone, Length, FunderTemplate, FunderRequirements,
 } from "./types";
 import { authFetch } from "@/lib/authFetch";
 
@@ -40,6 +40,10 @@ interface Props {
   doneCount: number;
   customInstructions: Record<string, string>;
   onCustomInstructions: (v: Record<string, string>) => void;
+  requirements: FunderRequirements | null;
+  requirementsLoading: boolean;
+  checkedCriteria: Set<string>;
+  onToggleCriteria: (c: string) => void;
 }
 
 const inputCls =
@@ -53,7 +57,9 @@ export default function LeftPanel({
   sections, generating, generatingSection, progress, enabledList, genError,
   onGenerateAll, onStopGeneration, doneCount,
   customInstructions, onCustomInstructions,
+  requirements, requirementsLoading, checkedCriteria, onToggleCriteria,
 }: Props) {
+  const [criteriaOpen, setCriteriaOpen] = useState(true);
   const [ciOpen, setCiOpen] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
@@ -330,6 +336,85 @@ export default function LeftPanel({
               Brief ready — click to expand ↓
             </button>
           )}
+        </div>
+      )}
+
+      {/* Funder Criteria Checklist */}
+      {(requirements && (requirements.criteria.length > 0 || requirements.mandatoryRequirements.length > 0)) && (
+        <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+          <button
+            onClick={() => setCriteriaOpen(v => !v)}
+            className="w-full flex items-center justify-between mb-2"
+          >
+            <h2 className="text-sm font-semibold text-violet-800 flex items-center gap-2">
+              <ClipboardList className="h-4 w-4" /> Funder Criteria
+              <span className="ml-1 rounded-full bg-violet-200 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
+                {checkedCriteria.size}/{requirements.criteria.length + requirements.mandatoryRequirements.length}
+              </span>
+            </h2>
+            {criteriaOpen ? <ChevronUp className="h-4 w-4 text-violet-400" /> : <ChevronDown className="h-4 w-4 text-violet-400" />}
+          </button>
+
+          {criteriaOpen && (
+            <div className="space-y-1.5">
+              {requirements.mandatoryRequirements.length > 0 && (
+                <>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-red-600 mt-1 mb-1">Mandatory Requirements</p>
+                  {requirements.mandatoryRequirements.map((req, i) => {
+                    const key = `mandatory:${req}`;
+                    const checked = checkedCriteria.has(key);
+                    return (
+                      <label key={i} className="flex items-start gap-2 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => onToggleCriteria(key)}
+                          className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-red-300 text-red-600 focus:ring-red-400"
+                        />
+                        <span className={`text-xs leading-relaxed ${checked ? "line-through text-gray-400" : "text-red-700"}`}>{req}</span>
+                      </label>
+                    );
+                  })}
+                  {requirements.criteria.length > 0 && <div className="border-t border-violet-200 my-2" />}
+                </>
+              )}
+              {requirements.criteria.length > 0 && (
+                <>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-600 mb-1">Evaluation Criteria</p>
+                  {requirements.criteria.map((criterion, i) => {
+                    const key = `criterion:${criterion}`;
+                    const checked = checkedCriteria.has(key);
+                    return (
+                      <label key={i} className="flex items-start gap-2 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => onToggleCriteria(key)}
+                          className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-violet-300 text-violet-600 focus:ring-violet-400"
+                        />
+                        <span className={`text-xs leading-relaxed ${checked ? "line-through text-gray-400" : "text-violet-800"}`}>{criterion}</span>
+                      </label>
+                    );
+                  })}
+                </>
+              )}
+              {requirements.evaluationRubric.length > 0 && (
+                <div className="mt-2 rounded-lg bg-white border border-violet-100 p-2">
+                  <p className="text-[10px] font-semibold text-violet-600 mb-1">Scoring Rubric</p>
+                  {requirements.evaluationRubric.map((r, i) => (
+                    <p key={i} className="text-xs text-violet-700">• {r}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Loading state for requirements */}
+      {requirementsLoading && (
+        <div className="flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-xs text-violet-600">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Extracting funder criteria…
         </div>
       )}
 

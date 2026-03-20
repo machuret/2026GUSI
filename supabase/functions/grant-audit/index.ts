@@ -135,19 +135,22 @@ async function callOpenAI(opts: {
 
 // ── Default audit prompt ─────────────────────────────────────────────────────
 
-const DEFAULT_AUDIT_PROMPT = `You are a Grant Application Auditor. Your job is to review a draft grant application and assess its accuracy and quality against the organisation's real information (vault documents and grant profile).
+const DEFAULT_AUDIT_PROMPT = `You are a Grant Application Auditor. Your job is to review a draft grant application and assess its accuracy and quality against the organisation's real information (vault documents and grant profile), AND against the funder's specific evaluation criteria when provided.
 
 Audit the following dimensions:
 1. **Accuracy** — Does the content accurately reflect the organisation's actual activities, mission, financials, and team?
 2. **Completeness** — Are there gaps where key information is missing or vague?
 3. **Alignment** — Does the application align with the grant's stated eligibility criteria and funder priorities?
 4. **Evidence** — Are claims supported by specific, verifiable evidence from the vault?
-5. **Improvements** — What concrete improvements can be made based on available vault content?
+5. **Criteria Coverage** — If FUNDER REQUIREMENTS are provided, does each section address the specific evaluation criteria?
+6. **Improvements** — What concrete improvements can be made based on available vault content?
 
 For each section of the draft, provide:
 - An accuracy score (0-100)
 - Specific issues found (if any)
 - Concrete improvements using real information from the vault
+
+If FUNDER REQUIREMENTS are provided, also populate criteriaChecks for each criterion.
 
 Return ONLY valid JSON in this exact format, no markdown:
 {
@@ -162,7 +165,15 @@ Return ONLY valid JSON in this exact format, no markdown:
       "improvements": ["<concrete improvement 1>", ...]
     }
   ],
-  "topRecommendations": ["<priority action 1>", "<priority action 2>", "<priority action 3>"]
+  "topRecommendations": ["<priority action 1>", "<priority action 2>", "<priority action 3>"],
+  "criteriaChecks": [
+    {
+      "criterion": "<criterion text>",
+      "addressed": <true|false>,
+      "section": "<which section addresses it, or null>",
+      "note": "<brief note on how well it is addressed or what is missing>"
+    }
+  ]
 }`;
 
 // ── Serve ────────────────────────────────────────────────────────────────────
@@ -205,12 +216,13 @@ serve(async (req: Request) => {
       const grantName = draft.grantName as string;
       const sections = (draft.sections as Record<string, string>) ?? {};
 
-      // 2. Load grant metadata
+      // 2. Load grant metadata + aiRequirements
       let grantDetails = "";
+      let aiRequirements: { criteria?: string[]; evaluationRubric?: string[]; mandatoryRequirements?: string[] } | null = null;
       if (draft.grantId) {
         const { data: grant } = await db
           .from("Grant")
-          .select("name, eligibility, founder, amount, geographicScope, howToApply")
+          .select("name, eligibility, founder, amount, geographicScope, howToApply, aiRequirements")
           .eq("id", draft.grantId)
           .maybeSingle();
         if (grant) {
@@ -222,6 +234,7 @@ serve(async (req: Request) => {
             grant.geographicScope ? `Geographic Scope: ${grant.geographicScope}` : null,
             grant.howToApply      ? `How to Apply: ${grant.howToApply}` : null,
           ].filter(Boolean).join("\n");
+          aiRequirements = (grant.aiRequirements as typeof aiRequirements) ?? null;
         }
       }
 
@@ -247,9 +260,26 @@ serve(async (req: Request) => {
         .map(([k, v]) => `### ${k}\n${(v as string).trim()}`)
         .join("\n\n");
 
+      // Build criteria block if aiRequirements were extracted
+      let criteriaBlock = "";
+      if (aiRequirements) {
+        const parts: string[] = [];
+        if (aiRequirements.criteria?.length) {
+          parts.push(`Evaluation Criteria (check each section addresses these):\n${aiRequirements.criteria.map((c) => `- ${c}`).join("\n")}`);
+        }
+        if (aiRequirements.evaluationRubric?.length) {
+          parts.push(`Scoring Rubric:\n${aiRequirements.evaluationRubric.map((r) => `- ${r}`).join("\n")}`);
+        }
+        if (aiRequirements.mandatoryRequirements?.length) {
+          parts.push(`Mandatory Requirements (hard gates — verify these are satisfied):\n${aiRequirements.mandatoryRequirements.map((r) => `- ${r}`).join("\n")}`);
+        }
+        if (parts.length > 0) criteriaBlock = `## FUNDER REQUIREMENTS\n${parts.join("\n\n")}`;
+      }
+
       const userPrompt = [
         `## GRANT APPLICATION BEING AUDITED: ${grantName}`,
         grantDetails ? `## GRANT DETAILS\n${grantDetails}` : "",
+        criteriaBlock,
         profileBlock,
         vaultBlock,
         `## DRAFT APPLICATION CONTENT\n${draftBlock}`,
@@ -282,6 +312,7 @@ serve(async (req: Request) => {
           summary: audit.summary ?? "",
           sectionAudits: audit.sectionAudits ?? [],
           topRecommendations: audit.topRecommendations ?? [],
+          criteriaChecks: audit.criteriaChecks ?? [],
           fullResult: audit,
         })
         .select("id")
