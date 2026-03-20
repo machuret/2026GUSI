@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
       }
 
       const rawHtml = await pageRes.text();
-      html = stripHtml(rawHtml).slice(0, 20000); // increased to ~5k tokens
+      html = stripHtml(rawHtml).slice(0, 48000); // ~12k tokens — covers most listing pages fully
     } catch (fetchErr) {
       const msg = fetchErr instanceof Error ? fetchErr.message : "Network error";
       const isTimeout = msg.toLowerCase().includes("timeout") || msg.toLowerCase().includes("abort");
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    if (html.length < 200) {
+    if (html.length < 100) {
       return NextResponse.json({
         error: isJsHeavy
           ? "Page returned no readable content — this site requires a browser to render. Try copying a direct search results URL with filters applied."
@@ -135,7 +135,7 @@ ${html}`;
 
     let result: Record<string, unknown>;
     try {
-      result = await callOpenAIJson({ systemPrompt, userPrompt, maxTokens: 6000, temperature: 0.05 });
+      result = await callOpenAIJson({ systemPrompt, userPrompt, model: "gpt-4o-mini", maxTokens: 6000, temperature: 0.05 });
     } catch (aiErr) {
       return NextResponse.json({
         error: aiErr instanceof Error ? aiErr.message : "AI extraction failed",
@@ -147,13 +147,19 @@ ${html}`;
 
     const grants = Array.isArray(result.grants) ? result.grants : [];
 
-    // Resolve relative URLs
+    // Resolve relative, protocol-relative, and absolute URLs
     const baseUrl = new URL(url);
     const resolvedGrants = grants.map((g: Record<string, unknown>) => ({
       ...g,
-      url: typeof g.url === "string" && g.url.startsWith("/")
-        ? `${baseUrl.origin}${g.url}`
-        : (g.url || url),
+      url: (() => {
+        const raw = typeof g.url === "string" ? g.url.trim() : "";
+        if (!raw) return url;
+        if (raw.startsWith("//")) return `${baseUrl.protocol}${raw}`;
+        if (raw.startsWith("/")) return `${baseUrl.origin}${raw}`;
+        if (raw.startsWith("http")) return raw;
+        // relative path like "../grants/xyz" or "grants/xyz"
+        try { return new URL(raw, url).href; } catch { return url; }
+      })(),
     }));
 
     return NextResponse.json({
