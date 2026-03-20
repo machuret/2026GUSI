@@ -168,6 +168,7 @@ export default function GrantsPage() {
     let ok = 0;
     let errors = 0;
     for (let i = 0; i < ids.length; i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 500));
       try {
         const res = await authFetch("/api/grants/analyse", {
           method: "POST",

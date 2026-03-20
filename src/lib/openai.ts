@@ -11,8 +11,8 @@ export const MODEL_CONFIG = {
   styleAnalyse:    "gpt-4o-mini",
   vaultCrawl:      "gpt-4o-mini",
   vaultAsk:        "gpt-4o-mini",
-  grantsAnalyse:   "gpt-4o",
-  grantsWrite:     "gpt-4o",
+  grantsAnalyse:   "gpt-4o-mini",
+  grantsWrite:     "gpt-4o-mini",
   companyResearch: "gpt-4o-mini",
 } as const;
 

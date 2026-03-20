@@ -279,6 +279,37 @@ Return ONLY valid JSON — no markdown, no explanation:
 
     // ── MODE: section ──────────────────────────────────────────────────────
     const { section, brief, tone, length, previousSections, customInstructions } = parsed.data as z.infer<typeof sectionSchema>;
+
+    // ── Contact Details: build directly from profile fields — no AI needed ──
+    if (section === "Contact Details") {
+      const p = profile as Record<string, unknown> | null;
+      const contacts = p?.contacts as { name: string; role?: string; email?: string; phone?: string }[] | null;
+      const lines: string[] = [];
+
+      if (contacts && contacts.length > 0) {
+        contacts.forEach((c, i) => {
+          if (i === 0) lines.push("PRIMARY CONTACT");
+          else lines.push(`ADDITIONAL CONTACT ${i + 1}`);
+          lines.push(`Name: ${c.name}`);
+          if (c.role)  lines.push(`Position: ${c.role}`);
+          if (c.email) lines.push(`Email: ${c.email}`);
+          if (c.phone) lines.push(`Phone: ${c.phone}`);
+          lines.push("");
+        });
+      } else {
+        if (p?.contactName)    lines.push(`Name: ${p.contactName}`);
+        if (p?.contactRole)    lines.push(`Position: ${p.contactRole}`);
+        if (p?.contactEmail)   lines.push(`Email: ${p.contactEmail}`);
+        if (p?.contactPhone)   lines.push(`Phone: ${p.contactPhone}`);
+        if (p?.contactAddress) lines.push(`Address: ${p.contactAddress}`);
+        else if (p?.location)  lines.push(`Location: ${p.location}${p?.country ? `, ${p.country}` : ""}`);
+      }
+
+      const content = lines.filter(Boolean).join("\n").trim()
+        || "Please complete your Grant Profile contact details to populate this section.";
+
+      return NextResponse.json({ success: true, section, content, wordCount: content.split(/\s+/).filter(Boolean).length });
+    }
     const wordTarget = WORD_TARGETS[length];
     const toneInstruction = tone === "first_person"
       ? 'Write in first person ("We are…", "Our organisation…", "We will…")'
