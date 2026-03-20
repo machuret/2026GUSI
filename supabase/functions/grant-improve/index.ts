@@ -245,9 +245,10 @@ serve(async (req: Request) => {
     let grantFunder: string | null = null;
     let grantUrl: string | null = null;
     let briefBlock = "";
+    let criteriaBlock = "";
     const [grantRes, { data: profile }, vaultBlock] = await Promise.all([
       draft.grantId
-        ? db.from("Grant").select("name, eligibility, founder, amount, geographicScope, howToApply, url").eq("id", draft.grantId).maybeSingle()
+        ? db.from("Grant").select("name, eligibility, founder, amount, geographicScope, howToApply, url, aiRequirements").eq("id", draft.grantId).maybeSingle()
         : Promise.resolve({ data: null }),
       db.from("GrantProfile").select("*").eq("companyId", DEMO_COMPANY_ID).maybeSingle(),
       getVaultBlock(db),
@@ -264,6 +265,16 @@ serve(async (req: Request) => {
         g.geographicScope ? `Geographic Scope: ${g.geographicScope}` : null,
         g.howToApply    ? `How to Apply: ${g.howToApply}` : null,
       ].filter(Boolean).join("\n");
+
+      // Build criteria block from aiRequirements if extracted
+      const req = g.aiRequirements as { criteria?: string[]; evaluationRubric?: string[]; mandatoryRequirements?: string[] } | null;
+      if (req) {
+        const parts: string[] = [];
+        if (req.criteria?.length) parts.push(`Evaluation Criteria (ensure each is addressed):\n${req.criteria.map((c) => `- ${c}`).join("\n")}`);
+        if (req.evaluationRubric?.length) parts.push(`Scoring Rubric:\n${req.evaluationRubric.map((r) => `- ${r}`).join("\n")}`);
+        if (req.mandatoryRequirements?.length) parts.push(`Mandatory Requirements (hard gates):\n${req.mandatoryRequirements.map((r) => `- ${r}`).join("\n")}`);
+        if (parts.length > 0) criteriaBlock = `## FUNDER REQUIREMENTS (your rewrite MUST satisfy these)\n${parts.join("\n\n")}`;
+      }
     }
     const profileBlock = profile ? buildProfileContext(profile as Record<string, unknown>) : "";
 
@@ -326,6 +337,7 @@ serve(async (req: Request) => {
           : "",
         `## TOP-LEVEL RECOMMENDATIONS:\n${(audit.topRecommendations as string[]).map((r, i) => `${i + 1}. ${r}`).join("\n")}`,
         grantDetails ? `## GRANT DETAILS\n${grantDetails}` : "",
+        criteriaBlock,
         briefBlock,
         funderTemplateBlock,
         profileBlock,

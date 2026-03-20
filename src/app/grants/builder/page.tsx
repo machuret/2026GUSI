@@ -442,6 +442,8 @@ export default function GrantBuilderPage() {
           brief = bData.brief as WritingBrief;
         }
         // 2. Generate each section
+        // Use per-grant stored requirements — aiRequirements is already on the grant object from the grants list fetch
+        const grantRequirements = (grant as Record<string, unknown>).aiRequirements as FunderRequirements | null | undefined;
         const generatedSections: Record<string, string> = {};
         for (const section of ALL_SECTIONS) {
           if (massAbortRef.current) break;
@@ -449,7 +451,7 @@ export default function GrantBuilderPage() {
             const sRes = await authFetch("/api/grants/write", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ grantId: grant.id, mode: "section", section, brief, tone: currentTone, length: currentLength, previousSections: generatedSections, requirements: requirements ?? undefined }),
+              body: JSON.stringify({ grantId: grant.id, mode: "section", section, brief, tone: currentTone, length: currentLength, previousSections: generatedSections, requirements: grantRequirements ?? undefined }),
             });
             const sData = await sRes.json();
             if (sRes.ok && sData.content) generatedSections[section] = sData.content;
