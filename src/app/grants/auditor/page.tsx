@@ -6,7 +6,7 @@ import {
   ArrowLeft, ShieldCheck, Loader2, ChevronDown, ChevronUp,
   CheckCircle, AlertTriangle, XCircle, Info, Trophy, PenLine,
   KanbanSquare, UserCheck, Rss, Settings, BookOpen, Sparkles,
-  Clock, Zap, Trash2,
+  Clock, Zap, Trash2, ChevronsRight,
 } from "lucide-react";
 import { authFetch, edgeFn } from "@/lib/authFetch";
 
@@ -433,6 +433,37 @@ export default function GrantAuditorPage() {
                 <Link href="/grants/builder" className="font-semibold underline">Grant Builder</Link>{" "}
                 to review the improved sections, or run another audit to verify the improvements.
               </p>
+            </div>
+          )}
+
+          {/* Next Step CTA — after improve or after high score audit */}
+          {(improveResult || (auditResult && auditResult.overallScore >= 70 && !improving)) && (
+            <div className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+              <ChevronsRight className="h-5 w-5 shrink-0 text-indigo-500" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-indigo-800">
+                  {improveResult ? "Draft improved — ready to finalise" : "Strong audit score — ready to submit?"}
+                </p>
+                <p className="text-xs text-indigo-600 mt-0.5">
+                  {improveResult
+                    ? "Review the improved draft, then export it or mark this grant as Submitted in the CRM."
+                    : "Your draft scored well. Export it, or track your submission in the CRM pipeline."}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  href="/grants/builder"
+                  className="flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+                >
+                  <PenLine className="h-3.5 w-3.5" /> Review Draft
+                </Link>
+                <Link
+                  href="/grants/crm"
+                  className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+                >
+                  <KanbanSquare className="h-3.5 w-3.5" /> Update CRM →
+                </Link>
+              </div>
             </div>
           )}
           {improveError && (

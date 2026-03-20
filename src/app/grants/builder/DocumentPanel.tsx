@@ -1,6 +1,7 @@
 "use client";
 
-import { Sparkles, Loader2, Copy, RefreshCw, CheckCircle, Download, Save, FileUp, FileDown, RotateCcw } from "lucide-react";
+import Link from "next/link";
+import { Sparkles, Loader2, Copy, RefreshCw, CheckCircle, Download, Save, FileUp, FileDown, RotateCcw, ShieldCheck, ChevronsRight } from "lucide-react";
 import { SECTION_META, SectionName, wordCount } from "./types";
 
 interface Props {
@@ -114,6 +115,23 @@ export default function DocumentPanel({
               Save draft
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Next Step CTA — shown after draft is saved */}
+      {saveMsg && saveMsg.startsWith("✓") && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <ChevronsRight className="h-5 w-5 shrink-0 text-amber-500" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-amber-800">Next step — audit your draft</p>
+            <p className="text-xs text-amber-600 mt-0.5">Draft saved. Let AI check for gaps, weak sections, and improvements.</p>
+          </div>
+          <Link
+            href="/grants/auditor"
+            className="shrink-0 flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" /> Audit Draft →
+          </Link>
         </div>
       )}
 

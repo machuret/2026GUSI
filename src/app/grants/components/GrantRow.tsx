@@ -255,12 +255,43 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
               </div>
             )}
             {analysis && (
-              <AnalysisPanel
-                analysis={analysis}
-                onClose={() => setAnalysis(null)}
-                onMarkNo={async () => { await onUpdate(grant.id, { decision: "No" }); }}
-                onAddToCrm={async () => { await onUpdate(grant.id, { crmStatus: "Researching" }); }}
-              />
+              <>
+                <AnalysisPanel
+                  analysis={analysis}
+                  onClose={() => setAnalysis(null)}
+                  onMarkNo={async () => { await onUpdate(grant.id, { decision: "No" }); }}
+                  onAddToCrm={async () => { await onUpdate(grant.id, { crmStatus: "Researching" }); }}
+                />
+                {analysis.score >= 50 ? (
+                  <div className="mt-3 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <ChevronsRight className="h-5 w-5 shrink-0 text-emerald-500" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-emerald-800">Next step — write your application</p>
+                      <p className="text-xs text-emerald-600 mt-0.5">Good fit score. Start writing your grant application now.</p>
+                    </div>
+                    <Link
+                      href={`/grants/builder?grantId=${grant.id}`}
+                      className="shrink-0 flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                    >
+                      <PenLine className="h-3.5 w-3.5" /> Write Application →
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="mt-3 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <ChevronsRight className="h-5 w-5 shrink-0 text-amber-500" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-amber-800">Low fit — consider skipping this grant</p>
+                      <p className="text-xs text-amber-600 mt-0.5">AI score is below 50%. Review the gaps before writing.</p>
+                    </div>
+                    <Link
+                      href={`/grants/builder?grantId=${grant.id}`}
+                      className="shrink-0 flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                    >
+                      <PenLine className="h-3.5 w-3.5" /> Write Anyway →
+                    </Link>
+                  </div>
+                )}
+              </>
             )}
             {editing ? (
               <div>
