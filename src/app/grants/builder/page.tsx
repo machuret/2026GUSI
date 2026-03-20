@@ -202,7 +202,7 @@ export default function GrantBuilderPage() {
 
     setGeneratingSection(null);
     setGenerating(false);
-  }, [selectedGrantId, brief, enabledList, tone, length, customInstructions]);
+  }, [selectedGrantId, brief, enabledList, tone, length, customInstructions, requirements]);
 
   // ── Regen single section ───────────────────────────────────────────────────
   const regenSection = useCallback(async (section: SectionName) => {
@@ -229,7 +229,7 @@ export default function GrantBuilderPage() {
     } finally {
       setGeneratingSection(null);
     }
-  }, [selectedGrantId, brief, tone, length, sections, enabledList, customInstructions]);
+  }, [selectedGrantId, brief, tone, length, sections, enabledList, customInstructions, requirements]);
 
   // ── Save draft ─────────────────────────────────────────────────────────────
   const saveDraft = useCallback(async () => {
@@ -449,7 +449,7 @@ export default function GrantBuilderPage() {
             const sRes = await authFetch("/api/grants/write", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ grantId: grant.id, mode: "section", section, brief, tone: currentTone, length: currentLength, previousSections: generatedSections }),
+              body: JSON.stringify({ grantId: grant.id, mode: "section", section, brief, tone: currentTone, length: currentLength, previousSections: generatedSections, requirements: requirements ?? undefined }),
             });
             const sData = await sRes.json();
             if (sRes.ok && sData.content) generatedSections[section] = sData.content;
