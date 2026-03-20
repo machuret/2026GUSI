@@ -5,6 +5,8 @@ import { z } from "zod";
 import { callOpenAIJson } from "@/lib/openai";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { handleOptions } from "@/lib/cors";
+import { getCompanyContext } from "@/lib/aiContext";
+import { DEMO_COMPANY_ID } from "@/lib/constants";
 
 const bodySchema = z.object({
   query: z.string().max(500).optional(),
@@ -22,6 +24,15 @@ const bodySchema = z.object({
   { message: "At least one search filter is required" }
 );
 
+/** Extract the registrable domain from a URL string, e.g. "globalultrasoundinstitute.com" */
+function extractDomain(url: string): string | null {
+  try {
+    const { hostname } = new URL(url.startsWith("http") ? url : `https://${url}`);
+    // Strip www. prefix
+    return hostname.replace(/^www\./, "").toLowerCase();
+  } catch { return null; }
+}
+
 export async function OPTIONS() { return handleOptions(); }
 
 export async function POST(req: NextRequest) {
@@ -34,6 +45,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
     }
     const { query, geographicScope, applicantCountry, orgType, fundingSize, deadlineUrgency, eligibilityType, grantType, companyDNA, existingNames } = parsed.data;
+
+    // Load company website for domain blocklist
+    const company = await getCompanyContext(DEMO_COMPANY_ID);
+    const ownDomain = company.website ? extractDomain(company.website) : null;
 
     const systemPrompt = `You are a world-class grant research specialist with encyclopaedic knowledge of global, national, and regional funding programs. Your mission is to find the maximum number of real, currently active (or annually recurring) grant opportunities that precisely match the given filters.
 
@@ -103,7 +118,76 @@ Be exhaustive — search your knowledge across government grants, foundations, c
           : msg,
       }, { status: 500 });
     }
-    return NextResponse.json({ success: true, results: (result.results as unknown[]) ?? [] });
+
+    let rawResults = (result.results as Record<string, unknown>[]) ?? [];
+
+    // ── Pass 1: Strip own company domain ──────────────────────────────────────
+    if (ownDomain) {
+      rawResults = rawResults.filter((r) => {
+        const resultDomain = typeof r.url === "string" ? extractDomain(r.url) : null;
+        const founderStr = typeof r.founder === "string" ? r.founder.toLowerCase() : "";
+        const nameStr = typeof r.name === "string" ? r.name.toLowerCase() : "";
+        // Block if URL is own domain, or if name/founder contains own company name
+        if (resultDomain && resultDomain === ownDomain) return false;
+        if (company.companyName) {
+          const own = company.companyName.toLowerCase();
+          if (nameStr.includes(own) || founderStr.includes(own)) return false;
+        }
+        return true;
+      });
+    }
+
+    if (rawResults.length === 0) {
+      return NextResponse.json({ success: true, results: [] });
+    }
+
+    // ── Pass 2: AI verification — confirm each result is a real grant ─────────
+    const verifySystemPrompt = `You are a grant verification specialist. For each item in the list, determine whether it is a genuine external grant/funding opportunity that an organisation could apply for.
+
+REJECT if:
+- It is the applicant's own company, product, or website
+- It is a consultancy, service provider, or training course — not a grant
+- It is a news article, blog post, or directory listing — not a grant
+- The URL or name clearly belongs to the applicant organisation itself
+- It is too vague to be a real, identifiable grant program
+
+KEEP if:
+- It is a real, named grant program offered by a government, foundation, corporation, or philanthropic body
+- There is genuine external funding involved that an eligible organisation could receive
+- You have reasonable confidence it exists or has existed
+
+Return ONLY valid JSON:
+{"verified": [{"idx": <original index 0-based>, "keep": true|false, "reason": "<one short reason if false>"}]}`;
+
+    const verifyUserPrompt = `Verify each of these grant results. Company domain to block: ${ownDomain ?? "none"}. Company name to block: ${company.companyName ?? "none"}.
+
+${rawResults.map((r, i) => `[${i}] Name: ${r.name}\nFounder: ${r.founder ?? "unknown"}\nURL: ${r.url ?? "none"}`).join("\n\n")}`;
+
+    let verified: Record<string, unknown>[] = rawResults; // default: keep all if verification fails
+    try {
+      const verifyResult = await callOpenAIJson<{ verified: { idx: number; keep: boolean }[] }>({
+        systemPrompt: verifySystemPrompt,
+        userPrompt: verifyUserPrompt,
+        model: "gpt-4o-mini",
+        maxTokens: 1000,
+        temperature: 0,
+      });
+
+      if (Array.isArray(verifyResult.verified)) {
+        const keepSet = new Set(
+          verifyResult.verified.filter((v) => v.keep).map((v) => v.idx)
+        );
+        // If verification returned meaningful results, apply the filter
+        if (keepSet.size > 0 || verifyResult.verified.length === rawResults.length) {
+          verified = rawResults.filter((_, i) => keepSet.has(i));
+        }
+      }
+    } catch {
+      // Verification failed — return unfiltered results rather than nothing
+      verified = rawResults;
+    }
+
+    return NextResponse.json({ success: true, results: verified });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });
   }
