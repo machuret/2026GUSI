@@ -30,6 +30,9 @@ export interface Grant {
   complexityNotes?: string | null;
   crmStatus?: "Researching" | "Pipeline" | "Active" | "Built" | "Improved" | "Submitted" | "Won" | "Lost" | null;
   crmNotes?: string | null;
+  validationStatus?: "VALIDATED" | "FAILED" | null;
+  validatedAt?: string | null;
+  validationResult?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 }

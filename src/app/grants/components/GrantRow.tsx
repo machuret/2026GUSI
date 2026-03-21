@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   ExternalLink, Trash2, ChevronDown, ChevronUp,
   FileText, Loader2, Save, Sparkles, FlaskConical, PenLine, KanbanSquare, ChevronsRight, MoreHorizontal,
+  ShieldCheck, ShieldX, ShieldAlert,
 } from "lucide-react";
 import { authFetch } from "@/lib/authFetch";
 import type { Grant } from "@/hooks/GrantsContext";
@@ -33,6 +34,16 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
   const [analysing, setAnalysing] = useState(false);
   const [researching, setResearching] = useState(false);
   const [sendingToCrm, setSendingToCrm] = useState(false);
+  const [revalidating, setRevalidating] = useState(false);
+  const [revalidateResult, setRevalidateResult] = useState<{
+    status: "VALIDATED" | "FAILED";
+    reasons: string[];
+    linkAlive: boolean;
+    aiConfidence: number;
+    grantSignals: string[];
+    failSignals: string[];
+  } | null>(null);
+  const [revalidateError, setRevalidateError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<GrantAnalysis | null>(
     grant.aiAnalysis ? (grant.aiAnalysis as unknown as GrantAnalysis) : null
   );
@@ -82,6 +93,39 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
     setDeleting(true);
     try { await onDelete(grant.id); }
     finally { setDeleting(false); }
+  };
+
+  const handleRevalidate = async () => {
+    setRevalidating(true);
+    setRevalidateError(null);
+    setRevalidateResult(null);
+    setExpanded(true);
+    try {
+      const res = await authFetch("/api/grants/revalidate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grantId: grant.id }),
+      });
+      const data = await res.json();
+      if (data.success && data.validationStatus) {
+        setRevalidateResult({
+          status:       data.validationStatus,
+          reasons:      data.validationResult?.reasons      ?? [],
+          linkAlive:    data.validationResult?.linkAlive    ?? false,
+          aiConfidence: data.validationResult?.aiConfidence ?? 0,
+          grantSignals: data.validationResult?.grantSignals ?? [],
+          failSignals:  data.validationResult?.failSignals  ?? [],
+        });
+        // Refresh grant data in parent so badges update immediately
+        await onUpdate(grant.id, {});
+      } else {
+        setRevalidateError(data.error || "Revalidation failed");
+      }
+    } catch {
+      setRevalidateError("Network error — revalidation failed");
+    } finally {
+      setRevalidating(false);
+    }
   };
 
   const sendToCrm = async (status: Grant["crmStatus"] = "Researching") => {
@@ -161,6 +205,16 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
                     ⚠ Duplicate
                   </span>
                 )}
+                {grant.validationStatus === "VALIDATED" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-300" title={`Validated ${grant.validatedAt ? new Date(grant.validatedAt).toLocaleDateString("en-AU") : ""}`}>
+                    <ShieldCheck className="h-2.5 w-2.5" /> VALIDATED
+                  </span>
+                )}
+                {grant.validationStatus === "FAILED" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700 border border-red-300" title={`Validation failed ${grant.validatedAt ? new Date(grant.validatedAt).toLocaleDateString("en-AU") : ""}`}>
+                    <ShieldX className="h-2.5 w-2.5" /> FAILED
+                  </span>
+                )}
                 {grant.crmStatus && (
                   <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold border ${
                     grant.crmStatus === "Won"       ? "bg-green-100 text-green-700 border-green-300" :
@@ -200,6 +254,11 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
                     <ExternalLink className="h-3.5 w-3.5 text-brand-500" /> Open URL
                   </a>
                 )}
+                <button onClick={() => { handleRevalidate(); setShowActions(false); }} disabled={revalidating}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+                  {revalidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5 text-teal-500" />}
+                  Re-validate
+                </button>
                 <button onClick={() => { handleAnalyse(); setShowActions(false); }} disabled={analysing}
                   className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40">
                   {analysing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5 text-purple-500" />} AI Fit Analysis
@@ -247,7 +306,71 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
           <td colSpan={9} className="px-6 py-5">
             {saveError && <p className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700 font-medium">{saveError}</p>}
             {aiError && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{aiError}</p>}
+            {revalidateError && <p className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{revalidateError}</p>}
             {researchMsg && <p className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{researchMsg}</p>}
+            {revalidating && (
+              <div className="mb-3 flex items-center gap-2 rounded-lg bg-teal-50 border border-teal-200 px-3 py-2 text-sm text-teal-700">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Re-validating — checking link liveness and AI authenticity…
+              </div>
+            )}
+            {revalidateResult && (
+              <div className={`mb-4 rounded-xl border px-4 py-4 ${
+                revalidateResult.status === "VALIDATED"
+                  ? "border-emerald-200 bg-emerald-50"
+                  : "border-red-200 bg-red-50"
+              }`}>
+                <div className="flex items-center gap-2 mb-3">
+                  {revalidateResult.status === "VALIDATED"
+                    ? <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                    : <ShieldX className="h-5 w-5 text-red-600" />}
+                  <p className={`font-semibold text-sm ${
+                    revalidateResult.status === "VALIDATED" ? "text-emerald-800" : "text-red-800"
+                  }`}>
+                    {revalidateResult.status === "VALIDATED" ? "Grant Validated" : "Validation Failed"}
+                    <span className="ml-2 text-xs font-normal opacity-70">AI confidence: {revalidateResult.aiConfidence}%</span>
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 text-xs">
+                  <div>
+                    <p className="font-semibold text-gray-500 uppercase tracking-wide mb-1">Link</p>
+                    <p className={revalidateResult.linkAlive ? "text-emerald-700" : "text-red-600"}>
+                      {revalidateResult.linkAlive ? "✓ URL is live" : "✗ URL is dead or redirected"}
+                    </p>
+                  </div>
+                  {revalidateResult.reasons.length > 0 && (
+                    <div className="sm:col-span-2">
+                      <p className="font-semibold text-gray-500 uppercase tracking-wide mb-1">Reasons</p>
+                      <ul className="space-y-0.5">
+                        {revalidateResult.reasons.map((r, i) => (
+                          <li key={i} className="text-gray-700">· {r}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {revalidateResult.grantSignals.length > 0 && (
+                    <div>
+                      <p className="font-semibold text-emerald-600 uppercase tracking-wide mb-1">Grant signals</p>
+                      <ul className="space-y-0.5">
+                        {revalidateResult.grantSignals.map((s, i) => (
+                          <li key={i} className="text-emerald-700">✓ {s}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {revalidateResult.failSignals.length > 0 && (
+                    <div>
+                      <p className="font-semibold text-red-600 uppercase tracking-wide mb-1">Fail signals</p>
+                      <ul className="space-y-0.5">
+                        {revalidateResult.failSignals.map((s, i) => (
+                          <li key={i} className="text-red-700">✗ {s}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             {(analysing || researching) && (
               <div className="mb-3 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -350,6 +473,9 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
                   </button>
                   <button onClick={handleResearch} disabled={researching} className="flex items-center gap-1 text-xs text-brand-600 hover:underline disabled:opacity-50">
                     <Sparkles className="h-3 w-3" /> AI auto-fill missing fields
+                  </button>
+                  <button onClick={handleRevalidate} disabled={revalidating} className="flex items-center gap-1 text-xs text-teal-600 hover:underline disabled:opacity-50">
+                    <ShieldAlert className="h-3 w-3" /> Re-validate
                   </button>
                   <Link href={`/grants/builder?grantId=${grant.id}`} className="flex items-center gap-1 text-xs text-emerald-600 hover:underline font-medium">
                     <PenLine className="h-3 w-3" /> Write Application →
