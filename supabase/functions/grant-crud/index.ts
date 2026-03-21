@@ -68,6 +68,9 @@ function validateUpdateData(body: Record<string, unknown>): Record<string, unkno
     aiAnalysis: (v) => v === null || typeof v === "object",
     aiBrief: (v) => v === null || typeof v === "object",
     aiResearched: (v) => v === null || typeof v === "boolean",
+    validationStatus: (v) => v === null || v === "VALIDATED" || v === "FAILED",
+    validatedAt: (v) => v === null || typeof v === "string",
+    validationResult: (v) => v === null || typeof v === "object",
   };
 
   const clean: Record<string, unknown> = {};

@@ -29,6 +29,9 @@ const updateSchema = z.object({
   aiAnalysis: z.record(z.unknown()).optional().nullable(),
   aiBrief: z.record(z.unknown()).optional().nullable(),
   aiResearched: z.boolean().optional().nullable(),
+  validationStatus: z.enum(["VALIDATED", "FAILED"]).optional().nullable(),
+  validatedAt: z.string().optional().nullable(),
+  validationResult: z.record(z.unknown()).optional().nullable(),
 });
 
 // PATCH /api/grants/[id]

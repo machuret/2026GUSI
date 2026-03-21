@@ -138,38 +138,33 @@ export function GrantsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const optimisticUpdate = useCallback(async (id: string, data: Partial<Grant>): Promise<{ success: boolean; error?: string }> => {
-    console.log(`[optimisticUpdate] START id=${id.slice(0,8)} data=`, data);
-    // Snapshot for rollback
-    const snapshot = grants.find((g) => g.id === id);
-    if (!snapshot) console.warn(`[optimisticUpdate] grant ${id.slice(0,8)} not found in local state`);
-    // Apply optimistically
-    setGrants((prev) => prev.map((g) => g.id === id ? { ...g, ...data } : g));
+    // Capture snapshot for rollback using functional update to avoid stale closure
+    let snapshot: Grant | undefined;
+    setGrants((prev) => {
+      snapshot = prev.find((g) => g.id === id);
+      return prev.map((g) => g.id === id ? { ...g, ...data } : g);
+    });
     try {
       const res = await authFetch(`${edgeFn("grant-crud")}?id=${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      console.log(`[optimisticUpdate] API response status=${res.status}`);
       const result = await res.json();
-      console.log(`[optimisticUpdate] API result:`, { success: result.success, error: result.error, hasgrant: !!result.grant });
       if (result.success) {
-        // Merge server response (may have extra fields like updatedAt)
         setGrants((prev) => prev.map((g) => g.id === id ? { ...g, ...result.grant } : g));
         return { success: true };
       } else {
-        // Rollback
-        if (snapshot) setGrants((prev) => prev.map((g) => g.id === id ? snapshot : g));
-        console.error(`[optimisticUpdate] FAILED for ${id}:`, result.error ?? res.status);
+        if (snapshot) setGrants((prev) => prev.map((g) => g.id === id ? snapshot! : g));
+        console.error(`[optimisticUpdate] FAILED for ${id.slice(0,8)}:`, result.error ?? res.status);
         return { success: false, error: result.error ?? "Update failed" };
       }
     } catch (err) {
-      // Rollback
-      if (snapshot) setGrants((prev) => prev.map((g) => g.id === id ? snapshot : g));
-      console.error(`[optimisticUpdate] NETWORK ERROR for ${id}:`, err);
+      if (snapshot) setGrants((prev) => prev.map((g) => g.id === id ? snapshot! : g));
+      console.error(`[optimisticUpdate] NETWORK ERROR for ${id.slice(0,8)}:`, err);
       return { success: false, error: "Network error" };
     }
-  }, [grants]);
+  }, []);
 
   const deleteGrant = useCallback(async (id: string) => {
     try {

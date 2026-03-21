@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await db
       .from("GrantDraft")
-      .select("id, grantId, grantName, sections, tone, length, published, createdAt, updatedAt")
+      .select("id, grantId, grantName, sections, brief, tone, length, published, createdAt, updatedAt")
       .eq("companyId", DEMO_COMPANY_ID)
       .order("updatedAt", { ascending: false });
 

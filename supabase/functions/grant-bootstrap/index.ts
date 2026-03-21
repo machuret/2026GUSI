@@ -54,7 +54,7 @@ serve(async (req: Request) => {
         .eq("companyId", DEMO_COMPANY_ID)
         .order("deadlineDate", { ascending: true, nullsFirst: false }),
       db.from("Company")
-        .select("id, name, industry, website, email")
+        .select("id, name, industry, website")
         .eq("id", DEMO_COMPANY_ID)
         .maybeSingle(),
       db.from("CompanyInfo")
