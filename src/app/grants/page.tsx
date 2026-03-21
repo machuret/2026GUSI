@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useState, useMemo } from "react";
-import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus, AlertTriangle, ShieldCheck, Copy } from "lucide-react";
+import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus, AlertTriangle, ShieldCheck, Copy, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { useGrantsContext, type Grant } from "@/hooks/GrantsContext";
 import { authFetch, edgeFn } from "@/lib/authFetch";
@@ -27,11 +27,13 @@ export default function GrantsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkAnalysing, setBulkAnalysing] = useState(false);
+  const [bulkRevalidating, setBulkRevalidating] = useState(false);
 
   // Progress tracking
-  const [analyseProgress, setAnalyseProgress] = useState<{ done: number; total: number; errors: number } | null>(null);
-  const [scoreProgress, setScoreProgress]     = useState<{ done: number; total: number; errors: number } | null>(null);
-  const [rankProgress, setRankProgress]       = useState<{ done: number; total: number } | null>(null);
+  const [analyseProgress, setAnalyseProgress]       = useState<{ done: number; total: number; errors: number } | null>(null);
+  const [scoreProgress, setScoreProgress]           = useState<{ done: number; total: number; errors: number } | null>(null);
+  const [rankProgress, setRankProgress]             = useState<{ done: number; total: number } | null>(null);
+  const [revalidateProgress, setRevalidateProgress] = useState<{ done: number; total: number; errors: number } | null>(null);
   const [deletingExpired, setDeletingExpired] = useState(false);
   const [crmFilter, setCrmFilter] = useState<"all" | "in" | "out">("all");
   const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
@@ -186,6 +188,35 @@ export default function GrantsPage() {
     setSelected(new Set());
     setBulkAnalysing(false);
     setAnalyseProgress(null);
+  };
+
+  const handleBulkRevalidate = async () => {
+    const ids = selected.size > 0 ? Array.from(selected) : grants.map((g) => g.id);
+    if (ids.length === 0) { toast.warning("No grants to revalidate"); return; }
+    if (!confirm(`Re-validate ${ids.length} grant${ids.length !== 1 ? "s" : ""}? This checks each URL is live and asks AI to confirm it\'s a real grant.\n\nThis may take a minute.`)) return;
+    setBulkRevalidating(true);
+    setRevalidateProgress({ done: 0, total: ids.length, errors: 0 });
+    let ok = 0;
+    let errors = 0;
+    for (let i = 0; i < ids.length; i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 300));
+      try {
+        const res = await authFetch("/api/grants/revalidate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ grantId: ids[i] }),
+        });
+        const data = await res.json();
+        if (data.success) ok++; else errors++;
+      } catch { errors++; }
+      setRevalidateProgress({ done: i + 1, total: ids.length, errors });
+    }
+    await fetchGrants();
+    if (ok > 0) toast.success(`Revalidated ${ok} of ${ids.length} grant${ids.length !== 1 ? "s" : ""}${errors > 0 ? ` (${errors} failed)` : ""}`);
+    else toast.error(`Revalidation failed for all ${ids.length} grants — check the edge function is deployed`);
+    setSelected(new Set());
+    setBulkRevalidating(false);
+    setRevalidateProgress(null);
   };
 
   const handleDeleteExpired = async () => {
@@ -413,10 +444,19 @@ export default function GrantsPage() {
           {bulkAnalysing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
           {bulkAnalysing ? "Analysing…" : selected.size > 0 ? `AI Fit (${selected.size} selected)` : "AI Fit (all)"}
         </button>
+        <button
+          onClick={handleBulkRevalidate}
+          disabled={bulkRevalidating || grants.length === 0}
+          title={selected.size > 0 ? `Re-validate ${selected.size} selected` : "Re-validate all grants"}
+          className="flex items-center gap-2 rounded-lg border border-teal-300 bg-white px-4 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50 disabled:opacity-60"
+        >
+          {bulkRevalidating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldAlert className="h-4 w-4" />}
+          {bulkRevalidating ? "Revalidating…" : selected.size > 0 ? `Re-validate (${selected.size})` : "Re-validate (all)"}
+        </button>
       </div>
 
       {/* Progress bars */}
-      {(analyseProgress || scoreProgress || rankProgress) && (
+      {(analyseProgress || scoreProgress || rankProgress || revalidateProgress) && (
         <div className="mt-3 space-y-2">
           {analyseProgress && (
             <div>
@@ -448,6 +488,17 @@ export default function GrantsPage() {
               </div>
               <div className="h-2 w-full rounded-full bg-brand-100 overflow-hidden">
                 <div className="h-full rounded-full bg-brand-500 animate-pulse" style={{ width: rankProgress.done === rankProgress.total ? "100%" : "60%" }} />
+              </div>
+            </div>
+          )}
+          {revalidateProgress && (
+            <div>
+              <div className="mb-1 flex items-center justify-between text-xs text-teal-700 font-medium">
+                <span>Re-validating — {revalidateProgress.done} / {revalidateProgress.total} done{revalidateProgress.errors > 0 ? ` · ${revalidateProgress.errors} failed` : ""}</span>
+                <span>{Math.round((revalidateProgress.done / revalidateProgress.total) * 100)}%</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-teal-100 overflow-hidden">
+                <div className="h-full rounded-full bg-teal-500 transition-all duration-300" style={{ width: `${(revalidateProgress.done / revalidateProgress.total) * 100}%` }} />
               </div>
             </div>
           )}
@@ -716,6 +767,11 @@ export default function GrantsPage() {
           <button onClick={bulkAddToCRM} disabled={bulkBusy}
             className="flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
             <ListPlus className="h-3.5 w-3.5" /> Add to CRM
+          </button>
+          <div className="h-5 w-px bg-gray-200" />
+          <button onClick={handleBulkRevalidate} disabled={bulkRevalidating}
+            className="flex items-center gap-1.5 rounded-lg bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-700 hover:bg-teal-100 disabled:opacity-50">
+            {bulkRevalidating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />} Re-validate
           </button>
           <div className="h-5 w-px bg-gray-200" />
           <button onClick={bulkDelete} disabled={bulkBusy}

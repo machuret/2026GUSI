@@ -116,10 +116,14 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
           grantSignals: data.validationResult?.grantSignals ?? [],
           failSignals:  data.validationResult?.failSignals  ?? [],
         });
-        // Refresh grant data in parent so badges update immediately
-        await onUpdate(grant.id, {});
+        // Push validationStatus + validatedAt directly into parent state so badges appear immediately
+        await onUpdate(grant.id, {
+          validationStatus: data.validationStatus,
+          validatedAt:      data.validationResult?.validatedAt ?? new Date().toISOString(),
+          validationResult: data.validationResult ?? null,
+        });
       } else {
-        setRevalidateError(data.error || "Revalidation failed");
+        setRevalidateError(data.error || "Revalidation failed — check the edge function is deployed");
       }
     } catch {
       setRevalidateError("Network error — revalidation failed");
