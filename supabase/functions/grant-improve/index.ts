@@ -6,6 +6,10 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { buildProfileContext, getVaultBlock, buildCriteriaBlock, crawlUrl, getFunderTemplateBlock } from "../_shared/grantContext.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("grant-improve");
 
 const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -33,104 +37,6 @@ function verifyAuth(req: Request): boolean {
   return apikey === SUPABASE_ANON_KEY || (auth?.startsWith("Bearer ") ?? false);
 }
 
-// ── Context helpers ──────────────────────────────────────────────────────────
-
-function buildProfileContext(profile: Record<string, unknown>): string {
-  const contacts = profile.contacts as { name: string; role?: string; email?: string; phone?: string }[] | null;
-  const lines: string[] = [];
-  if (contacts?.length) {
-    lines.push(`Contacts / Founders:`);
-    contacts.forEach((c, i) => {
-      const parts = [c.name, c.role, c.email, c.phone].filter(Boolean).join(" | ");
-      lines.push(`  ${i + 1}. ${parts}`);
-    });
-  } else {
-    if (profile.contactName) lines.push(`Contact Name: ${profile.contactName}`);
-    if (profile.contactRole) lines.push(`Contact Role: ${profile.contactRole}`);
-  }
-  if (profile.orgType) lines.push(`Organisation Type: ${profile.orgType}${profile.orgType2 ? ` / ${profile.orgType2}` : ""}`);
-  if (profile.sector) lines.push(`Sector: ${profile.sector}${profile.subSector ? ` / ${profile.subSector}` : ""}`);
-  if (profile.stage) lines.push(`Stage: ${profile.stage}`);
-  if (profile.teamSize) lines.push(`Team Size: ${profile.teamSize}`);
-  if (profile.annualRevenue) lines.push(`Annual Revenue: ${profile.annualRevenue}`);
-  if (profile.location) lines.push(`Location: ${profile.location}, ${profile.country ?? "United States"}`);
-  if (profile.missionStatement) lines.push(`\nMission Statement:\n${profile.missionStatement}`);
-  if (profile.keyActivities) lines.push(`\nKey Activities:\n${profile.keyActivities}`);
-  if (profile.uniqueStrengths) lines.push(`\nUnique Strengths:\n${profile.uniqueStrengths}`);
-  if (profile.pastGrantsWon) lines.push(`\nPast Grants Won:\n${profile.pastGrantsWon}`);
-
-  const extraDocs = profile.extraDocs as { title: string; content: string }[] | null;
-  if (extraDocs?.length) {
-    for (const doc of extraDocs) {
-      lines.push(`\n--- ${doc.title} ---\n${doc.content}`);
-    }
-  }
-
-  return lines.length > 0 ? `## GRANT PROFILE\n${lines.join("\n")}` : "";
-}
-
-async function getVaultBlock(db: ReturnType<typeof createClient>): Promise<string> {
-  const { data: docs } = await db
-    .from("Document")
-    .select("filename, content")
-    .eq("companyId", DEMO_COMPANY_ID)
-    .order("createdAt", { ascending: false })
-    .limit(10);
-  if (!docs || docs.length === 0) return "";
-  let budget = 12000;
-  const chunks: string[] = [];
-  for (const doc of docs) {
-    if (budget <= 0) break;
-    const chunk = (doc.content as string).slice(0, Math.min(2000, budget));
-    budget -= chunk.length;
-    chunks.push(`--- ${doc.filename} ---\n${chunk}`);
-  }
-  return `## KNOWLEDGE VAULT\n${chunks.join("\n\n")}`;
-}
-
-async function getFunderTemplateBlock(
-  db: ReturnType<typeof createClient>,
-  funderName: string | null
-): Promise<string> {
-  if (!funderName) return "";
-  const { data: templates } = await db
-    .from("FunderTemplate")
-    .select("funderName, preferences, patterns, avoid, notes")
-    .eq("companyId", DEMO_COMPANY_ID);
-  if (!templates?.length) return "";
-  const lower = funderName.toLowerCase();
-  const match = templates.find(
-    (t: Record<string, unknown>) =>
-      typeof t.funderName === "string" &&
-      (t.funderName.toLowerCase() === lower ||
-        lower.includes(t.funderName.toLowerCase()) ||
-        t.funderName.toLowerCase().includes(lower))
-  );
-  if (!match) return "";
-  const parts = [`## FUNDER TEMPLATE — ${match.funderName}\nApply these insights when rewriting to ensure alignment with this funder's preferences.`];
-  if (match.preferences) parts.push(`What this funder loves:\n${match.preferences}`);
-  if (match.patterns) parts.push(`Winning patterns:\n${match.patterns}`);
-  if (match.avoid) parts.push(`What to AVOID:\n${match.avoid}`);
-  if (match.notes) parts.push(`Notes:\n${match.notes}`);
-  return parts.join("\n\n");
-}
-
-async function crawlUrl(url: string): Promise<string> {
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { "User-Agent": "Mozilla/5.0" } });
-    if (!res.ok) return "";
-    const html = await res.text();
-    return html
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 4000);
-  } catch {
-    return "";
-  }
-}
 
 // ── OpenAI caller ────────────────────────────────────────────────────────────
 
@@ -251,7 +157,7 @@ serve(async (req: Request) => {
         ? db.from("Grant").select("name, eligibility, founder, amount, geographicScope, howToApply, url, aiRequirements").eq("id", draft.grantId).maybeSingle()
         : Promise.resolve({ data: null }),
       db.from("GrantProfile").select("*").eq("companyId", DEMO_COMPANY_ID).maybeSingle(),
-      getVaultBlock(db),
+      getVaultBlock(db, DEMO_COMPANY_ID),
     ]);
     if (grantRes.data) {
       const g = grantRes.data;
@@ -267,20 +173,13 @@ serve(async (req: Request) => {
       ].filter(Boolean).join("\n");
 
       // Build criteria block from aiRequirements if extracted
-      const req = g.aiRequirements as { criteria?: string[]; evaluationRubric?: string[]; mandatoryRequirements?: string[] } | null;
-      if (req) {
-        const parts: string[] = [];
-        if (req.criteria?.length) parts.push(`Evaluation Criteria (ensure each is addressed):\n${req.criteria.map((c) => `- ${c}`).join("\n")}`);
-        if (req.evaluationRubric?.length) parts.push(`Scoring Rubric:\n${req.evaluationRubric.map((r) => `- ${r}`).join("\n")}`);
-        if (req.mandatoryRequirements?.length) parts.push(`Mandatory Requirements (hard gates):\n${req.mandatoryRequirements.map((r) => `- ${r}`).join("\n")}`);
-        if (parts.length > 0) criteriaBlock = `## FUNDER REQUIREMENTS (your rewrite MUST satisfy these)\n${parts.join("\n\n")}`;
-      }
+      criteriaBlock = buildCriteriaBlock(g.aiRequirements as Parameters<typeof buildCriteriaBlock>[0]);
     }
     const profileBlock = profile ? buildProfileContext(profile as Record<string, unknown>) : "";
 
     // Load funder template + crawl grant URL + load brief in parallel
     const [funderTemplateBlock, crawledContent] = await Promise.all([
-      getFunderTemplateBlock(db, grantFunder),
+      getFunderTemplateBlock(db, DEMO_COMPANY_ID, grantFunder),
       grantUrl ? crawlUrl(grantUrl) : Promise.resolve(""),
     ]);
 
@@ -367,7 +266,7 @@ serve(async (req: Request) => {
           });
         }
       } catch (err) {
-        console.error(`[grant-improve] Failed to improve "${sa.section}":`, err);
+        log.error("Section improve failed", { section: sa.section, error: String(err).slice(0, 200) });
         changes.push({
           section: sa.section,
           changesSummary: `Error: ${String(err).slice(0, 100)}`,
@@ -385,7 +284,7 @@ serve(async (req: Request) => {
         updatedAt: new Date().toISOString(),
       })
       .eq("id", audit.draftId);
-    if (updateErr) console.error("[grant-improve] Draft update error:", updateErr);
+    if (updateErr) log.error("Draft update failed", { error: String(updateErr), draftId: audit.draftId });
 
     // 7. Mark audit as improved
     await db
@@ -414,7 +313,7 @@ serve(async (req: Request) => {
       });
     } catch { /* non-critical */ }
 
-    console.log(`[grant-improve] Improved ${changes.length} sections for "${draft.grantName}"`);
+    log.info("Improve complete", { grantName: draft.grantName, sectionsImproved: changes.length });
 
     return json({
       success: true,
@@ -424,7 +323,7 @@ serve(async (req: Request) => {
       message: `Improved ${changes.length} section${changes.length !== 1 ? "s" : ""} based on audit findings.`,
     });
   } catch (err) {
-    console.error("grant-improve error:", err);
+    log.error("Unhandled error", { error: String(err) });
     return json({ error: String(err) }, 500);
   }
 });

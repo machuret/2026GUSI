@@ -5,6 +5,10 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { buildProfileContext, getVaultBlock, buildCriteriaBlock } from "../_shared/grantContext.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("grant-audit");
 
 const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -32,62 +36,6 @@ function verifyAuth(req: Request): boolean {
   return apikey === SUPABASE_ANON_KEY || (auth?.startsWith("Bearer ") ?? false);
 }
 
-// ── Context helpers ──────────────────────────────────────────────────────────
-
-function buildProfileContext(profile: Record<string, unknown>): string {
-  const contacts = profile.contacts as { name: string; role?: string; email?: string; phone?: string }[] | null;
-  const lines: (string | null)[] = [];
-  if (contacts?.length) {
-    lines.push(`Contacts / Founders:`);
-    contacts.forEach((c, i) => {
-      const parts = [c.name, c.role, c.email, c.phone].filter(Boolean).join(" | ");
-      lines.push(`  ${i + 1}. ${parts}`);
-    });
-  } else {
-    if (profile.contactName) lines.push(`Contact Name: ${profile.contactName}`);
-    if (profile.contactRole) lines.push(`Contact Role: ${profile.contactRole}`);
-  }
-  if (profile.orgType) lines.push(`Organisation Type: ${profile.orgType}${profile.orgType2 ? ` / ${profile.orgType2}` : ""}`);
-  if (profile.sector) lines.push(`Sector: ${profile.sector}${profile.subSector ? ` / ${profile.subSector}` : ""}`);
-  if (profile.stage) lines.push(`Stage: ${profile.stage}`);
-  if (profile.teamSize) lines.push(`Team Size: ${profile.teamSize}`);
-  if (profile.annualRevenue) lines.push(`Annual Revenue: ${profile.annualRevenue}`);
-  if (profile.location) lines.push(`Location: ${profile.location}, ${profile.country ?? "United States"}`);
-  if (profile.yearFounded) lines.push(`Year Founded: ${profile.yearFounded}`);
-  if ((profile.focusAreas as string[] | null)?.length) lines.push(`Focus Areas: ${(profile.focusAreas as string[]).join(", ")}`);
-  if (profile.missionStatement) lines.push(`\nMission Statement:\n${profile.missionStatement}`);
-  if (profile.keyActivities) lines.push(`\nKey Activities:\n${profile.keyActivities}`);
-  if (profile.uniqueStrengths) lines.push(`\nUnique Strengths:\n${profile.uniqueStrengths}`);
-  if (profile.pastGrantsWon) lines.push(`\nPast Grants Won:\n${profile.pastGrantsWon}`);
-
-  const extraDocs = profile.extraDocs as { title: string; content: string }[] | null;
-  if (extraDocs?.length) {
-    for (const doc of extraDocs) {
-      lines.push(`\n--- ${doc.title} ---\n${doc.content}`);
-    }
-  }
-
-  return lines.length > 0 ? `## GRANT PROFILE\n${lines.join("\n")}` : "";
-}
-
-async function getVaultBlock(db: ReturnType<typeof createClient>): Promise<string> {
-  const { data: docs } = await db
-    .from("Document")
-    .select("filename, content")
-    .eq("companyId", DEMO_COMPANY_ID)
-    .order("createdAt", { ascending: false })
-    .limit(10);
-  if (!docs || docs.length === 0) return "";
-  let budget = 12000;
-  const chunks: string[] = [];
-  for (const doc of docs) {
-    if (budget <= 0) break;
-    const chunk = (doc.content as string).slice(0, Math.min(2000, budget));
-    budget -= chunk.length;
-    chunks.push(`--- ${doc.filename} ---\n${chunk}`);
-  }
-  return `## KNOWLEDGE VAULT\n${chunks.join("\n\n")}`;
-}
 
 // ── OpenAI caller with retries ───────────────────────────────────────────────
 
@@ -241,7 +189,7 @@ serve(async (req: Request) => {
       // 3. Load profile + vault + custom prompt in parallel
       const [{ data: profile }, vaultBlock, { data: promptRow }] = await Promise.all([
         db.from("GrantProfile").select("*").eq("companyId", DEMO_COMPANY_ID).maybeSingle(),
-        getVaultBlock(db),
+        getVaultBlock(db, DEMO_COMPANY_ID),
         db.from("PromptTemplate")
           .select("systemPrompt")
           .eq("companyId", DEMO_COMPANY_ID)
@@ -260,21 +208,7 @@ serve(async (req: Request) => {
         .map(([k, v]) => `### ${k}\n${(v as string).trim()}`)
         .join("\n\n");
 
-      // Build criteria block if aiRequirements were extracted
-      let criteriaBlock = "";
-      if (aiRequirements) {
-        const parts: string[] = [];
-        if (aiRequirements.criteria?.length) {
-          parts.push(`Evaluation Criteria (check each section addresses these):\n${aiRequirements.criteria.map((c) => `- ${c}`).join("\n")}`);
-        }
-        if (aiRequirements.evaluationRubric?.length) {
-          parts.push(`Scoring Rubric:\n${aiRequirements.evaluationRubric.map((r) => `- ${r}`).join("\n")}`);
-        }
-        if (aiRequirements.mandatoryRequirements?.length) {
-          parts.push(`Mandatory Requirements (hard gates — verify these are satisfied):\n${aiRequirements.mandatoryRequirements.map((r) => `- ${r}`).join("\n")}`);
-        }
-        if (parts.length > 0) criteriaBlock = `## FUNDER REQUIREMENTS\n${parts.join("\n\n")}`;
-      }
+      const criteriaBlock = buildCriteriaBlock(aiRequirements);
 
       const userPrompt = [
         `## GRANT APPLICATION BEING AUDITED: ${grantName}`,
@@ -317,7 +251,7 @@ serve(async (req: Request) => {
         })
         .select("id")
         .single();
-      if (saveErr) console.error("[grant-audit] DB save error:", saveErr);
+      if (saveErr) log.error("DB save failed", { error: String(saveErr), draftId });
 
       // 7. Log AI usage
       try {
@@ -330,7 +264,7 @@ serve(async (req: Request) => {
         });
       } catch { /* non-critical */ }
 
-      console.log(`[grant-audit] Audit complete for "${grantName}" — score ${audit.overallScore}, saved as ${saved?.id}`);
+      log.info("Audit complete", { grantName, score: audit.overallScore, auditId: saved?.id ?? null });
       return json({ success: true, audit, auditId: saved?.id ?? null });
     }
 
@@ -350,7 +284,7 @@ serve(async (req: Request) => {
 
     return json({ error: "Method not allowed" }, 405);
   } catch (err) {
-    console.error("grant-audit error:", err);
+    log.error("Unhandled error", { error: String(err) });
     return json({ error: String(err) }, 500);
   }
 });

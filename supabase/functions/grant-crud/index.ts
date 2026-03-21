@@ -5,6 +5,9 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("grant-crud");
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -114,7 +117,7 @@ serve(async (req: Request) => {
         .single();
 
       if (error) throw error;
-      console.log(`[grant-crud] PATCH ${id.slice(0, 8)} OK crmStatus=${grant?.crmStatus}`);
+      log.info("PATCH OK", { id: id.slice(0, 8), crmStatus: grant?.crmStatus });
       return json({ success: true, grant });
     }
 
@@ -122,13 +125,13 @@ serve(async (req: Request) => {
     if (req.method === "DELETE") {
       const { error } = await db.from("Grant").delete().eq("id", id);
       if (error) throw error;
-      console.log(`[grant-crud] DELETE ${id.slice(0, 8)} OK`);
+      log.info("DELETE OK", { id: id.slice(0, 8) });
       return json({ success: true });
     }
 
     return json({ error: "Method not allowed" }, 405);
   } catch (err) {
-    console.error("grant-crud error:", err);
+    log.error("Unhandled error", { error: String(err) });
     return json({ error: String(err) }, 500);
   }
 });
