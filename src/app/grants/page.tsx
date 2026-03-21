@@ -28,6 +28,7 @@ export default function GrantsPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkAnalysing, setBulkAnalysing] = useState(false);
   const [bulkRevalidating, setBulkRevalidating] = useState(false);
+  const [allFilteredSelected, setAllFilteredSelected] = useState(false);
 
   // Progress tracking
   const [analyseProgress, setAnalyseProgress]       = useState<{ done: number; total: number; errors: number } | null>(null);
@@ -40,11 +41,14 @@ export default function GrantsPage() {
   const [perPage, setPerPage] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
 
-  const toggleSelect = (id: string) => setSelected((prev) => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
+  const toggleSelect = (id: string) => {
+    setAllFilteredSelected(false);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const bulkAddToCRM = async () => {
     const ids = Array.from(selected);
@@ -285,11 +289,20 @@ export default function GrantsPage() {
   const pageItems = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
   const allPageSelected = pageItems.length > 0 && pageItems.every(g => selected.has(g.id));
   const toggleSelectAll = () => {
+    setAllFilteredSelected(false);
     if (allPageSelected) {
       setSelected(prev => { const next = new Set(prev); pageItems.forEach(g => next.delete(g.id)); return next; });
     } else {
       setSelected(prev => { const next = new Set(prev); pageItems.forEach(g => next.add(g.id)); return next; });
     }
+  };
+  const selectAllFiltered = () => {
+    setSelected(new Set(filtered.map(g => g.id)));
+    setAllFilteredSelected(true);
+  };
+  const clearAllSelected = () => {
+    setSelected(new Set());
+    setAllFilteredSelected(false);
   };
 
   const counts = {
@@ -642,15 +655,26 @@ export default function GrantsPage() {
               onClick={async () => {
                 if (!confirm(`Permanently delete all ${filtered.length} expired grant${filtered.length !== 1 ? "s" : ""}?`)) return;
                 setBulkBusy(true);
-                let ok = 0;
-                for (const g of filtered) {
-                  try { const r = await deleteGrant(g.id); if (r.success) ok++; } catch { /* skip */ }
+                try {
+                  const ids = filtered.map(g => g.id);
+                  const res = await authFetch(edgeFn("grant-bulk-delete"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ids }),
+                  });
+                  const result = await res.json();
+                  if (result.success) {
+                    removeGrantsLocal(ids);
+                    toast.success(`Deleted ${result.deleted ?? ids.length} expired grant${ids.length !== 1 ? "s" : ""}`);
+                    setDeadlineFilter("active");
+                  } else {
+                    toast.error(`Failed to delete: ${result.error ?? "unknown error"}`);
+                  }
+                } catch {
+                  toast.error("Network error — could not delete. Please try again.");
                 }
-                if (ok > 0) toast.success(`Deleted ${ok} expired grant${ok !== 1 ? "s" : ""}`);
-                else toast.error("Failed to delete — try again");
-                setSelected(new Set());
+                clearAllSelected();
                 setBulkBusy(false);
-                if (ok > 0) setDeadlineFilter("active");
               }}
               disabled={bulkBusy}
               className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
@@ -659,6 +683,22 @@ export default function GrantsPage() {
               Delete all expired
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Select-all-filtered banner */}
+      {allPageSelected && filtered.length > pageItems.length && (
+        <div className="mb-3 flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5">
+          {allFilteredSelected ? (
+            <p className="text-sm text-brand-800 font-medium">All <span className="font-bold">{filtered.length}</span> grants selected</p>
+          ) : (
+            <p className="text-sm text-brand-800 font-medium">All <span className="font-bold">{pageItems.length}</span> grants on this page are selected</p>
+          )}
+          {allFilteredSelected ? (
+            <button onClick={clearAllSelected} className="text-sm font-medium text-brand-700 hover:underline">Clear selection</button>
+          ) : (
+            <button onClick={selectAllFiltered} className="text-sm font-medium text-brand-700 hover:underline">Select all {filtered.length} results</button>
+          )}
         </div>
       )}
 
@@ -764,6 +804,10 @@ export default function GrantsPage() {
             {selected.size} selected
           </span>
           <div className="h-5 w-px bg-gray-200" />
+          <span className="text-xs text-gray-400">
+            {allFilteredSelected ? `All ${filtered.length} results` : `${selected.size} on page`}
+          </span>
+          <div className="h-5 w-px bg-gray-200" />
           <button onClick={bulkAddToCRM} disabled={bulkBusy}
             className="flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">
             <ListPlus className="h-3.5 w-3.5" /> Add to CRM
@@ -778,7 +822,7 @@ export default function GrantsPage() {
             className="flex items-center gap-1 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50">
             <Trash2 className="h-3.5 w-3.5" /> Delete
           </button>
-          <button onClick={() => setSelected(new Set())}
+          <button onClick={clearAllSelected}
             className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100">
             Cancel
           </button>
