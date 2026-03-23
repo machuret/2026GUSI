@@ -94,32 +94,47 @@ export async function POST(req: NextRequest) {
     const masterContext = contextParts.join("\n\n");
 
     // ── Prompt ────────────────────────────────────────────────────────────
-    const systemPrompt = `You are a grant eligibility analyst. You will be given a company's full profile and a grant opportunity with rich context (including the funder's own website content when available). Your job is to assess how likely this company is to successfully win this grant.
+    const systemPrompt = `You are a rigorous grant eligibility analyst. You will be given a company's full profile and a grant opportunity. Your job is to give a precise, calibrated assessment of how likely this company is to WIN this specific grant.
 
-Analyse the following dimensions (each scored roughly equally):
-1. Mission/purpose alignment — does the company's work match what the grant funds?
-2. Geographic eligibility — is the company in the right location?
-3. Sector/industry fit — does the grant target this company's sector?
-4. Stage/size fit — is the company at the right stage or scale?
-5. Eligibility criteria — does the company meet stated requirements?
-6. Competitive positioning — how strong is the company's case vs typical applicants?
-7. Timeline feasibility — can the company realistically prepare and submit by the deadline?
+Score each dimension independently (0–100), then compute a weighted average for the final score:
+1. Mission/purpose alignment (weight 25%) — does the company's work directly match what the funder prioritises?
+2. Geographic eligibility (weight 20%) — is the company definitively in the eligible region?
+3. Sector/industry fit (weight 20%) — does the funder explicitly target this company's sector?
+4. Stage/size fit (weight 15%) — does the company meet the stage, team size, and revenue requirements?
+5. Eligibility criteria (weight 10%) — does the company satisfy every stated requirement?
+6. Competitive positioning (weight 10%) — how strong is the application vs typical competition?
 
-Important rules:
-- If the grant deadline has EXPIRED, automatically set verdict to "Not Eligible" and score to 0, noting the deadline has passed.
-- If the deadline is within 7 days, factor in whether a quality application is realistically achievable.
-- Be specific about WHY something is a strength or gap — generic advice is not useful.
-- If live grant page content is provided, use it as the PRIMARY source for eligibility criteria and funder priorities — it is more current than our stored data.
-- Cite specific evidence from the company profile, vault documents, or grant page to support your assessment.
+SCORE CALIBRATION — use the full 0–100 range honestly:
+- 0–15: Ineligible or clearly disqualified (wrong country, wrong sector, expired deadline)
+- 16–35: Significant gaps — missing key criteria, weak alignment, long odds
+- 36–55: Possible but uncertain — some fit but notable gaps or unknown eligibility factors
+- 56–75: Good fit — strong case with minor gaps or competition risk
+- 76–90: Very strong fit — meets nearly all criteria, compelling case
+- 91–100: Reserve ONLY for near-perfect matches where the company is an ideal candidate
+
+CRITICAL RULES:
+- Never default to 80–85 unless the evidence specifically supports it. Most grants should score below 70.
+- If the grant deadline has EXPIRED, set score to 0 and verdict to "Not Eligible".
+- If the deadline is within 7 days, penalise score by up to 20 points for timeline risk.
+- Be specific — cite exact profile fields, grant criteria, or page content. No generic statements.
+- If live grant page content is provided, treat it as the PRIMARY source — it overrides stored data.
+- A missing profile field (e.g. no location set, no org type) should lower the score, not be ignored.
+
+Verdict mapping:
+- Strong Fit: score 76–100
+- Good Fit: score 56–75
+- Possible Fit: score 36–55
+- Weak Fit: score 16–35
+- Not Eligible: score 0–15
 
 Return ONLY valid JSON in this exact format, no markdown, no explanation:
 {
   "score": <integer 0-100>,
   "verdict": "<one of: Strong Fit | Good Fit | Possible Fit | Weak Fit | Not Eligible>",
   "summary": "<2-3 sentence plain-English summary of the assessment>",
-  "strengths": ["<specific strength 1>", "<specific strength 2>"],
-  "gaps": ["<specific gap or risk 1>", "<specific gap or risk 2>"],
-  "recommendation": "<one concrete, actionable step to improve chances of winning>"
+  "strengths": ["<specific strength citing exact evidence>", "<specific strength>"],
+  "gaps": ["<specific gap citing exact missing criterion>", "<specific gap>"],
+  "recommendation": "<one concrete, actionable step most likely to improve the score>"
 }`;
 
     const userPrompt = `Assess this company's likelihood of winning this grant.\n\n${masterContext}`;
@@ -128,8 +143,8 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation:
       systemPrompt,
       userPrompt,
       model: MODEL_CONFIG.grantsAnalyse,
-      maxTokens: 800,
-      temperature: 0.3,
+      maxTokens: 1200,
+      temperature: 0.7,
       jsonMode: true,
     });
 

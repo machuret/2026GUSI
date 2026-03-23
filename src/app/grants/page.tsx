@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus, AlertTriangle, ShieldCheck, Copy, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { useGrantsContext, type Grant } from "@/hooks/GrantsContext";
@@ -40,6 +40,17 @@ export default function GrantsPage() {
   const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
   const [perPage, setPerPage] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
+  const prevGrantsLength = useRef(grants.length);
+
+  // Reset to page 1 when a new grant is added (e.g. via crawler or search modal)
+  // so the freshly prepended grant is immediately visible instead of buried on page 1
+  // while the user is viewing a later page.
+  useEffect(() => {
+    if (grants.length > prevGrantsLength.current) {
+      setCurrentPage(1);
+    }
+    prevGrantsLength.current = grants.length;
+  }, [grants.length]);
 
   const toggleSelect = (id: string) => {
     setAllFilteredSelected(false);
