@@ -15,7 +15,11 @@ export async function POST(req: NextRequest) {
     if (authError) return authError;
 
     const body = await req.json();
-    const { grantId } = schema.parse(body);
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
+    }
+    const { grantId } = parsed.data;
 
     // Forward auth headers from the original request to the edge function
     const authorization = req.headers.get("authorization") ?? "";

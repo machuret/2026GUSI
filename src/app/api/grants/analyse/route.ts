@@ -16,6 +16,21 @@ const bodySchema = z.object({
   grantId: z.string().min(1),
 });
 
+// Score band boundaries — single source of truth used by both the system prompt
+// and the post-parse verdict enforcement below. Edit here to change both at once.
+const SCORE_BANDS = [
+  { min: 76, verdict: "Strong Fit" },
+  { min: 56, verdict: "Good Fit" },
+  { min: 36, verdict: "Possible Fit" },
+  { min: 16, verdict: "Weak Fit" },
+  { min: 0,  verdict: "Not Eligible" },
+] as const;
+
+/** Derive a canonical verdict from a 0-100 score using SCORE_BANDS. */
+function verdictFromScore(s: number): string {
+  return SCORE_BANDS.find((b) => s >= b.min)?.verdict ?? "Not Eligible";
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Allow service-role key auth for internal/webhook calls (Supabase Edge Function)
@@ -109,11 +124,11 @@ Score each dimension independently (0–100), then compute a weighted average fo
 6. Competitive positioning (weight 10%) — how strong is the application vs typical competition?
 
 SCORE CALIBRATION — use the full 0–100 range honestly:
-- 0–15: Ineligible or clearly disqualified (wrong country, wrong sector, expired deadline)
-- 16–35: Significant gaps — missing key criteria, weak alignment, long odds
-- 36–55: Possible but uncertain — some fit but notable gaps or unknown eligibility factors
-- 56–75: Good fit — strong case with minor gaps or competition risk
-- 76–90: Very strong fit — meets nearly all criteria, compelling case
+- 0–15:   Ineligible or clearly disqualified (wrong country, wrong sector, expired deadline)
+- 16–35:  Significant gaps — missing key criteria, weak alignment, long odds
+- 36–55:  Possible but uncertain — some fit but notable gaps or unknown eligibility factors
+- 56–75:  Good fit — strong case with minor gaps or competition risk
+- 76–90:  Very strong fit — meets nearly all criteria, compelling case
 - 91–100: Reserve ONLY for near-perfect matches where the company is an ideal candidate
 
 CRITICAL RULES:
@@ -124,12 +139,12 @@ CRITICAL RULES:
 - If live grant page content is provided, treat it as the PRIMARY source — it overrides stored data.
 - A missing profile field (e.g. no location set, no org type) should lower the score, not be ignored.
 
-Verdict mapping:
-- Strong Fit: score 76–100
-- Good Fit: score 56–75
-- Possible Fit: score 36–55
-- Weak Fit: score 16–35
-- Not Eligible: score 0–15
+Verdict mapping (enforced server-side — your verdict MUST match your score):
+- Strong Fit:   76–100
+- Good Fit:     56–75
+- Possible Fit: 36–55
+- Weak Fit:     16–35
+- Not Eligible: 0–15
 
 Return ONLY valid JSON in this exact format, no markdown, no explanation:
 {
@@ -167,19 +182,19 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation:
     }
 
     // ── Persist full analysis to Grant record ─────────────────────────────
-    const score = typeof analysis.score === "number" ? Math.min(100, Math.max(0, Math.round(analysis.score))) : null;
+    const score = typeof analysis.score === "number"
+      ? Math.min(100, Math.max(0, Math.round(analysis.score)))
+      : null;
 
-    // Enforce verdict↔score consistency — AI occasionally returns a mismatched pair.
-    // Derive the canonical verdict from the score band so the UI is never contradictory.
-    const verdictFromScore = (s: number): string => {
-      if (s >= 76) return "Strong Fit";
-      if (s >= 56) return "Good Fit";
-      if (s >= 36) return "Possible Fit";
-      if (s >= 16) return "Weak Fit";
-      return "Not Eligible";
-    };
-    const rawVerdict = typeof analysis.verdict === "string" ? analysis.verdict : null;
-    const verdict = score != null ? verdictFromScore(score) : rawVerdict;
+    // Score is mandatory — a missing or non-numeric score means the AI response is malformed.
+    if (score === null) {
+      return NextResponse.json({ error: "AI returned an invalid score — please try again" }, { status: 500 });
+    }
+
+    // Enforce verdict↔score consistency using the module-level SCORE_BANDS.
+    // The AI prompt already instructs matching verdicts, but we enforce it server-side
+    // so a mismatch never reaches the DB or the UI.
+    const verdict = verdictFromScore(score);
 
     // Only auto-set decision if the user hasn't manually chosen one
     const currentDecision = (grant as Record<string, unknown>).decision as string | null;

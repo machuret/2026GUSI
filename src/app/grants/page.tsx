@@ -253,7 +253,11 @@ export default function GrantsPage() {
     setDeletingExpired(false);
   };
 
-  const now = Date.now();
+  // Stable timestamp for deadline comparisons — captured once per page-load session.
+  // Using a ref avoids re-memoising every millisecond while staying accurate enough
+  // for deadline badge counts (grants don't expire mid-session in a meaningful way).
+  const nowRef = useRef(Date.now());
+  const now = nowRef.current;
   const DAY = 86400000;
   const YEAR = 365 * DAY;
 
@@ -276,7 +280,6 @@ export default function GrantsPage() {
       matchDeadline = false;
     }
     return matchSearch && matchDeadline && matchCrm;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, deadlineFilter, crmFilter, now]);
 
   const deadlineCounts = {
