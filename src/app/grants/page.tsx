@@ -244,8 +244,26 @@ export default function GrantsPage() {
 
   const now = Date.now();
   const DAY = 86400000;
-
   const YEAR = 365 * DAY;
+
+  // Shared base filter — applies search + deadline + CRM filters.
+  // Decision filter is intentionally excluded so counts can be computed per-decision.
+  const applyBaseFilters = (g: Grant) => {
+    const q = search.toLowerCase();
+    const matchSearch = !search || g.name.toLowerCase().includes(q) || (g.founder ?? "").toLowerCase().includes(q) || (g.notes ?? "").toLowerCase().includes(q);
+    const matchCrm = crmFilter === "all" || (crmFilter === "in" ? !!g.crmStatus : !g.crmStatus);
+    let matchDeadline = true;
+    if (deadlineFilter === "active") {
+      matchDeadline = !g.deadlineDate || new Date(g.deadlineDate).getTime() >= now;
+    } else if (deadlineFilter !== "all" && g.deadlineDate) {
+      const diff = new Date(g.deadlineDate).getTime() - now;
+      if (deadlineFilter === "expired") matchDeadline = diff < 0;
+      else matchDeadline = diff >= 0 && diff <= parseInt(deadlineFilter) * DAY;
+    } else if (deadlineFilter !== "all" && !g.deadlineDate) {
+      matchDeadline = false;
+    }
+    return matchSearch && matchDeadline && matchCrm;
+  };
 
   const deadlineCounts = {
     active: grants.filter(g => !g.deadlineDate || new Date(g.deadlineDate).getTime() >= now).length,
@@ -257,23 +275,7 @@ export default function GrantsPage() {
   };
 
   const filtered = grants
-    .filter((g) => {
-      const q = search.toLowerCase();
-      const matchSearch = !search || g.name.toLowerCase().includes(q) || (g.founder ?? "").toLowerCase().includes(q) || (g.notes ?? "").toLowerCase().includes(q);
-      const matchDecision = decisionFilter === "All" || g.decision === decisionFilter;
-      const matchCrm = crmFilter === "all" || (crmFilter === "in" ? !!g.crmStatus : !g.crmStatus);
-      let matchDeadline = true;
-      if (deadlineFilter === "active") {
-        matchDeadline = !g.deadlineDate || new Date(g.deadlineDate).getTime() >= now;
-      } else if (deadlineFilter !== "all" && g.deadlineDate) {
-        const diff = new Date(g.deadlineDate).getTime() - now;
-        if (deadlineFilter === "expired") matchDeadline = diff < 0;
-        else matchDeadline = diff >= 0 && diff <= parseInt(deadlineFilter) * DAY;
-      } else if (deadlineFilter !== "all" && !g.deadlineDate) {
-        matchDeadline = false;
-      }
-      return matchSearch && matchDecision && matchDeadline && matchCrm;
-    })
+    .filter((g) => applyBaseFilters(g) && (decisionFilter === "All" || g.decision === decisionFilter))
     .sort((a, b) => {
       let av: string | number = 0, bv: string | number = 0;
       if (sortField === "deadlineDate") { av = a.deadlineDate ? new Date(a.deadlineDate).getTime() : Infinity; bv = b.deadlineDate ? new Date(b.deadlineDate).getTime() : Infinity; }
@@ -305,24 +307,8 @@ export default function GrantsPage() {
     setAllFilteredSelected(false);
   };
 
-  // Counts scoped to the active deadline + CRM + search filters (but NOT the decision filter itself)
-  // so the badge on each decision button reflects how many would show if you clicked it.
-  const filteredIgnoringDecision = grants.filter((g) => {
-    const q = search.toLowerCase();
-    const matchSearch = !search || g.name.toLowerCase().includes(q) || (g.founder ?? "").toLowerCase().includes(q) || (g.notes ?? "").toLowerCase().includes(q);
-    const matchCrm = crmFilter === "all" || (crmFilter === "in" ? !!g.crmStatus : !g.crmStatus);
-    let matchDeadline = true;
-    if (deadlineFilter === "active") {
-      matchDeadline = !g.deadlineDate || new Date(g.deadlineDate).getTime() >= now;
-    } else if (deadlineFilter !== "all" && g.deadlineDate) {
-      const diff = new Date(g.deadlineDate).getTime() - now;
-      if (deadlineFilter === "expired") matchDeadline = diff < 0;
-      else matchDeadline = diff >= 0 && diff <= parseInt(deadlineFilter) * DAY;
-    } else if (deadlineFilter !== "all" && !g.deadlineDate) {
-      matchDeadline = false;
-    }
-    return matchSearch && matchDeadline && matchCrm;
-  });
+  // Counts scoped to base filters only (not decision) so badges match what clicking each decision tab would show.
+  const filteredIgnoringDecision = grants.filter(applyBaseFilters);
 
   const counts = {
     Apply:    filteredIgnoringDecision.filter(g => g.decision === "Apply").length,

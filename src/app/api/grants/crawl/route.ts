@@ -228,10 +228,19 @@ ${html}`;
       })(),
     }));
 
+    // Deduplicate by name (case-insensitive) — pages often list the same grant in a table and a sidebar
+    const seen = new Set<string>();
+    const dedupedGrants = resolvedGrants.filter((g: Record<string, unknown>) => {
+      const key = (typeof g.name === "string" ? g.name : "").toLowerCase().trim();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
     return NextResponse.json({
       success: true,
-      grants: resolvedGrants,
-      totalFound: typeof result.totalFound === "number" ? result.totalFound : resolvedGrants.length,
+      grants: dedupedGrants,
+      totalFound: typeof result.totalFound === "number" ? result.totalFound : dedupedGrants.length,
       pageTitle: typeof result.pageTitle === "string" ? result.pageTitle : (siteName ?? url),
       jsWarning,
       htmlLength: html.length,

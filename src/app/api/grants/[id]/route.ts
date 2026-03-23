@@ -5,6 +5,7 @@ import { handleApiError } from "@/lib/apiHelpers";
 import { requireEdgeAuth } from "@/lib/edgeAuth";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { z } from "zod";
+import { logger } from "@/lib/logger";
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
@@ -26,6 +27,8 @@ const updateSchema = z.object({
   complexityNotes: z.string().optional().nullable(),
   crmStatus: z.enum(["Researching", "Pipeline", "Active", "Submitted", "Won", "Lost"]).optional().nullable(),
   crmNotes: z.string().optional().nullable(),
+  aiScore: z.number().int().min(0).max(100).optional().nullable(),
+  aiVerdict: z.string().optional().nullable(),
   aiAnalysis: z.record(z.unknown()).optional().nullable(),
   aiBrief: z.record(z.unknown()).optional().nullable(),
   aiResearched: z.boolean().optional().nullable(),
@@ -42,7 +45,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (authError) return authError;
 
     const body = await req.json();
-    console.log(`[PATCH /api/grants/${id.slice(0,8)}] body:`, JSON.stringify(body));
     const data = updateSchema.parse(body);
 
     const { data: existing, error: fetchError } = await db
@@ -51,9 +53,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .eq("id", id)
       .maybeSingle();
 
-    if (fetchError) { console.error(`[PATCH] fetchError:`, fetchError); throw fetchError; }
-    if (!existing) { console.error(`[PATCH] Grant not found: ${id}`); return NextResponse.json({ error: "Grant not found" }, { status: 404 }); }
-    if (existing.companyId !== DEMO_COMPANY_ID) { console.error(`[PATCH] Forbidden: companyId=${existing.companyId}`); return NextResponse.json({ error: "Forbidden" }, { status: 403 }); }
+    if (fetchError) { logger.error("Update Grant", `fetchError for ${id}`, fetchError); throw fetchError; }
+    if (!existing) return NextResponse.json({ error: "Grant not found" }, { status: 404 });
+    if (existing.companyId !== DEMO_COMPANY_ID) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { data: grant, error } = await db
       .from("Grant")
@@ -62,8 +64,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .select()
       .single();
 
-    if (error) { console.error(`[PATCH] DB update error:`, error); throw error; }
-    console.log(`[PATCH /api/grants/${id.slice(0,8)}] SUCCESS crmStatus=${grant?.crmStatus}`);
+    if (error) { logger.error("Update Grant", `DB update failed for ${id}`, error); throw error; }
     return NextResponse.json({ success: true, grant });
   } catch (error) {
     return handleApiError(error, "Update Grant");

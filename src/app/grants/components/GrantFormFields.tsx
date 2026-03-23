@@ -93,9 +93,9 @@ export function GrantFormFields({ form, set, onResearch, researching }: Props) {
         <div>
           <label className={labelCls}>Decision</label>
           <select
-            value={form.decision ?? "Maybe"}
+            value={form.decision ?? ""}
             onChange={(e) => {
-              const val = e.target.value;
+              const val = e.target.value || null;
               set("decision", val);
               if (val === "No" || val === "Rejected") {
                 set("fitScore", null);
@@ -105,6 +105,7 @@ export function GrantFormFields({ form, set, onResearch, researching }: Props) {
             }}
             className={inputCls}
           >
+            <option value="">— Select —</option>
             <option>Apply</option><option>Maybe</option><option>No</option><option>Rejected</option>
           </select>
         </div>
