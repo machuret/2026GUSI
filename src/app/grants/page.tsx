@@ -305,11 +305,30 @@ export default function GrantsPage() {
     setAllFilteredSelected(false);
   };
 
+  // Counts scoped to the active deadline + CRM + search filters (but NOT the decision filter itself)
+  // so the badge on each decision button reflects how many would show if you clicked it.
+  const filteredIgnoringDecision = grants.filter((g) => {
+    const q = search.toLowerCase();
+    const matchSearch = !search || g.name.toLowerCase().includes(q) || (g.founder ?? "").toLowerCase().includes(q) || (g.notes ?? "").toLowerCase().includes(q);
+    const matchCrm = crmFilter === "all" || (crmFilter === "in" ? !!g.crmStatus : !g.crmStatus);
+    let matchDeadline = true;
+    if (deadlineFilter === "active") {
+      matchDeadline = !g.deadlineDate || new Date(g.deadlineDate).getTime() >= now;
+    } else if (deadlineFilter !== "all" && g.deadlineDate) {
+      const diff = new Date(g.deadlineDate).getTime() - now;
+      if (deadlineFilter === "expired") matchDeadline = diff < 0;
+      else matchDeadline = diff >= 0 && diff <= parseInt(deadlineFilter) * DAY;
+    } else if (deadlineFilter !== "all" && !g.deadlineDate) {
+      matchDeadline = false;
+    }
+    return matchSearch && matchDeadline && matchCrm;
+  });
+
   const counts = {
-    Apply:    grants.filter(g => g.decision === "Apply").length,
-    Maybe:    grants.filter(g => g.decision === "Maybe").length,
-    No:       grants.filter(g => g.decision === "No").length,
-    Rejected: grants.filter(g => g.decision === "Rejected").length,
+    Apply:    filteredIgnoringDecision.filter(g => g.decision === "Apply").length,
+    Maybe:    filteredIgnoringDecision.filter(g => g.decision === "Maybe").length,
+    No:       filteredIgnoringDecision.filter(g => g.decision === "No").length,
+    Rejected: filteredIgnoringDecision.filter(g => g.decision === "Rejected").length,
   };
 
   const renderSortBtn = (field: typeof sortField, label: string) => (

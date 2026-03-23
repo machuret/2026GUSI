@@ -75,12 +75,16 @@ export default function GrantCrawlerPage() {
       const data = await res.json();
       if (data.jsWarning) setJsWarning(data.jsWarning);
       if (data.tip) setCrawlTip(data.tip);
-      if (data.error) { setCrawlError(data.error); setIsPartial(data.partial ?? false); }
       if (data.grants?.length) {
         setResults(data.grants);
         setPageTitle(data.pageTitle ?? siteName ?? url);
         setHtmlLength(data.htmlLength ?? 0);
         setUsedFirecrawl(data.usedFirecrawl ?? false);
+        // If API also returned an error alongside results, show it as a warning not a blocker
+        if (data.error) setJsWarning((prev) => prev ?? data.error);
+      } else if (data.error) {
+        setCrawlError(data.error);
+        setIsPartial(data.partial ?? false);
       }
     } catch { setCrawlError("Network error — could not reach the page."); }
     finally { setCrawling(null); }
