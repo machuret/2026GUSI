@@ -10,6 +10,7 @@ import { logAiUsage } from "@/lib/aiUsage";
 import { getCompanyContext, getVaultContext } from "@/lib/aiContext";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { crawlGrantUrl, buildProfileContext } from "@/lib/grantCrawl";
+import { logger } from "@/lib/logger";
 
 const bodySchema = z.object({
   grantId: z.string().min(1),
@@ -53,7 +54,10 @@ export async function POST(req: NextRequest) {
     // ── Crawl grant URL if available ───────────────────────────────────────
     let crawledContent = "";
     if (grant.url) {
+      const crawlStart = Date.now();
       crawledContent = await crawlGrantUrl(grant.url as string);
+      const crawlMs = Date.now() - crawlStart;
+      if (crawlMs > 3000) logger.warn("Grant Analyse", `Slow crawl: ${crawlMs}ms for ${grant.url}`);
     }
 
     // ── Build grant details block ─────────────────────────────────────────
@@ -144,7 +148,7 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation:
       userPrompt,
       model: MODEL_CONFIG.grantsAnalyse,
       maxTokens: 1200,
-      temperature: 0.7,
+      temperature: 0.5,
       jsonMode: true,
     });
 
@@ -164,7 +168,18 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation:
 
     // ── Persist full analysis to Grant record ─────────────────────────────
     const score = typeof analysis.score === "number" ? Math.min(100, Math.max(0, Math.round(analysis.score))) : null;
-    const verdict = typeof analysis.verdict === "string" ? analysis.verdict : null;
+
+    // Enforce verdict↔score consistency — AI occasionally returns a mismatched pair.
+    // Derive the canonical verdict from the score band so the UI is never contradictory.
+    const verdictFromScore = (s: number): string => {
+      if (s >= 76) return "Strong Fit";
+      if (s >= 56) return "Good Fit";
+      if (s >= 36) return "Possible Fit";
+      if (s >= 16) return "Weak Fit";
+      return "Not Eligible";
+    };
+    const rawVerdict = typeof analysis.verdict === "string" ? analysis.verdict : null;
+    const verdict = score != null ? verdictFromScore(score) : rawVerdict;
 
     // Only auto-set decision if the user hasn't manually chosen one
     const currentDecision = (grant as Record<string, unknown>).decision as string | null;
@@ -173,7 +188,7 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation:
     const decision = currentDecision ?? autoDecision;
     const decisionUpdate = currentDecision ? {} : { decision };
 
-    await db.from("Grant").update({
+    const { error: updateErr } = await db.from("Grant").update({
       aiScore: score,
       aiVerdict: verdict,
       aiAnalysis: analysis,
@@ -181,7 +196,12 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation:
       updatedAt: new Date().toISOString(),
     }).eq("id", grantId);
 
-    return NextResponse.json({ success: true, analysis, decision });
+    if (updateErr) {
+      logger.error("Grant Analyse", `DB update failed for ${grantId}`, updateErr);
+      return NextResponse.json({ error: "Analysis succeeded but failed to save — please try again" }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, analysis: { ...analysis, verdict }, decision });
   } catch (err) {
     return handleApiError(err, "Grant Analyse");
   }

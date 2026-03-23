@@ -52,7 +52,8 @@ serve(async (req: Request) => {
       db.from("Grant")
         .select("*")
         .eq("companyId", DEMO_COMPANY_ID)
-        .order("deadlineDate", { ascending: true, nullsFirst: false }),
+        .order("deadlineDate", { ascending: true, nullsFirst: false })
+        .limit(2000),
       db.from("Company")
         .select("id, name, industry, website")
         .eq("id", DEMO_COMPANY_ID)

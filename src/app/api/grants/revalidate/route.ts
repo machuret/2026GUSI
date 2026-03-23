@@ -37,17 +37,25 @@ export async function POST(req: NextRequest) {
     if (!contentType.includes("application/json")) {
       const text = await res.text();
       const isNotDeployed = res.status === 404 || text.includes("Function not found") || text.includes("<!DOCTYPE");
-      return NextResponse.json({
-        error: isNotDeployed
-          ? "Revalidation service is not deployed. Run: supabase functions deploy grant-revalidate"
-          : `Revalidation service returned an unexpected response (HTTP ${res.status})`,
-        partial: true,
-      }, { status: 503 });
+      return NextResponse.json(
+        isNotDeployed
+          ? { error: "Revalidation service is not deployed. Run: supabase functions deploy grant-revalidate", deployed: false }
+          : { error: `Revalidation service returned an unexpected response (HTTP ${res.status})` },
+        { status: 503 }
+      );
     }
 
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
   } catch (err) {
+    // AbortSignal.timeout() throws a DOMException with name "TimeoutError"
+    const isTimeout = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+    if (isTimeout) {
+      return NextResponse.json(
+        { error: "Revalidation timed out (45s). The grant-revalidate edge function may be overloaded or unreachable." },
+        { status: 504 }
+      );
+    }
     return handleApiError(err, "Grant Revalidate");
   }
 }

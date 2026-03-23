@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus, AlertTriangle, ShieldCheck, Copy, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { useGrantsContext, type Grant } from "@/hooks/GrantsContext";
@@ -259,7 +259,9 @@ export default function GrantsPage() {
 
   // Shared base filter — applies search + deadline + CRM filters.
   // Decision filter is intentionally excluded so counts can be computed per-decision.
-  const applyBaseFilters = (g: Grant) => {
+  // Wrapped in useCallback so filtered/filteredIgnoringDecision only recompute when
+  // the filter inputs actually change, not on every unrelated state update.
+  const applyBaseFilters = useCallback((g: Grant) => {
     const q = search.toLowerCase();
     const matchSearch = !search || g.name.toLowerCase().includes(q) || (g.founder ?? "").toLowerCase().includes(q) || (g.notes ?? "").toLowerCase().includes(q);
     const matchCrm = crmFilter === "all" || (crmFilter === "in" ? !!g.crmStatus : !g.crmStatus);
@@ -274,7 +276,8 @@ export default function GrantsPage() {
       matchDeadline = false;
     }
     return matchSearch && matchDeadline && matchCrm;
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, deadlineFilter, crmFilter, now]);
 
   const deadlineCounts = {
     active: grants.filter(g => !g.deadlineDate || new Date(g.deadlineDate).getTime() >= now).length,
@@ -344,19 +347,21 @@ export default function GrantsPage() {
 
   const existingNames = new Set(grants.map((g) => g.name.toLowerCase()));
 
-  // Build duplicate id set for badge display only
+  // Build duplicate id set for badge display only.
+  // O(n) pass: build a normalised-name → [ids] map, then flag any name with >1 entry.
+  // Avoids the previous O(n²) nested loop that caused stutter at 100+ grants.
   const duplicateIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (let i = 0; i < grants.length; i++) {
-      for (let j = i + 1; j < grants.length; j++) {
-        const a = grants[i];
-        const b = grants[j];
-        if (fuzzyMatchesExisting(a.name, new Set([b.name.toLowerCase()]))) {
-          ids.add(a.id);
-          ids.add(b.id);
-        }
-      }
+    const nameMap = new Map<string, string[]>();
+    for (const g of grants) {
+      const key = g.name.toLowerCase().trim();
+      const bucket = nameMap.get(key);
+      if (bucket) bucket.push(g.id);
+      else nameMap.set(key, [g.id]);
     }
+    const ids = new Set<string>();
+    Array.from(nameMap.values()).forEach((bucket) => {
+      if (bucket.length > 1) bucket.forEach((id: string) => ids.add(id));
+    });
     return ids;
   }, [grants]);
 
