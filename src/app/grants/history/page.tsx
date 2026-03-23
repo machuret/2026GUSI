@@ -378,7 +378,7 @@ export default function GrantHistoryPage() {
             className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           />
         </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-1.5">
           <Filter className="h-3.5 w-3.5 text-gray-400" />
           {["All", ...ALL_OUTCOMES].map((o) => (
             <button key={o} onClick={() => setOutcomeFilter(o)}
@@ -387,7 +387,7 @@ export default function GrantHistoryPage() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-1.5">
           {["All", ...ALL_REGIONS].map((r) => (
             <button key={r} onClick={() => setRegionFilter(r)}
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${regionFilter === r ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>

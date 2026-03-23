@@ -9,7 +9,7 @@ import { logAiUsage } from "@/lib/aiUsage";
 import { logger } from "@/lib/logger";
 
 const bodySchema = z.object({
-  rawText: z.string().min(10, "rawText must be at least 10 characters"),
+  rawText: z.string().min(10, "rawText must be at least 10 characters").max(50000, "rawText must be under 50,000 characters"),
 });
 
 const SYSTEM_PROMPT = `You are a data extraction assistant. You will be given raw unstructured text describing a company's past grant submissions, funder outreach, and partnership history. Your job is to parse it into a structured JSON array.
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
       completionTokens: result.completionTokens,
     });
 
-    let parsed2: { rows?: unknown[] };
+    let parsed2: { rows?: unknown[] } = {};
     try {
       parsed2 = JSON.parse(result.content);
     } catch {

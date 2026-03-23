@@ -126,11 +126,22 @@ function GrantCrmCard({
     finally { setResearching(false); }
   };
 
-  // Fetch previous engagement history for this funder on first expand
+  // Reset the fetched flag when founder changes (e.g. after AI Research fills it in).
+  const prevFounderRef = useRef(grant.founder);
   useEffect(() => {
-    if (!expanded || historyFetched.current || !grant.founder) return;
+    if (prevFounderRef.current !== grant.founder) {
+      prevFounderRef.current = grant.founder;
+      historyFetched.current = false;
+      setHistoryMatches(null);
+    }
+  }, [grant.founder]);
+
+  // Fetch previous engagement history for this funder on first expand.
+  // Guard empty-string founder (.trim()) to avoid a vacuous ILIKE match.
+  useEffect(() => {
+    if (!expanded || historyFetched.current || !grant.founder?.trim()) return;
     historyFetched.current = true;
-    authFetch(`/api/grants/history/check?funderName=${encodeURIComponent(grant.founder)}`)
+    authFetch(`/api/grants/history/check?funderName=${encodeURIComponent(grant.founder.trim())}`)
       .then((res) => res.json())
       .then((data) => setHistoryMatches(data.matches ?? []))
       .catch(() => setHistoryMatches([]));

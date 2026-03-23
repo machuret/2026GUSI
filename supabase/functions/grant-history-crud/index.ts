@@ -19,6 +19,10 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const DEMO_COMPANY_ID   = "demo";
 
+// Module-level service-role client — safe to share since it carries no user state.
+// Avoids re-allocating a new client on every request.
+const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
 const VALID_OUTCOMES = [
   "Won", "Submitted", "Rejected", "Shortlisted",
   "NotSubmitted", "Exploratory", "Active", "Pending",
@@ -81,7 +85,6 @@ serve(async (req: Request) => {
     const user = await verifyAuth(req);
     if (!user) return json({ error: "Unauthorized" }, 401);
 
-    const db  = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
     const url = new URL(req.url);
 
     // ── GET — list history rows, optionally filtered by funderName ─────────
@@ -111,11 +114,16 @@ serve(async (req: Request) => {
       // Accept a single row object OR an array (bulk import from AI parser)
       const rows: Record<string, unknown>[] = Array.isArray(body.rows) ? body.rows : [body];
 
+      // Validate all rows first — collect every error before touching the DB.
       const toInsert: Record<string, unknown>[] = [];
-      for (const row of rows) {
-        const { data, error } = validateRow(row);
-        if (error) return json({ error }, 400);
-        toInsert.push(data);
+      const validationErrors: string[] = [];
+      for (let i = 0; i < rows.length; i++) {
+        const { data, error } = validateRow(rows[i]);
+        if (error) validationErrors.push(`Row ${i + 1}: ${error}`);
+        else toInsert.push(data);
+      }
+      if (validationErrors.length > 0) {
+        return json({ error: validationErrors.join("; ") }, 400);
       }
 
       const { data: inserted, error: insertErr } = await db
@@ -139,6 +147,7 @@ serve(async (req: Request) => {
         .select("companyId")
         .eq("id", id)
         .maybeSingle();
+
 
       if (!existing) return json({ error: "Record not found" }, 404);
       if (existing.companyId !== DEMO_COMPANY_ID) return json({ error: "Forbidden" }, 403);

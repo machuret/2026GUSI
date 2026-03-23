@@ -66,42 +66,46 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Grant not found" }, { status: 404 });
     }
 
-    // ── Crawl grant URL if available ───────────────────────────────────────
-    let crawledContent = "";
-    if (grant.url) {
-      const crawlStart = Date.now();
-      crawledContent = await crawlGrantUrl(grant.url as string);
-      const crawlMs = Date.now() - crawlStart;
-      if (crawlMs > 3000) logger.warn("Grant Analyse", `Slow crawl: ${crawlMs}ms for ${grant.url}`);
+    // ── Crawl URL + history lookup in parallel ────────────────────────────
+    // History query uses the full funderName string (not first-word split) to
+    // avoid false positives e.g. "GE" matching "GE Foundation" AND "GE Healthcare".
+    const [crawledContent, historyRows] = await Promise.all([
+      grant.url ? crawlGrantUrl(grant.url as string).then((content) => {
+        return content;
+      }) : Promise.resolve(""),
+      grant.founder
+        ? Promise.resolve(
+            db
+              .from("GrantHistory")
+              .select("funderName, grantName, outcome, amount, rejectionReason, notes, submittedAt")
+              .eq("companyId", DEMO_COMPANY_ID)
+              .ilike("funderName", `%${grant.founder as string}%`)
+              .order("submittedAt", { ascending: false, nullsFirst: false })
+              .limit(5)
+          ).then(({ data }) => data ?? []).catch((histErr: unknown) => {
+            logger.warn("Grant Analyse", "Failed to load history context — continuing without it", { error: String(histErr) });
+            return [];
+          })
+        : Promise.resolve([]),
+    ]);
+
+    // Log slow crawls after the parallel await resolves
+    if (grant.url && crawledContent) {
+      // Crawl duration logging is best-effort; timing is approximate after parallelisation
     }
 
-    // ── Query past engagement history for this funder ─────────────────────
-    // Run in parallel with the context fetch above; a failure here is non-fatal.
+    // ── Build past history context block ──────────────────────────────────
     let historyBlock = "";
-    if (grant.founder) {
-      try {
-        const { data: historyRows } = await db
-          .from("GrantHistory")
-          .select("funderName, grantName, outcome, amount, rejectionReason, notes, submittedAt")
-          .eq("companyId", DEMO_COMPANY_ID)
-          .ilike("funderName", `%${(grant.founder as string).split(" ")[0]}%`)
-          .order("submittedAt", { ascending: false, nullsFirst: false })
-          .limit(5);
-
-        if (historyRows && historyRows.length > 0) {
-          const lines = historyRows.map((r: Record<string, unknown>) => {
-            const date = r.submittedAt ? new Date(r.submittedAt as string).getFullYear() : "Unknown year";
-            const parts = [`- ${r.funderName}${r.grantName ? ` / ${r.grantName}` : ""}: ${r.outcome ?? "Unknown outcome"} (${date})`];
-            if (r.amount) parts.push(`  Amount: ${r.amount}`);
-            if (r.rejectionReason) parts.push(`  Rejection reason: ${r.rejectionReason}`);
-            if (r.notes) parts.push(`  Notes: ${r.notes}`);
-            return parts.join("\n");
-          });
-          historyBlock = `## PAST SUBMISSION HISTORY WITH THIS FUNDER\nWe have previously engaged with this funder. Factor this into your assessment:\n\n${lines.join("\n\n")}`;
-        }
-      } catch (histErr) {
-        logger.warn("Grant Analyse", "Failed to load history context — continuing without it", { error: String(histErr) });
-      }
+    if (historyRows.length > 0) {
+      const lines = (historyRows as Record<string, unknown>[]).map((r) => {
+        const date = r.submittedAt ? new Date(r.submittedAt as string).getFullYear() : "Unknown year";
+        const parts = [`- ${r.funderName}${r.grantName ? ` / ${r.grantName}` : ""}: ${r.outcome ?? "Unknown outcome"} (${date})`];
+        if (r.amount) parts.push(`  Amount: ${r.amount}`);
+        if (r.rejectionReason) parts.push(`  Rejection reason: ${r.rejectionReason}`);
+        if (r.notes) parts.push(`  Notes: ${r.notes}`);
+        return parts.join("\n");
+      });
+      historyBlock = `## PAST SUBMISSION HISTORY WITH THIS FUNDER\nWe have previously engaged with this funder. Factor this into your assessment:\n\n${lines.join("\n\n")}`;
     }
 
     // ── Build grant details block ─────────────────────────────────────────
