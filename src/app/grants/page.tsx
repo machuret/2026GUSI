@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus, AlertTriangle, ShieldCheck, Copy, ShieldAlert } from "lucide-react";
+import { Plus, Search, Loader2, ChevronDown, ChevronUp, Download, Sparkles, BarChart3, UserCheck, KanbanSquare, Trophy, PenLine, Rss, Clock, Trash2, CheckSquare, FlaskConical, ListPlus, AlertTriangle, ShieldCheck, Copy, ShieldAlert, History } from "lucide-react";
 import Link from "next/link";
 import { useGrantsContext, type Grant } from "@/hooks/GrantsContext";
 import { authFetch, edgeFn } from "@/lib/authFetch";
@@ -406,6 +406,9 @@ export default function GrantsPage() {
         </Link>
         <Link href="/grants/auditor" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-amber-600">
           <ShieldCheck className="h-3.5 w-3.5" /> Auditor
+        </Link>
+        <Link href="/grants/history" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-amber-700">
+          <History className="h-3.5 w-3.5" /> History
         </Link>
       </div>
 

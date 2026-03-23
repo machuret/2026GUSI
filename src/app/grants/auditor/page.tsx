@@ -6,7 +6,7 @@ import {
   ArrowLeft, ShieldCheck, Loader2, ChevronDown, ChevronUp,
   CheckCircle, AlertTriangle, XCircle, Info, Trophy, PenLine,
   KanbanSquare, UserCheck, Rss, Settings, BookOpen, Sparkles,
-  Clock, Zap, Trash2, ChevronsRight, ClipboardList,
+  Clock, Zap, Trash2, ChevronsRight, ClipboardList, History,
 } from "lucide-react";
 import { authFetch, edgeFn } from "@/lib/authFetch";
 
@@ -226,6 +226,9 @@ export default function GrantAuditorPage() {
         <span className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 border border-amber-200">
           <ShieldCheck className="h-3.5 w-3.5" /> Auditor
         </span>
+        <Link href="/grants/history" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-amber-700">
+          <History className="h-3.5 w-3.5" /> History
+        </Link>
       </div>
 
       {/* Header */}

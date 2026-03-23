@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Save, Loader2, CheckCircle, Target, Building2, MapPin, DollarSign, Tag, Star, ArrowLeft, Trophy, PenLine, Rss, KanbanSquare, ShieldCheck, User, FileText, Plus, Trash2, Sparkles, X } from "lucide-react";
+import { Save, Loader2, CheckCircle, Target, Building2, MapPin, DollarSign, Tag, Star, ArrowLeft, Trophy, PenLine, Rss, KanbanSquare, ShieldCheck, User, FileText, Plus, Trash2, Sparkles, X, History } from "lucide-react";
 import { authFetch, edgeFn } from "@/lib/authFetch";
 
 const ORG_TYPES = ["Non-profit / Charity", "Social Enterprise", "SME (Small-Medium Business)", "Startup", "University / Research Institute", "Government / Council", "Indigenous Organisation", "Other"];
@@ -249,6 +249,9 @@ export default function GrantProfilePage() {
         </Link>
         <Link href="/grants/auditor" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-amber-600">
           <ShieldCheck className="h-3.5 w-3.5" /> Auditor
+        </Link>
+        <Link href="/grants/history" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-amber-700">
+          <History className="h-3.5 w-3.5" /> History
         </Link>
       </div>
 

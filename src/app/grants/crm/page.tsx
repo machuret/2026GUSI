@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, PenLine, Sparkles, ExternalLink, Loader2,
   ChevronDown, ChevronUp, StickyNote, FlaskConical, X,
-  Bell, LayoutList, Columns2, AlertTriangle,
+  Bell, LayoutList, Columns2, AlertTriangle, History,
 } from "lucide-react";
 import { useGrantsContext, type Grant } from "@/hooks/GrantsContext";
 import { authFetch } from "@/lib/authFetch";
 import { toast } from "sonner";
+import type { GrantHistoryRow } from "@/app/grants/history/page";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 
 type CrmStatus = "Researching" | "Pipeline" | "Active" | "Built" | "Improved" | "Submitted" | "Won" | "Lost";
@@ -83,6 +84,10 @@ function GrantCrmCard({
 
   const [noteError, setNoteError] = useState<string | null>(null);
 
+  // Duplicate detection — fetched once when the card is first expanded
+  const [historyMatches, setHistoryMatches] = useState<GrantHistoryRow[] | null>(null);
+  const historyFetched = useRef(false);
+
   const saveNotes = async () => {
     setSavingNotes(true); setNoteError(null);
     try {
@@ -120,6 +125,16 @@ function GrantCrmCard({
     } catch { setResearchErr("Network error"); }
     finally { setResearching(false); }
   };
+
+  // Fetch previous engagement history for this funder on first expand
+  useEffect(() => {
+    if (!expanded || historyFetched.current || !grant.founder) return;
+    historyFetched.current = true;
+    authFetch(`/api/grants/history/check?funderName=${encodeURIComponent(grant.founder)}`)
+      .then((res) => res.json())
+      .then((data) => setHistoryMatches(data.matches ?? []))
+      .catch(() => setHistoryMatches([]));
+  }, [expanded, grant.founder]);
 
   const col = COLUMNS.find((c) => c.status === status);
   const deadlineMs = grant.deadlineDate ? new Date(grant.deadlineDate).getTime() : null;
@@ -220,6 +235,34 @@ function GrantCrmCard({
         <div className="border-t border-gray-100 px-4 py-3 space-y-3">
           {researchMsg && <p className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">{researchMsg}</p>}
           {researchErr && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{researchErr}</p>}
+
+          {/* Previous engagement alert */}
+          {historyMatches && historyMatches.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+                  <History className="h-3.5 w-3.5" />
+                  Previously approached ({historyMatches.length} record{historyMatches.length !== 1 ? "s" : ""})
+                </p>
+                <Link href="/grants/history" className="text-[10px] font-medium text-amber-700 hover:underline">View all →</Link>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {historyMatches.map((m) => (
+                  <span key={m.id} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                    m.outcome === "Won"      ? "bg-green-100 text-green-800" :
+                    m.outcome === "Rejected" ? "bg-red-100 text-red-700" :
+                    m.outcome === "Active"   ? "bg-blue-100 text-blue-700" :
+                    "bg-gray-100 text-gray-600"
+                  }`}>
+                    {m.outcome ?? "Unknown"}{m.submittedAt ? ` · ${new Date(m.submittedAt).getFullYear()}` : ""}{m.amount ? ` · ${m.amount}` : ""}
+                  </span>
+                ))}
+              </div>
+              {historyMatches[0]?.rejectionReason && (
+                <p className="text-[10px] text-amber-700">↳ {historyMatches[0].rejectionReason}</p>
+              )}
+            </div>
+          )}
 
           {/* Grant details */}
           <div className="space-y-2 text-xs text-gray-600">
@@ -420,6 +463,9 @@ export default function GrantsCrmPage() {
           </button>
           <Link href="/grants" className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
             ← All Grants
+          </Link>
+          <Link href="/grants/history" className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-700 hover:bg-amber-100">
+            <History className="h-4 w-4" /> History
           </Link>
           <Link href="/grants/builder" className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700">
             <PenLine className="h-4 w-4" /> Grant Builder

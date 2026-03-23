@@ -75,6 +75,35 @@ export async function POST(req: NextRequest) {
       if (crawlMs > 3000) logger.warn("Grant Analyse", `Slow crawl: ${crawlMs}ms for ${grant.url}`);
     }
 
+    // ── Query past engagement history for this funder ─────────────────────
+    // Run in parallel with the context fetch above; a failure here is non-fatal.
+    let historyBlock = "";
+    if (grant.founder) {
+      try {
+        const { data: historyRows } = await db
+          .from("GrantHistory")
+          .select("funderName, grantName, outcome, amount, rejectionReason, notes, submittedAt")
+          .eq("companyId", DEMO_COMPANY_ID)
+          .ilike("funderName", `%${(grant.founder as string).split(" ")[0]}%`)
+          .order("submittedAt", { ascending: false, nullsFirst: false })
+          .limit(5);
+
+        if (historyRows && historyRows.length > 0) {
+          const lines = historyRows.map((r: Record<string, unknown>) => {
+            const date = r.submittedAt ? new Date(r.submittedAt as string).getFullYear() : "Unknown year";
+            const parts = [`- ${r.funderName}${r.grantName ? ` / ${r.grantName}` : ""}: ${r.outcome ?? "Unknown outcome"} (${date})`];
+            if (r.amount) parts.push(`  Amount: ${r.amount}`);
+            if (r.rejectionReason) parts.push(`  Rejection reason: ${r.rejectionReason}`);
+            if (r.notes) parts.push(`  Notes: ${r.notes}`);
+            return parts.join("\n");
+          });
+          historyBlock = `## PAST SUBMISSION HISTORY WITH THIS FUNDER\nWe have previously engaged with this funder. Factor this into your assessment:\n\n${lines.join("\n\n")}`;
+        }
+      } catch (histErr) {
+        logger.warn("Grant Analyse", "Failed to load history context — continuing without it", { error: String(histErr) });
+      }
+    }
+
     // ── Build grant details block ─────────────────────────────────────────
     const grantLines = [
       `Grant Name: ${grant.name}`,
@@ -105,6 +134,7 @@ export async function POST(req: NextRequest) {
       profileBlock,
       company.block,
       vault.block,
+      historyBlock,
       crawledContent
         ? `## LIVE GRANT PAGE CONTENT (crawled from ${grant.url})\nUse this to verify eligibility criteria, funder priorities, and application requirements:\n\n${crawledContent}`
         : "",

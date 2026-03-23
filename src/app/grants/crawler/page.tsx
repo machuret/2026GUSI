@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   Globe, Loader2, Plus, AlertCircle,
-  Rss, Search, Info, Zap, Trophy, PenLine, UserCheck, KanbanSquare, Link2,
+  Rss, Search, Info, Zap, Trophy, PenLine, UserCheck, KanbanSquare, Link2, History, ShieldCheck,
 } from "lucide-react";
 import { DEMO_COMPANY_ID } from "@/lib/constants";
 import { useGrantsContext } from "@/hooks/GrantsContext";
@@ -137,6 +137,12 @@ export default function GrantCrawlerPage() {
         <span className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 border border-brand-200">
           <Rss className="h-3.5 w-3.5" /> Crawler
         </span>
+        <Link href="/grants/auditor" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-amber-600">
+          <ShieldCheck className="h-3.5 w-3.5" /> Auditor
+        </Link>
+        <Link href="/grants/history" className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-amber-700">
+          <History className="h-3.5 w-3.5" /> History
+        </Link>
       </div>
 
       <div className="mb-6">
