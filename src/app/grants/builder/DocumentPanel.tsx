@@ -57,6 +57,7 @@ export default function DocumentPanel({
       setOpenNotes((prev) => { const next = new Set(prev); next.delete(s); return next; });
     }
   };
+
   const totalCriteria = requirements
     ? requirements.criteria.length + requirements.mandatoryRequirements.length
     : 0;
@@ -260,7 +261,7 @@ export default function DocumentPanel({
                     <textarea
                       value={regenNotes[s] ?? ""}
                       onChange={(e) => setRegenNotes((prev) => ({ ...prev, [s]: e.target.value }))}
-                      onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); handleRegen(s); } }}
+                      onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !generatingSection) { e.preventDefault(); handleRegen(s); } }}
                       placeholder="e.g. Fix org type to NGO, update impact numbers, emphasise youth reach… (Ctrl+Enter to regen)"
                       rows={2}
                       className="w-full resize-none rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs text-gray-700 placeholder:text-gray-300 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
@@ -268,8 +269,9 @@ export default function DocumentPanel({
                   </div>
                   <button
                     onClick={() => toggleNote(s)}
+                    aria-label="Close regen instruction"
                     className="mt-1 text-violet-300 hover:text-violet-500"
-                    title="Dismiss"
+                    title="Close"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
