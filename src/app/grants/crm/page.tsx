@@ -1,334 +1,30 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft, PenLine, Sparkles, ExternalLink, Loader2,
-  ChevronDown, ChevronUp, StickyNote, FlaskConical, X,
-  Bell, LayoutList, Columns2, AlertTriangle, History,
+  ArrowLeft, PenLine, Sparkles, Loader2, X,
+  LayoutList, Columns2, History,
 } from "lucide-react";
 import { useGrantsContext, type Grant } from "@/hooks/GrantsContext";
 import { authFetch } from "@/lib/authFetch";
 import { toast } from "sonner";
-import type { GrantHistoryRow } from "@/app/grants/history/page";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
-
-type CrmStatus = "Researching" | "Pipeline" | "Active" | "Built" | "Improved" | "Submitted" | "Won" | "Lost";
-type ViewMode = "kanban" | "list";
-
-const COLUMNS: { status: CrmStatus; label: string; color: string; bg: string; border: string }[] = [
-  { status: "Researching", label: "🔍 Researching",  color: "text-blue-700",   bg: "bg-blue-50",   border: "border-blue-200" },
-  { status: "Pipeline",    label: "📋 Pipeline",     color: "text-purple-700", bg: "bg-purple-50", border: "border-purple-200" },
-  { status: "Active",      label: "✍️ Active",       color: "text-brand-700",  bg: "bg-brand-50",  border: "border-brand-200" },
-  { status: "Built",       label: "🏗️ Built",        color: "text-emerald-700",bg: "bg-emerald-50",border: "border-emerald-200" },
-  { status: "Improved",    label: "✨ Improved",     color: "text-teal-700",   bg: "bg-teal-50",   border: "border-teal-200" },
-  { status: "Submitted",   label: "📤 Submitted",    color: "text-orange-700", bg: "bg-orange-50", border: "border-orange-200" },
-  { status: "Lost",        label: "❌ Lost",         color: "text-gray-500",   bg: "bg-gray-50",   border: "border-gray-200" },
-];
-
-const STATUS_OPTIONS: CrmStatus[] = ["Researching", "Pipeline", "Active", "Built", "Improved", "Submitted", "Won", "Lost"];
-
-function parseAmount(raw?: string | null): number | null {
-  if (!raw) return null;
-  const cleaned = raw.replace(/,/g, "");
-  const m = cleaned.match(/([\d]+(?:\.\d+)?)/);
-  if (!m) return null;
-  const n = parseFloat(m[0]);
-  if (/k\b/i.test(raw)) return n * 1000;
-  return n;
-}
-
-function formatCurrency(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-  return `$${n.toLocaleString()}`;
-}
-
-function getDaysLeft(deadlineDate?: string | null): number | null {
-  if (!deadlineDate) return null;
-  return Math.ceil((new Date(deadlineDate).getTime() - Date.now()) / 86_400_000);
-}
-
-function sortByUrgency(grants: Grant[]): Grant[] {
-  return [...grants].sort((a, b) => {
-    const da = getDaysLeft(a.deadlineDate);
-    const db = getDaysLeft(b.deadlineDate);
-    if (da === null && db === null) return 0;
-    if (da === null) return 1;
-    if (db === null) return -1;
-    return da - db;
-  });
-}
-
-function GrantCrmCard({
-  grant,
-  onUpdate,
-  companyDNA,
-}: {
-  grant: Grant;
-  onUpdate: (id: string, d: Partial<Grant>) => Promise<unknown>;
-  companyDNA: string;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [notes, setNotes] = useState(grant.crmNotes ?? "");
-  const [savingNotes, setSavingNotes] = useState(false);
-  const [status, setStatus] = useState<CrmStatus | null>(grant.crmStatus ?? null);
-  const [removingFromCrm, setRemovingFromCrm] = useState(false);
-
-  // Sync local state when parent grant prop changes (e.g. after research auto-fill)
-  useEffect(() => { setNotes(grant.crmNotes ?? ""); }, [grant.crmNotes]);
-  useEffect(() => { setStatus(grant.crmStatus ?? null); }, [grant.crmStatus]);
-  const [researching, setResearching] = useState(false);
-  const [researchMsg, setResearchMsg] = useState<string | null>(null);
-  const [researchErr, setResearchErr] = useState<string | null>(null);
-
-  const [noteError, setNoteError] = useState<string | null>(null);
-
-  // Duplicate detection — fetched once when the card is first expanded
-  const [historyMatches, setHistoryMatches] = useState<GrantHistoryRow[] | null>(null);
-  const historyFetched = useRef(false);
-
-  const saveNotes = async () => {
-    setSavingNotes(true); setNoteError(null);
-    try {
-      const result = await onUpdate(grant.id, { crmNotes: notes }) as { success?: boolean } | undefined;
-      if (result && result.success === false) setNoteError("Failed to save notes");
-    } catch { setNoteError("Network error — notes not saved"); }
-    finally { setSavingNotes(false); }
-  };
-
-  const moveStatus = async (s: CrmStatus) => {
-    if (s === status) return;
-    setStatus(s);
-    await onUpdate(grant.id, { crmStatus: s });
-  };
-
-  const removeFromCrm = async () => {
-    setRemovingFromCrm(true);
-    try { await onUpdate(grant.id, { crmStatus: null }); }
-    finally { setRemovingFromCrm(false); }
-  };
-
-  const handleResearch = async () => {
-    setResearching(true); setResearchErr(null); setResearchMsg(null);
-    try {
-      const res = await authFetch("/api/grants/research", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: grant.name, url: grant.url, founder: grant.founder, existingData: grant }),
-      });
-      const data = await res.json();
-      if (data.success && data.filled) {
-        await onUpdate(grant.id, data.filled);
-        const count = Object.keys(data.filled).length;
-        setResearchMsg(`✓ AI filled ${count} field${count !== 1 ? "s" : ""}`);
-      } else setResearchErr(data.error || "Research failed");
-    } catch { setResearchErr("Network error"); }
-    finally { setResearching(false); }
-  };
-
-  // Reset the fetched flag when founder changes (e.g. after AI Research fills it in).
-  const prevFounderRef = useRef(grant.founder);
-  useEffect(() => {
-    if (prevFounderRef.current !== grant.founder) {
-      prevFounderRef.current = grant.founder;
-      historyFetched.current = false;
-      setHistoryMatches(null);
-    }
-  }, [grant.founder]);
-
-  // Fetch previous engagement history for this funder on first expand.
-  // Guard empty-string founder (.trim()) to avoid a vacuous ILIKE match.
-  useEffect(() => {
-    if (!expanded || historyFetched.current || !grant.founder?.trim()) return;
-    historyFetched.current = true;
-    authFetch(`/api/grants/history/check?funderName=${encodeURIComponent(grant.founder.trim())}`)
-      .then((res) => res.json())
-      .then((data) => setHistoryMatches(data.matches ?? []))
-      .catch(() => setHistoryMatches([]));
-  }, [expanded, grant.founder]);
-
-  const col = COLUMNS.find((c) => c.status === status);
-  const deadlineMs = grant.deadlineDate ? new Date(grant.deadlineDate).getTime() : null;
-  const daysLeft = deadlineMs ? Math.ceil((deadlineMs - Date.now()) / 86_400_000) : null;
-  const deadlineUrgent = daysLeft !== null && daysLeft <= 14;
-  const isExpired = daysLeft !== null && daysLeft < 0;
-  const isStaleAnalysis = isExpired && grant.aiScore != null;
-
-  return (
-    <div className={`rounded-xl border shadow-sm hover:shadow-md transition-shadow ${isExpired ? "border-red-200 bg-red-50/30" : "border-gray-200 bg-white"}`}>
-      {/* Expired banner */}
-      {isExpired && (
-        <div className="flex items-center gap-1.5 rounded-t-xl bg-red-100 px-3 py-1.5 text-[11px] font-semibold text-red-700">
-          <AlertTriangle className="h-3 w-3" /> Deadline expired {Math.abs(daysLeft!)}d ago
-          {isStaleAnalysis && <span className="ml-auto text-[10px] font-medium text-red-500">⚠ Fit score may be stale</span>}
-        </div>
-      )}
-      {/* Card header */}
-      <div className="px-4 pt-4 pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold text-gray-900 text-sm leading-snug line-clamp-2">{grant.name}</p>
-            {grant.founder && <p className="text-xs text-gray-400 mt-0.5">{grant.founder}</p>}
-          </div>
-          <button onClick={() => setExpanded((v) => !v)} className="shrink-0 text-gray-400 hover:text-brand-600 mt-0.5">
-            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </button>
-        </div>
-
-        {/* Meta row */}
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {grant.amount && (
-            <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">{grant.amount}</span>
-          )}
-          {daysLeft !== null && (
-            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${deadlineUrgent ? "bg-red-50 text-red-600" : "bg-gray-100 text-gray-500"}`}>
-              {daysLeft < 0 ? "Overdue" : daysLeft === 0 ? "Due today" : `${daysLeft}d left`}
-            </span>
-          )}
-          {grant.matchScore != null && (
-            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${grant.matchScore >= 70 ? "bg-green-100 text-green-700" : grant.matchScore >= 40 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-600"}`}>
-              {grant.matchScore}% match
-            </span>
-          )}
-          {grant.complexityLabel && (
-            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-              grant.complexityLabel === "Low" ? "bg-green-100 text-green-700" :
-              grant.complexityLabel === "Medium" ? "bg-yellow-100 text-yellow-700" :
-              grant.complexityLabel === "High" ? "bg-orange-100 text-orange-700" :
-              "bg-red-100 text-red-700"
-            }`}>{grant.complexityLabel}</span>
-          )}
-        </div>
-
-        {/* Status selector */}
-        <div className="mt-3">
-          <select
-            value={status ?? ""}
-            onChange={(e) => moveStatus(e.target.value as CrmStatus)}
-            className={`w-full rounded-lg border px-2 py-1.5 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-brand-500 ${col ? `${col.bg} ${col.color} ${col.border}` : "border-gray-200 bg-gray-50 text-gray-500"}`}
-          >
-            <option value="" disabled>Move to stage…</option>
-            {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-
-        {/* Research feedback (always visible) */}
-        {researchMsg && <p className="mt-2 rounded-lg bg-green-50 border border-green-200 px-3 py-1.5 text-xs text-green-700">{researchMsg}</p>}
-        {researchErr && <p className="mt-2 rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-xs text-red-700">{researchErr}</p>}
-
-        {/* Action buttons */}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {grant.url && (
-            <a href={grant.url} target="_blank" rel="noopener noreferrer" title="Open grant URL"
-              className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:text-brand-600 hover:border-brand-300">
-              <ExternalLink className="h-3 w-3" /> URL
-            </a>
-          )}
-          <button onClick={handleResearch} disabled={researching} title="AI Research"
-            className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:text-brand-600 hover:border-brand-300 disabled:opacity-40">
-            {researching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-            {researching ? "Researching…" : "Research"}
-          </button>
-          <Link href={`/grants/builder?grantId=${grant.id}`}
-            className="flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100">
-            <PenLine className="h-3 w-3" /> Write App
-          </Link>
-          <button onClick={removeFromCrm} disabled={removingFromCrm} title="Remove from CRM"
-            className="ml-auto flex items-center gap-1 rounded-md border border-red-100 px-2 py-1 text-xs text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40">
-            {removingFromCrm ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
-            Remove
-          </button>
-        </div>
-      </div>
-
-      {/* Expanded panel */}
-      {expanded && (
-        <div className="border-t border-gray-100 px-4 py-3 space-y-3">
-          {researchMsg && <p className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">{researchMsg}</p>}
-          {researchErr && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{researchErr}</p>}
-
-          {/* Previous engagement alert */}
-          {historyMatches && historyMatches.length > 0 && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
-                  <History className="h-3.5 w-3.5" />
-                  Previously approached ({historyMatches.length} record{historyMatches.length !== 1 ? "s" : ""})
-                </p>
-                <Link href="/grants/history" className="text-[10px] font-medium text-amber-700 hover:underline">View all →</Link>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {historyMatches.map((m) => (
-                  <span key={m.id} className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                    m.outcome === "Won"      ? "bg-green-100 text-green-800" :
-                    m.outcome === "Rejected" ? "bg-red-100 text-red-700" :
-                    m.outcome === "Active"   ? "bg-blue-100 text-blue-700" :
-                    "bg-gray-100 text-gray-600"
-                  }`}>
-                    {m.outcome ?? "Unknown"}{m.submittedAt ? ` · ${new Date(m.submittedAt).getFullYear()}` : ""}{m.amount ? ` · ${m.amount}` : ""}
-                  </span>
-                ))}
-              </div>
-              {historyMatches[0]?.rejectionReason && (
-                <p className="text-[10px] text-amber-700">↳ {historyMatches[0].rejectionReason}</p>
-              )}
-            </div>
-          )}
-
-          {/* Grant details */}
-          <div className="space-y-2 text-xs text-gray-600">
-            {grant.eligibility && (
-              <div><p className="font-semibold uppercase tracking-wide text-gray-400 text-[10px]">Eligibility</p><p className="mt-0.5 whitespace-pre-wrap">{grant.eligibility}</p></div>
-            )}
-            {grant.howToApply && (
-              <div><p className="font-semibold uppercase tracking-wide text-gray-400 text-[10px]">How to Apply</p><p className="mt-0.5 whitespace-pre-wrap">{grant.howToApply}</p></div>
-            )}
-            {grant.geographicScope && (
-              <div><p className="font-semibold uppercase tracking-wide text-gray-400 text-[10px]">Scope</p><p className="mt-0.5">{grant.geographicScope}</p></div>
-            )}
-            {grant.notes && (
-              <div><p className="font-semibold uppercase tracking-wide text-gray-400 text-[10px]">Grant Notes</p><p className="mt-0.5 whitespace-pre-wrap">{grant.notes}</p></div>
-            )}
-            {!grant.eligibility && !grant.howToApply && !grant.notes && (
-              <p className="text-gray-400 italic">No details yet — click Research to auto-fill.</p>
-            )}
-          </div>
-
-          {/* CRM Notes */}
-          <div>
-            <div className="flex items-center gap-1.5 mb-1">
-              <StickyNote className="h-3 w-3 text-gray-400" />
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">CRM Notes</p>
-            </div>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              placeholder="Add research notes, contacts, action items…"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-400 resize-none"
-            />
-            <button
-              onClick={saveNotes}
-              disabled={savingNotes || notes === (grant.crmNotes ?? "")}
-              className="mt-1.5 flex items-center gap-1 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-40"
-            >
-              {savingNotes ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-              Save Notes
-            </button>
-            {noteError && <p className="mt-1 text-xs text-red-600">{noteError}</p>}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+import { GrantCrmCard } from "./components/GrantCrmCard";
+import { CrmListView } from "./components/CrmListView";
+import { CrmStats, DeadlineAlertStrip, MassResearchProgress, CrmEmptyState } from "./components/CrmStats";
+import { COLUMNS, sortByUrgency, formatCurrency, parseAmount, type CrmStatus, type ViewMode } from "./components/crmConstants";
 
 export default function GrantsCrmPage() {
   const { grants, loading, companyDNA, optimisticUpdate } = useGrantsContext();
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
+  const [dragError, setDragError] = useState<string | null>(null);
+  const [massResearching, setMassResearching] = useState(false);
+  const [researchProgress, setResearchProgress] = useState<{ done: number; total: number; errors: number } | null>(null);
+  const researchAbortRef = useRef(false);
+  const [resetting, setResetting] = useState(false);
 
-  // Optimistic wrapper: instant UI update, rolls back + toast on failure
   const safeUpdate = useCallback(async (id: string, data: Partial<Grant>) => {
     const result = await optimisticUpdate(id, data);
     if (!result.success) {
@@ -336,11 +32,6 @@ export default function GrantsCrmPage() {
     }
     return result;
   }, [optimisticUpdate]);
-
-  // ── Mass Research ────────────────────────────────────────────────────────
-  const [massResearching, setMassResearching] = useState(false);
-  const [researchProgress, setResearchProgress] = useState<{ done: number; total: number; errors: number } | null>(null);
-  const researchAbortRef = useRef(false);
 
   const handleMassResearch = useCallback(async () => {
     const crmGrants = grants.filter(g => !!g.crmStatus);
@@ -355,8 +46,7 @@ export default function GrantsCrmPage() {
       const g = crmGrants[i];
       try {
         const res = await authFetch("/api/grants/research", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ grantId: g.id }),
         });
         const data = await res.json();
@@ -368,9 +58,6 @@ export default function GrantsCrmPage() {
     setResearchProgress(null);
     alert(`✓ Researched ${ok} of ${crmGrants.length} CRM grants${errors > 0 ? ` (${errors} failed)` : ""}.`);
   }, [grants]);
-
-  // ── Reset CRM ────────────────────────────────────────────────────────────
-  const [resetting, setResetting] = useState(false);
 
   const handleResetCrm = useCallback(async () => {
     const crmGrants = grants.filter(g => !!g.crmStatus);
@@ -389,16 +76,6 @@ export default function GrantsCrmPage() {
     setResetting(false);
   }, [grants, safeUpdate]);
 
-  const crmGrants = grants.filter((g) => g.crmStatus != null);
-  const filtered = crmGrants.filter((g) => {
-    const q = search.toLowerCase();
-    return !search || g.name.toLowerCase().includes(q) || (g.founder ?? "").toLowerCase().includes(q);
-  });
-
-  const getColumn = (status: CrmStatus) => sortByUrgency(filtered.filter((g) => g.crmStatus === status));
-
-  const [dragError, setDragError] = useState<string | null>(null);
-
   const onDragEnd = useCallback(async (result: DropResult) => {
     const { draggableId, destination } = result;
     if (!destination) return;
@@ -407,26 +84,15 @@ export default function GrantsCrmPage() {
     if (!grant || grant.crmStatus === newStatus) return;
     setDragError(null);
     const res = await safeUpdate(draggableId, { crmStatus: newStatus });
-    if (!res.success) {
-      setDragError(`Failed to move "${grant.name.slice(0, 40)}" — please try again`);
-    }
+    if (!res.success) setDragError(`Failed to move "${grant.name.slice(0, 40)}" — please try again`);
   }, [grants, safeUpdate]);
 
-  const totalInCrm = crmGrants.length;
-  const submittedCount = crmGrants.filter((g) => g.crmStatus === "Submitted").length;
-  const activeCount = crmGrants.filter((g) => g.crmStatus === "Active" || g.crmStatus === "Submitted").length;
-  const researchingCount = crmGrants.filter((g) => g.crmStatus === "Researching" || g.crmStatus === "Pipeline").length;
-
-  // Total pipeline value (exclude Won/Lost from "pipeline" figure)
-  const pipelineGrants = crmGrants.filter((g) => g.crmStatus !== "Won" && g.crmStatus !== "Lost");
-  const pipelineValue = pipelineGrants.reduce((sum, g) => sum + (parseAmount(g.amount) ?? 0), 0);
-  const lostCount = crmGrants.filter((g) => g.crmStatus === "Lost").length;
-
-  // Deadline alerts: grants due within 7 days across all active stages
-  const urgentGrants = crmGrants.filter((g) => {
-    const d = getDaysLeft(g.deadlineDate);
-    return d !== null && d <= 7 && g.crmStatus !== "Won" && g.crmStatus !== "Lost";
-  }).sort((a, b) => (getDaysLeft(a.deadlineDate) ?? 99) - (getDaysLeft(b.deadlineDate) ?? 99));
+  const crmGrants = grants.filter((g) => g.crmStatus != null);
+  const filtered = crmGrants.filter((g) => {
+    const q = search.toLowerCase();
+    return !search || g.name.toLowerCase().includes(q) || (g.founder ?? "").toLowerCase().includes(q);
+  });
+  const getColumn = (status: CrmStatus) => sortByUrgency(filtered.filter((g) => g.crmStatus === status));
 
   return (
     <div className="mx-auto max-w-[1600px]">
@@ -442,33 +108,26 @@ export default function GrantsCrmPage() {
           <p className="mt-1 text-gray-500">Manage your grant pipeline — research, track progress, and write applications</p>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          {/* View toggle */}
           <div className="flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
-            <button
-              onClick={() => setViewMode("kanban")}
+            <button onClick={() => setViewMode("kanban")}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "kanban" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
               <Columns2 className="h-3.5 w-3.5" /> Kanban
             </button>
-            <button
-              onClick={() => setViewMode("list")}
+            <button onClick={() => setViewMode("list")}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "list" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
               <LayoutList className="h-3.5 w-3.5" /> List
             </button>
           </div>
-          <button
-            onClick={handleMassResearch}
+          <button onClick={handleMassResearch}
             disabled={massResearching || loading || grants.filter(g => !!g.crmStatus).length === 0}
-            className="flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
-          >
+            className="flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50">
             {massResearching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
             {massResearching ? `Researching… (${researchProgress?.done ?? 0}/${researchProgress?.total ?? 0})` : "Research All"}
           </button>
-          <button
-            onClick={handleResetCrm}
+          <button onClick={handleResetCrm}
             disabled={resetting || loading || grants.filter(g => !!g.crmStatus).length === 0}
             className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
-            title="Remove all grants from CRM (does not delete the grants)"
-          >
+            title="Remove all grants from CRM (does not delete the grants)">
             {resetting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
             Reset CRM
           </button>
@@ -484,170 +143,37 @@ export default function GrantsCrmPage() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-          <p className="text-xs text-gray-400">Total in CRM</p>
-          <p className="text-2xl font-bold text-gray-900">{totalInCrm}</p>
-        </div>
-        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
-          <p className="text-xs text-blue-600">Researching / Pipeline</p>
-          <p className="text-2xl font-bold text-blue-800">{researchingCount}</p>
-        </div>
-        <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
-          <p className="text-xs text-brand-600">Active / Submitted</p>
-          <p className="text-2xl font-bold text-brand-800">{activeCount}</p>
-        </div>
-        <div className="rounded-xl border border-purple-200 bg-purple-50 px-4 py-3">
-          <p className="text-xs text-purple-600">Pipeline Value</p>
-          <p className="text-2xl font-bold text-purple-800">{pipelineValue > 0 ? formatCurrency(pipelineValue) : "—"}</p>
-        </div>
-        <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
-          <p className="text-xs text-orange-600">Submitted</p>
-          <p className="text-2xl font-bold text-orange-800">{submittedCount}</p>
-        </div>
-      </div>
-
-      {/* Deadline alerts strip */}
-      {urgentGrants.length > 0 && (
-        <div className="mb-5 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Bell className="h-4 w-4 text-orange-500" />
-            <p className="text-sm font-semibold text-orange-700">
-              {urgentGrants.length} grant{urgentGrants.length !== 1 ? "s" : ""} due within 7 days
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {urgentGrants.map((g) => {
-              const d = getDaysLeft(g.deadlineDate)!;
-              const col = COLUMNS.find((c) => c.status === g.crmStatus);
-              return (
-                <div key={g.id} className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs ${d <= 0 ? "border-red-200 bg-red-50" : "border-orange-200 bg-white"}`}>
-                  <span className={`font-semibold ${d <= 0 ? "text-red-600" : "text-orange-700"}`}>
-                    {d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? "Due today" : `${d}d left`}
-                  </span>
-                  <span className="text-gray-700 font-medium">{g.name.length > 40 ? g.name.slice(0, 40) + "…" : g.name}</span>
-                  {col && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${col.bg} ${col.color}`}>{g.crmStatus}</span>}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Mass research progress bar */}
+      <CrmStats crmGrants={crmGrants} />
+      <DeadlineAlertStrip crmGrants={crmGrants} />
       {researchProgress && (
-        <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
-          <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-blue-700">
-            <span>Researching CRM grants — {researchProgress.done} / {researchProgress.total} done{researchProgress.errors > 0 ? ` · ${researchProgress.errors} failed` : ""}</span>
-            <div className="flex items-center gap-2">
-              <span>{Math.round((researchProgress.done / researchProgress.total) * 100)}%</span>
-              <button onClick={() => { researchAbortRef.current = true; }} className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-200">
-                <X className="h-3 w-3" /> Cancel
-              </button>
-            </div>
-          </div>
-          <div className="h-2 w-full rounded-full bg-blue-100 overflow-hidden">
-            <div className="h-full rounded-full bg-blue-500 transition-all duration-300"
-              style={{ width: `${(researchProgress.done / researchProgress.total) * 100}%` }} />
-          </div>
-        </div>
+        <MassResearchProgress
+          done={researchProgress.done}
+          total={researchProgress.total}
+          errors={researchProgress.errors}
+          onCancel={() => { researchAbortRef.current = true; }}
+        />
       )}
 
       {/* Search */}
       <div className="mb-5">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+        <input value={search} onChange={(e) => setSearch(e.target.value)}
           placeholder="Search CRM grants…"
           className="w-full max-w-sm rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         />
       </div>
 
-      {/* Drag error */}
       {dragError && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{dragError}</div>
       )}
 
-      {/* Empty state */}
-      {!loading && crmGrants.length === 0 && (
-        <div className="rounded-xl border border-dashed border-gray-300 py-20 text-center">
-          <FlaskConical className="mx-auto h-10 w-10 text-gray-300 mb-3" />
-          <p className="text-gray-500 font-medium">No grants in CRM yet</p>
-          <p className="text-sm text-gray-400 mt-1">Go to <Link href="/grants" className="text-brand-600 hover:underline">All Grants</Link> and click <strong>Send to CRM</strong> on any grant.</p>
-        </div>
-      )}
+      {!loading && crmGrants.length === 0 && <CrmEmptyState />}
 
-      {/* LIST VIEW */}
+      {/* List view */}
       {!loading && crmGrants.length > 0 && viewMode === "list" && (
-        <div className="rounded-xl border border-gray-200 bg-white overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Grant</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-[110px]">Stage</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-[90px]">Amount</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-[110px]">Deadline</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-[80px]">Match</th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 w-[100px]">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortByUrgency(filtered).map((grant) => {
-                const daysLeft = getDaysLeft(grant.deadlineDate);
-                const colMeta = COLUMNS.find((c) => c.status === grant.crmStatus);
-                return (
-                  <tr key={grant.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900 text-sm">{grant.name}</p>
-                      {grant.founder && <p className="text-xs text-gray-400">{grant.founder}</p>}
-                    </td>
-                    <td className="px-3 py-3">
-                      <select
-                        value={grant.crmStatus ?? ""}
-                        onChange={(e) => safeUpdate(grant.id, { crmStatus: e.target.value as CrmStatus })}
-                        className={`w-full rounded-lg border px-2 py-1 text-xs font-medium focus:outline-none ${colMeta ? `${colMeta.bg} ${colMeta.color} ${colMeta.border}` : "border-gray-200"}`}
-                      >
-                        {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </td>
-                    <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{grant.amount || <span className="text-gray-300">—</span>}</td>
-                    <td className="px-3 py-3 whitespace-nowrap">
-                      {daysLeft !== null ? (
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${daysLeft <= 0 ? "bg-red-100 text-red-600" : daysLeft <= 7 ? "bg-orange-100 text-orange-600" : daysLeft <= 14 ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-500"}`}>
-                          {daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Today" : `${daysLeft}d`}
-                        </span>
-                      ) : <span className="text-gray-300 text-xs">—</span>}
-                    </td>
-                    <td className="px-3 py-3">
-                      {grant.matchScore != null ? (
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${grant.matchScore >= 70 ? "bg-green-100 text-green-700" : grant.matchScore >= 40 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-600"}`}>{grant.matchScore}%</span>
-                      ) : <span className="text-gray-300 text-xs">—</span>}
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex items-center gap-1">
-                        {grant.url && (
-                          <a href={grant.url} target="_blank" rel="noopener noreferrer" className="rounded p-1 text-brand-400 hover:bg-brand-50 hover:text-brand-700" title="Open URL">
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </a>
-                        )}
-                        <Link href={`/grants/builder?grantId=${grant.id}`} className="rounded p-1 text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600" title="Write Application">
-                          <PenLine className="h-3.5 w-3.5" />
-                        </Link>
-                        <button onClick={() => safeUpdate(grant.id, { crmStatus: null })} className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-500" title="Remove from CRM">
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <CrmListView grants={filtered} onUpdate={safeUpdate} />
       )}
 
-      {/* KANBAN VIEW */}
+      {/* Kanban view */}
       {(loading || crmGrants.length > 0) && viewMode === "kanban" && (
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="overflow-x-auto pb-4">
@@ -657,7 +183,6 @@ export default function GrantsCrmPage() {
                 const colValue = cards.reduce((sum, g) => sum + (parseAmount(g.amount) ?? 0), 0);
                 return (
                   <div key={col.status} className="flex-1 min-w-[220px]">
-                    {/* Column header */}
                     <div className={`mb-3 rounded-lg px-3 py-2 ${col.bg} border ${col.border}`}>
                       <div className="flex items-center justify-between">
                         <span className={`text-sm font-semibold ${col.color}`}>{col.label}</span>
@@ -667,15 +192,10 @@ export default function GrantsCrmPage() {
                         <p className={`text-xs mt-0.5 font-medium ${col.color} opacity-70`}>{formatCurrency(colValue)}</p>
                       )}
                     </div>
-
-                    {/* Droppable column */}
                     <Droppable droppableId={col.status}>
                       {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.droppableProps}
-                          className={`space-y-3 min-h-[80px] rounded-lg p-1 transition-colors ${snapshot.isDraggingOver ? `${col.bg} ring-2 ring-inset ${col.border.replace("border-", "ring-")}` : ""}`}
-                        >
+                        <div ref={provided.innerRef} {...provided.droppableProps}
+                          className={`space-y-3 min-h-[80px] rounded-lg p-1 transition-colors ${snapshot.isDraggingOver ? `${col.bg} ring-2 ring-inset ${col.border.replace("border-", "ring-")}` : ""}`}>
                           {loading ? (
                             <div className="rounded-xl border border-gray-200 bg-white p-4 text-center">
                               <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-300" />
@@ -688,17 +208,9 @@ export default function GrantsCrmPage() {
                             cards.map((grant, index) => (
                               <Draggable key={grant.id} draggableId={grant.id} index={index}>
                                 {(dragProvided, dragSnapshot) => (
-                                  <div
-                                    ref={dragProvided.innerRef}
-                                    {...dragProvided.draggableProps}
-                                    {...dragProvided.dragHandleProps}
-                                    className={dragSnapshot.isDragging ? "opacity-90 rotate-1 scale-[1.02]" : ""}
-                                  >
-                                    <GrantCrmCard
-                                      grant={grant}
-                                      onUpdate={safeUpdate}
-                                      companyDNA={companyDNA}
-                                    />
+                                  <div ref={dragProvided.innerRef} {...dragProvided.draggableProps} {...dragProvided.dragHandleProps}
+                                    className={dragSnapshot.isDragging ? "opacity-90 rotate-1 scale-[1.02]" : ""}>
+                                    <GrantCrmCard grant={grant} onUpdate={safeUpdate} companyDNA={companyDNA} />
                                   </div>
                                 )}
                               </Draggable>
