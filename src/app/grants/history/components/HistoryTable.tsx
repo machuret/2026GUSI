@@ -19,7 +19,7 @@ interface Props {
   onRetry: () => void;
 }
 
-function SummaryStats({ rows }: { rows: GrantHistoryRow[] }) {
+export function SummaryStats({ rows }: { rows: GrantHistoryRow[] }) {
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const r of rows) {
@@ -65,47 +65,49 @@ export function HistoryTable({
 
   return (
     <>
-      {!loading && rows.length > 0 && <SummaryStats rows={rows} />}
+      {!loading && !error && rows.length > 0 && <SummaryStats rows={rows} />}
 
-      {/* Filters */}
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search funder, partner, notes…"
-            className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-          />
+      {/* Filters — hidden while loading or in error state */}
+      {!loading && !error && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-48">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Search funder, partner, notes…"
+              className="w-full rounded-lg border border-gray-300 py-2.5 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Filter className="h-3.5 w-3.5 text-gray-400" />
+            {["All", ...ALL_OUTCOMES].map((o) => (
+              <button
+                key={o}
+                onClick={() => onOutcomeChange(o)}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
+                  outcomeFilter === o ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {o === "All" ? "All outcomes" : (OUTCOME_CONFIG[o]?.label ?? o)}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {["All", ...ALL_REGIONS].map((r) => (
+              <button
+                key={r}
+                onClick={() => onRegionChange(r)}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
+                  regionFilter === r ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {r === "All" ? "All regions" : r}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Filter className="h-3.5 w-3.5 text-gray-400" />
-          {["All", ...ALL_OUTCOMES].map((o) => (
-            <button
-              key={o}
-              onClick={() => onOutcomeChange(o)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
-                outcomeFilter === o ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {o === "All" ? "All outcomes" : (OUTCOME_CONFIG[o]?.label ?? o)}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {["All", ...ALL_REGIONS].map((r) => (
-            <button
-              key={r}
-              onClick={() => onRegionChange(r)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
-                regionFilter === r ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {r === "All" ? "All regions" : r}
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
 
       {/* States */}
       {loading && (

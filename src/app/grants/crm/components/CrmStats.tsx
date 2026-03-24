@@ -1,9 +1,9 @@
 "use client";
 
-import { Bell, X, Loader2, FlaskConical } from "lucide-react";
+import { Bell, X, FlaskConical } from "lucide-react";
 import Link from "next/link";
 import type { Grant } from "@/hooks/GrantsContext";
-import { COLUMNS, getDaysLeft, formatCurrency, type ColumnDef } from "./crmConstants";
+import { COLUMNS, getDaysLeft, formatCurrency, parseAmount, type ColumnDef } from "./crmConstants";
 
 interface StatsProps {
   crmGrants: Grant[];
@@ -23,14 +23,7 @@ export function CrmStats({ crmGrants }: StatsProps) {
   const submittedCount = crmGrants.filter((g) => g.crmStatus === "Submitted").length;
   const pipelineValue = crmGrants
     .filter((g) => g.crmStatus !== "Won" && g.crmStatus !== "Lost")
-    .reduce((sum, g) => {
-      if (!g.amount) return sum;
-      const cleaned = g.amount.replace(/,/g, "");
-      const m = cleaned.match(/([\d]+(?:\.\d+)?)/);
-      if (!m) return sum;
-      const n = parseFloat(m[0]);
-      return sum + (/k\b/i.test(g.amount) ? n * 1000 : n);
-    }, 0);
+    .reduce((sum, g) => sum + (parseAmount(g.amount) ?? 0), 0);
 
   return (
     <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">

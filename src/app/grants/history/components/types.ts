@@ -1,3 +1,5 @@
+export type GrantOutcome = "Won" | "Submitted" | "Rejected" | "Shortlisted" | "NotSubmitted" | "Exploratory" | "Active" | "Pending";
+
 export interface GrantHistoryRow {
   id: string;
   companyId: string;
@@ -5,7 +7,7 @@ export interface GrantHistoryRow {
   grantName?: string | null;
   partnerOrg?: string | null;
   region?: string | null;
-  outcome?: "Won" | "Submitted" | "Rejected" | "Shortlisted" | "NotSubmitted" | "Exploratory" | "Active" | "Pending" | null;
+  outcome?: GrantOutcome | null;
   amount?: string | null;
   rejectionReason?: string | null;
   notes?: string | null;

@@ -16,7 +16,7 @@ import { CrmStats, DeadlineAlertStrip, MassResearchProgress, CrmEmptyState } fro
 import { COLUMNS, sortByUrgency, formatCurrency, parseAmount, type CrmStatus, type ViewMode } from "./components/crmConstants";
 
 export default function GrantsCrmPage() {
-  const { grants, loading, companyDNA, optimisticUpdate } = useGrantsContext();
+  const { grants, loading, optimisticUpdate } = useGrantsContext();
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [dragError, setDragError] = useState<string | null>(null);
@@ -210,7 +210,7 @@ export default function GrantsCrmPage() {
                                 {(dragProvided, dragSnapshot) => (
                                   <div ref={dragProvided.innerRef} {...dragProvided.draggableProps} {...dragProvided.dragHandleProps}
                                     className={dragSnapshot.isDragging ? "opacity-90 rotate-1 scale-[1.02]" : ""}>
-                                    <GrantCrmCard grant={grant} onUpdate={safeUpdate} companyDNA={companyDNA} />
+                                    <GrantCrmCard grant={grant} onUpdate={safeUpdate} />
                                   </div>
                                 )}
                               </Draggable>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Loader2, Sparkles, Upload, X, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { authFetch, edgeFn } from "@/lib/authFetch";
 import { toast } from "sonner";
@@ -30,6 +30,15 @@ export function ImportModal({ onClose, onImported }: Props) {
   const [parsed, setParsed] = useState<ParsedRow[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape" && !saving && !parsing) onClose();
+  }, [onClose, saving, parsing]);
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   const handleParse = async () => {
     if (!rawText.trim()) return;
@@ -74,7 +83,12 @@ export function ImportModal({ onClose, onImported }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Import grant history via AI"
+    >
       <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div>
@@ -83,7 +97,7 @@ export function ImportModal({ onClose, onImported }: Props) {
               Paste raw text — partnership notes, handover docs, meeting notes. The AI will parse it into structured records.
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} aria-label="Close import modal" className="text-gray-400 hover:text-gray-600">
             <X className="h-5 w-5" />
           </button>
         </div>

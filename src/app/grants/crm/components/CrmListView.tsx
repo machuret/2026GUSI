@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { PenLine, ExternalLink } from "lucide-react";
+import { PenLine, ExternalLink, X } from "lucide-react";
 import type { Grant } from "@/hooks/GrantsContext";
 import { COLUMNS, STATUS_OPTIONS, getDaysLeft, sortByUrgency, type CrmStatus, type ColumnDef } from "./crmConstants";
 
@@ -81,6 +81,12 @@ export function CrmListView({ grants, onUpdate }: Props) {
                       className="rounded-md border border-emerald-200 bg-emerald-50 p-1 text-emerald-600 hover:bg-emerald-100">
                       <PenLine className="h-3.5 w-3.5" />
                     </Link>
+                    <button
+                      onClick={() => onUpdate(grant.id, { crmStatus: null })}
+                      title="Remove from CRM"
+                      className="rounded-md border border-red-100 p-1 text-red-300 hover:bg-red-50 hover:text-red-500">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -88,6 +94,9 @@ export function CrmListView({ grants, onUpdate }: Props) {
           })}
         </tbody>
       </table>
+      <div className="border-t border-gray-100 px-4 py-3 text-xs text-gray-400">
+        {sorted.length} grant{sorted.length !== 1 ? "s" : ""}
+      </div>
     </div>
   );
 }

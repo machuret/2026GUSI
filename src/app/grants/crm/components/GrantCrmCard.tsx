@@ -14,7 +14,6 @@ import { COLUMNS, STATUS_OPTIONS, type CrmStatus, type ColumnDef } from "./crmCo
 interface Props {
   grant: Grant;
   onUpdate: (id: string, d: Partial<Grant>) => Promise<unknown>;
-  companyDNA: string;
 }
 
 export function GrantCrmCard({ grant, onUpdate }: Props) {

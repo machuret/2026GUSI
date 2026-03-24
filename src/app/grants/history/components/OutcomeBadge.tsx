@@ -1,5 +1,3 @@
-"use client";
-
 import { OUTCOME_CONFIG } from "./types";
 
 export function OutcomeBadge({ outcome }: { outcome?: string | null }) {
