@@ -205,7 +205,7 @@ export default function GrantBuilderPage() {
   }, [selectedGrantId, brief, enabledList, tone, length, customInstructions, requirements]);
 
   // ── Regen single section ───────────────────────────────────────────────────
-  const regenSection = useCallback(async (section: SectionName) => {
+  const regenSection = useCallback(async (section: SectionName, note?: string) => {
     if (!selectedGrantId || !brief) return;
     setGeneratingSection(section);
     try {
@@ -214,7 +214,9 @@ export default function GrantBuilderPage() {
       for (const s of enabledList) {
         if (s !== section && sections[s]) prev[s] = sections[s];
       }
-      const ci = customInstructions[section]?.trim() || undefined;
+      // Merge persistent custom instructions with the one-shot regen note
+      const parts = [customInstructions[section]?.trim(), note?.trim()].filter(Boolean);
+      const ci = parts.length > 0 ? parts.join("\n\n") : undefined;
       const res  = await authFetch("/api/grants/write", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

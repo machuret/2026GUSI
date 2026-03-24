@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Sparkles, Loader2, Copy, RefreshCw, CheckCircle, Download, Save, FileUp, FileDown, RotateCcw, ShieldCheck, ChevronsRight, ClipboardList } from "lucide-react";
+import { Sparkles, Loader2, Copy, RefreshCw, CheckCircle, Download, Save, FileUp, FileDown, RotateCcw, ShieldCheck, ChevronsRight, ClipboardList, MessageSquarePlus, X } from "lucide-react";
 import { SECTION_META, SectionName, wordCount, FunderRequirements } from "./types";
 
 interface Props {
@@ -16,7 +17,7 @@ interface Props {
   grantName: string;
   onCopySection: (key: string, text: string) => void;
   onCopyAll: () => void;
-  onRegenSection: (s: SectionName) => void;
+  onRegenSection: (s: SectionName, note?: string) => void;
   onRegenAll: () => void;
   onEditSection: (s: SectionName, value: string) => void;
   onDownload: () => void;
@@ -37,6 +38,24 @@ export default function DocumentPanel({
   onDownload, onDownloadPdf, exportingPdf, onSaveDraft, onExportDoc, exportingDoc, hasSections,
   requirements, checkedCriteria,
 }: Props) {
+  const [regenNotes, setRegenNotes] = useState<Record<string, string>>({});
+  const [openNotes, setOpenNotes] = useState<Set<string>>(new Set());
+
+  const toggleNote = (s: string) => {
+    setOpenNotes((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) { next.delete(s); } else { next.add(s); }
+      return next;
+    });
+  };
+
+  const handleRegen = (s: SectionName) => {
+    const note = regenNotes[s]?.trim();
+    onRegenSection(s, note || undefined);
+    // Clear note and collapse after firing
+    setRegenNotes((prev) => ({ ...prev, [s]: "" }));
+    setOpenNotes((prev) => { const next = new Set(prev); next.delete(s); return next; });
+  };
   const totalCriteria = requirements
     ? requirements.criteria.length + requirements.mandatoryRequirements.length
     : 0;
@@ -206,7 +225,19 @@ export default function DocumentPanel({
                           : <Copy className="h-4 w-4" />}
                       </button>
                       <button
-                        onClick={() => onRegenSection(s)}
+                        onClick={() => toggleNote(s)}
+                        disabled={!!generatingSection}
+                        title={openNotes.has(s) ? "Hide instruction" : "Add regen instruction"}
+                        className={`rounded p-1 transition-colors disabled:opacity-40 ${
+                          openNotes.has(s)
+                            ? "text-violet-600 bg-violet-50"
+                            : "text-gray-400 hover:text-violet-600 hover:bg-violet-50"
+                        }`}
+                      >
+                        <MessageSquarePlus className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleRegen(s)}
                         disabled={!!generatingSection}
                         title="Regenerate section"
                         className="rounded p-1 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 disabled:opacity-40"
@@ -217,6 +248,30 @@ export default function DocumentPanel({
                   )}
                 </div>
               </div>
+
+              {/* Inline regen instruction */}
+              {openNotes.has(s) && (
+                <div className="border-b border-violet-100 bg-violet-50/60 px-4 py-2.5 flex items-start gap-2">
+                  <MessageSquarePlus className="h-3.5 w-3.5 mt-2 shrink-0 text-violet-400" />
+                  <div className="flex-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500 mb-1">Regen instruction</p>
+                    <textarea
+                      value={regenNotes[s] ?? ""}
+                      onChange={(e) => setRegenNotes((prev) => ({ ...prev, [s]: e.target.value }))}
+                      placeholder="e.g. Fix org type to NGO, update impact numbers, emphasise youth reach…"
+                      rows={2}
+                      className="w-full resize-none rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs text-gray-700 placeholder:text-gray-300 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                    />
+                  </div>
+                  <button
+                    onClick={() => toggleNote(s)}
+                    className="mt-1 text-violet-300 hover:text-violet-500"
+                    title="Dismiss"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
 
               {/* Section body */}
               {isGenerating && !hasContent ? (
