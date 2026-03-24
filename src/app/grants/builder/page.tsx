@@ -205,8 +205,8 @@ export default function GrantBuilderPage() {
   }, [selectedGrantId, brief, enabledList, tone, length, customInstructions, requirements]);
 
   // ── Regen single section ───────────────────────────────────────────────────
-  const regenSection = useCallback(async (section: SectionName, note?: string) => {
-    if (!selectedGrantId || !brief) return;
+  const regenSection = useCallback(async (section: SectionName, note?: string): Promise<boolean> => {
+    if (!selectedGrantId || !brief) return false;
     setGeneratingSection(section);
     try {
       // Pass all other completed sections as context for coherence
@@ -226,8 +226,10 @@ export default function GrantBuilderPage() {
       if (!res.ok) throw new Error(data.error || "Failed");
       setSections((prev) => ({ ...prev, [section]: data.content }));
       setSaved(false);
+      return true;
     } catch (err) {
       setGenError(`Regen failed: ${err instanceof Error ? err.message : "Error"}`);
+      return false;
     } finally {
       setGeneratingSection(null);
     }
@@ -709,7 +711,6 @@ export default function GrantBuilderPage() {
             saving={saving}
             saveMsg={saveMsg}
             totalWords={totalWords}
-            grantName={selectedGrant?.name ?? "grant"}
             onCopySection={copySection}
             onCopyAll={copyAll}
             onRegenSection={regenSection}

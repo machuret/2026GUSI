@@ -14,10 +14,9 @@ interface Props {
   saving: boolean;
   saveMsg: string | null;
   totalWords: number;
-  grantName: string;
   onCopySection: (key: string, text: string) => void;
   onCopyAll: () => void;
-  onRegenSection: (s: SectionName, note?: string) => void;
+  onRegenSection: (s: SectionName, note?: string) => Promise<boolean>;
   onRegenAll: () => void;
   onEditSection: (s: SectionName, value: string) => void;
   onDownload: () => void;
@@ -33,15 +32,15 @@ interface Props {
 
 export default function DocumentPanel({
   enabledList, sections, generatingSection, generating,
-  copied, saving, saveMsg, totalWords, grantName,
+  copied, saving, saveMsg, totalWords,
   onCopySection, onCopyAll, onRegenSection, onRegenAll, onEditSection,
   onDownload, onDownloadPdf, exportingPdf, onSaveDraft, onExportDoc, exportingDoc, hasSections,
   requirements, checkedCriteria,
 }: Props) {
-  const [regenNotes, setRegenNotes] = useState<Record<string, string>>({});
-  const [openNotes, setOpenNotes] = useState<Set<string>>(new Set());
+  const [regenNotes, setRegenNotes] = useState<Partial<Record<SectionName, string>>>({});
+  const [openNotes, setOpenNotes] = useState<Set<SectionName>>(new Set());
 
-  const toggleNote = (s: string) => {
+  const toggleNote = (s: SectionName) => {
     setOpenNotes((prev) => {
       const next = new Set(prev);
       if (next.has(s)) { next.delete(s); } else { next.add(s); }
@@ -49,12 +48,14 @@ export default function DocumentPanel({
     });
   };
 
-  const handleRegen = (s: SectionName) => {
+  const handleRegen = async (s: SectionName) => {
     const note = regenNotes[s]?.trim();
-    onRegenSection(s, note || undefined);
-    // Clear note and collapse after firing
-    setRegenNotes((prev) => ({ ...prev, [s]: "" }));
-    setOpenNotes((prev) => { const next = new Set(prev); next.delete(s); return next; });
+    const ok = await onRegenSection(s, note || undefined);
+    // Clear note and collapse only on success — preserve on failure so user can retry
+    if (ok) {
+      setRegenNotes((prev) => ({ ...prev, [s]: "" }));
+      setOpenNotes((prev) => { const next = new Set(prev); next.delete(s); return next; });
+    }
   };
   const totalCriteria = requirements
     ? requirements.criteria.length + requirements.mandatoryRequirements.length
@@ -228,6 +229,7 @@ export default function DocumentPanel({
                         onClick={() => toggleNote(s)}
                         disabled={!!generatingSection}
                         title={openNotes.has(s) ? "Hide instruction" : "Add regen instruction"}
+                        aria-label={openNotes.has(s) ? "Hide regen instruction" : "Add regen instruction"}
                         className={`rounded p-1 transition-colors disabled:opacity-40 ${
                           openNotes.has(s)
                             ? "text-violet-600 bg-violet-50"
@@ -258,7 +260,8 @@ export default function DocumentPanel({
                     <textarea
                       value={regenNotes[s] ?? ""}
                       onChange={(e) => setRegenNotes((prev) => ({ ...prev, [s]: e.target.value }))}
-                      placeholder="e.g. Fix org type to NGO, update impact numbers, emphasise youth reach…"
+                      onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); handleRegen(s); } }}
+                      placeholder="e.g. Fix org type to NGO, update impact numbers, emphasise youth reach… (Ctrl+Enter to regen)"
                       rows={2}
                       className="w-full resize-none rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs text-gray-700 placeholder:text-gray-300 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
                     />
