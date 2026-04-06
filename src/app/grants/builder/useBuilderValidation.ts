@@ -216,6 +216,11 @@ export function useBuilderValidation({ grant }: UseBuilderValidationOptions): Va
       });
     }
 
+    // 14. Missing Grant Profile statistics (prevents fabricated learner counts)
+    // Note: This check requires access to profile data - placeholder for now
+    // TODO: Add profile data to validation hook and check for keyActivities field
+    // If keyActivities is empty, warn that AI may fabricate statistics like "1,000 learners across 15 countries"
+
     // ── CATEGORIZE ISSUES ─────────────────────────────────────────────────
     const errors = issues.filter((i) => i.severity === "error");
     const warnings = issues.filter((i) => i.severity === "warning");

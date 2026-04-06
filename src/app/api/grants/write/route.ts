@@ -179,12 +179,12 @@ function buildGusiFacts(profile: Record<string, unknown> | null, company: { comp
 
   // ── Signal what is NOT documented so the AI doesn't invent it ──────────────
   const notDocumented: string[] = [];
-  if (!profile?.keyActivities)  notDocumented.push("specific learner/beneficiary counts");
+  if (!profile?.keyActivities)  notDocumented.push("specific learner/beneficiary counts (e.g., '1,000 learners', '15 countries')");
   if (!profile?.annualRevenue)  notDocumented.push("annual revenue or financials");
   if (!profile?.teamSize)       notDocumented.push("exact team size");
   if (!profile?.pastGrantsWon)  notDocumented.push("specific past grants or funding history");
   if (notDocumented.length > 0) {
-    lines.push(`\n⚠ NOT DOCUMENTED (do NOT invent these — describe qualitatively or omit):\n${notDocumented.map((x) => `- ${x}`).join("\n")}`);
+    lines.push(`\n🚫 CRITICAL — NOT DOCUMENTED (NEVER invent these numbers — describe impact qualitatively instead):\n${notDocumented.map((x) => `- ${x}`).join("\n")}\n\n⚠️ If you invent specific numbers for any of the above, the application will be rejected. Use qualitative descriptions like "serving regional communities", "across multiple cohorts", "reaching diverse learners" instead of fabricated statistics.`);
   }
 
   return `## GUSI FACTS — USE THESE BY NAME IN EVERY SECTION\nThese are real, verified facts about the applicant organisation. Ground your writing in these specifics:\n\n${lines.join("\n")}`;
@@ -700,7 +700,7 @@ WRITING RULES:
 - This section will be read by a grant assessor — make it easy to assess against criteria${focusEmphasisBlock}
 - NO REPETITION: every statistic, achievement, or example may appear in only ONE section. If it was used in a previous section, omit it here and choose a different supporting detail
 - DATE ACCURACY (critical): all dates, years, and project timelines must be grounded in the DATE CONTEXT block in the user prompt — never use past dates as future ones, never guess a year
-- NUMBERS INTEGRITY (critical): never invent specific figures — learner counts, beneficiary numbers, program reach, revenue, team size, grant history — unless the exact number is explicitly stated in the GUSI FACTS, vault, or profile. If a number is not documented, describe impact qualitatively (e.g. "across multiple cohorts", "serving regional communities") or state that data collection is underway. Invented statistics that contradict real records will disqualify an application${suggestedAsk ? `
+- NUMBERS INTEGRITY (critical): NEVER invent specific figures for learner counts, beneficiary numbers, program reach, revenue, team size, or grant history. Common fabricated statistics like "1,000 learners", "15 countries", "500 participants" are STRICTLY FORBIDDEN unless the exact number appears in GUSI FACTS, vault, or profile. Check the "NOT DOCUMENTED" section in GUSI FACTS — if a statistic is listed there, you MUST NOT invent a number for it. Instead, describe impact qualitatively: "serving regional communities", "across multiple cohorts", "reaching diverse learners", "expanding our reach", "building on existing programs". Invented statistics will cause immediate application rejection${suggestedAsk ? `
 - FUNDING CONSISTENCY (critical): The total funding request is ${suggestedAsk}. Every section must state this same figure. Never reference a different amount — assessors will reject applications with inconsistent numbers.${section === "Budget & Budget Narrative" ? ` For this Budget section, all line items MUST sum exactly to ${suggestedAsk}.` : ""}` : ""}${sectionExamplesBlock ? "\n- Study the REFERENCE EXAMPLES provided — match their quality, specificity, and professional tone. Do NOT copy them directly, but learn from their structure and approach." : ""}${customInstructions ? `\n\nPERMANENT SECTION INSTRUCTIONS (applied every time this section is generated — follow closely):\n${customInstructions}` : ""}${regenNote ? `\n\nONE-SHOT REGEN NOTE (for this regeneration only — override or extend the permanent instructions above as needed):\n${regenNote}` : ""}`;
 
     // Build previousSections context block
