@@ -629,7 +629,7 @@ export default function LeftPanel({
       {/* Generate button */}
       <button
         onClick={onGenerateAll}
-        disabled={!selectedGrantId || !brief || generating || (!validation.canGenerate && !validationAcknowledged)}
+        disabled={!selectedGrantId || !brief || generating || validation.errors.length > 0 || (validation.warnings.length > 0 && !validationAcknowledged)}
         className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
       >
         {generating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}

@@ -41,30 +41,49 @@ export function useBuilderValidation({ grant }: UseBuilderValidationOptions): Va
     // 1. Deadline expired
     if (grant.deadlineDate) {
       const deadline = new Date(grant.deadlineDate);
-      const now = new Date();
-      const daysUntil = Math.ceil((deadline.getTime() - now.getTime()) / 86400000);
       
-      if (daysUntil < 0) {
-        issues.push({
-          severity: "error",
-          category: "deadline",
-          message: `Deadline expired ${Math.abs(daysUntil)} days ago (${deadline.toLocaleDateString("en-AU")})`,
-          field: "deadlineDate",
-        });
-      } else if (daysUntil === 0) {
-        issues.push({
-          severity: "error",
-          category: "deadline",
-          message: "Deadline is TODAY - insufficient time to complete application",
-          field: "deadlineDate",
-        });
-      } else if (daysUntil <= 2) {
+      // Check for Invalid Date
+      if (isNaN(deadline.getTime())) {
         issues.push({
           severity: "warning",
           category: "deadline",
-          message: `Only ${daysUntil} day${daysUntil === 1 ? "" : "s"} until deadline - very tight timeline`,
+          message: "Deadline date is invalid - please verify the deadline",
           field: "deadlineDate",
         });
+      } else {
+        const now = new Date();
+        const daysUntil = Math.ceil((deadline.getTime() - now.getTime()) / 86400000);
+        
+        if (daysUntil < 0) {
+          issues.push({
+            severity: "error",
+            category: "deadline",
+            message: `Deadline expired ${Math.abs(daysUntil)} days ago (${deadline.toLocaleDateString("en-AU")})`,
+            field: "deadlineDate",
+          });
+        } else if (daysUntil === 0) {
+          issues.push({
+            severity: "error",
+            category: "deadline",
+            message: "Deadline is TODAY - insufficient time to complete application",
+            field: "deadlineDate",
+          });
+        } else if (daysUntil <= 2) {
+          issues.push({
+            severity: "warning",
+            category: "deadline",
+            message: `Only ${daysUntil} day${daysUntil === 1 ? "" : "s"} until deadline - very tight timeline`,
+            field: "deadlineDate",
+          });
+        } else if (daysUntil <= 7) {
+          // Move 7-day warning here from later in the code to avoid duplication
+          issues.push({
+            severity: "warning",
+            category: "deadline",
+            message: `Only ${daysUntil} days until deadline - limited time for review and refinement`,
+            field: "deadlineDate",
+          });
+        }
       }
     }
 
@@ -165,22 +184,6 @@ export function useBuilderValidation({ grant }: UseBuilderValidationOptions): Va
         message: "Geographic scope not specified - application may not address location requirements",
         field: "geographicScope",
       });
-    }
-
-    // 10. Deadline very soon
-    if (grant.deadlineDate) {
-      const deadline = new Date(grant.deadlineDate);
-      const now = new Date();
-      const daysUntil = Math.ceil((deadline.getTime() - now.getTime()) / 86400000);
-      
-      if (daysUntil > 0 && daysUntil <= 7) {
-        issues.push({
-          severity: "warning",
-          category: "deadline",
-          message: `Only ${daysUntil} days until deadline - limited time for review and refinement`,
-          field: "deadlineDate",
-        });
-      }
     }
 
     // ── CATEGORIZE ISSUES ─────────────────────────────────────────────────

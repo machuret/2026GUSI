@@ -363,70 +363,118 @@ ${crawledContent.slice(0, 12000)}`;
 
     // ── Build budget template block ────────────────────────────────────────
     const buildBudgetContext = (grantType?: string, requestedAmount?: string): string => {
-      if (!budgetLineItems || budgetLineItems.length === 0) return "";
-      
-      // Find matching template by grant type
-      const focusAreaObj = (grant.aiBrief as Record<string, unknown> | null)?.focusArea as { primary?: string } | undefined;
-      const grantFocusArea = grantType || focusAreaObj?.primary;
-      const matchingTemplate = budgetTemplates?.find(
-        (t: Record<string, unknown>) => t.grantType === grantFocusArea
-      ) || budgetTemplates?.find((t: Record<string, unknown>) => t.grantType === "General");
+      try {
+        // Validate input data
+        if (!budgetLineItems || budgetLineItems.length === 0) {
+          console.warn("[Budget Template] No line items found for company:", DEMO_COMPANY_ID);
+          return "## BUDGET TEMPLATE UNAVAILABLE\n\nNo budget line items configured. Please use general cost estimates and justify each line item with market research.";
+        }
 
-      const lines: string[] = [
-        "## GUSI BUDGET TEMPLATE — REAL UNIT COSTS",
-        "⚠ CRITICAL: Use these ACTUAL costs, not AI estimates. Every budget line item must be grounded in this template.",
-        ""
-      ];
+        const lines: string[] = [
+          "## GUSI BUDGET TEMPLATE — REAL UNIT COSTS",
+          "⚠ CRITICAL: Use these ACTUAL costs, not AI estimates. Every budget line item must be grounded in this template.",
+          ""
+        ];
 
-      if (matchingTemplate) {
-        lines.push(`Template: ${matchingTemplate.name}`);
-        lines.push(`Grant Type: ${matchingTemplate.grantType}`);
-        lines.push(`Typical Range: ${matchingTemplate.typicalAmount}`);
-        lines.push(`Overhead Rate: ${matchingTemplate.overheadRate}%`);
+        // Find matching template by grant type with null safety
+        let matchingTemplate: Record<string, unknown> | undefined;
+        try {
+          const focusAreaObj = (grant.aiBrief as Record<string, unknown> | null)?.focusArea as { primary?: string } | undefined;
+          const grantFocusArea = grantType || focusAreaObj?.primary;
+          
+          if (budgetTemplates && budgetTemplates.length > 0) {
+            matchingTemplate = budgetTemplates.find(
+              (t: Record<string, unknown>) => t.grantType === grantFocusArea
+            ) || budgetTemplates.find((t: Record<string, unknown>) => t.grantType === "General");
+          }
+        } catch (err) {
+          console.error("[Budget Template] Error finding template:", err);
+        }
+
+        // Add template info with null safety
+        if (matchingTemplate) {
+          try {
+            lines.push(`Template: ${matchingTemplate.name || "Unknown"}`);
+            lines.push(`Grant Type: ${matchingTemplate.grantType || "General"}`);
+            lines.push(`Typical Range: ${matchingTemplate.typicalAmount || "Varies"}`);
+            lines.push(`Overhead Rate: ${matchingTemplate.overheadRate || 15}%`);
+            lines.push("");
+            
+            // Handle allocations with null safety
+            const allocations = matchingTemplate.allocations as { category: string; percentage: number; notes: string }[] | null | undefined;
+            if (allocations && Array.isArray(allocations) && allocations.length > 0) {
+              lines.push("Recommended Allocation:");
+              allocations.forEach((a) => {
+                if (a && a.category && typeof a.percentage === "number") {
+                  lines.push(`  - ${a.category}: ${a.percentage}% — ${a.notes || ""}`);
+                }
+              });
+              lines.push("");
+            }
+          } catch (err) {
+            console.error("[Budget Template] Error processing template:", err);
+          }
+        }
+
+        lines.push("AVAILABLE LINE ITEMS (use these exact costs):");
         lines.push("");
-        lines.push("Recommended Allocation:");
-        const allocations = matchingTemplate.allocations as { category: string; percentage: number; notes: string }[];
-        allocations.forEach((a) => {
-          lines.push(`  - ${a.category}: ${a.percentage}% — ${a.notes}`);
+
+        // Group by category with error handling
+        const byCategory: Record<string, unknown[]> = {};
+        budgetLineItems.forEach((item: Record<string, unknown>) => {
+          try {
+            const cat = (item.category as string) || "Other";
+            if (!byCategory[cat]) byCategory[cat] = [];
+            byCategory[cat].push(item);
+          } catch (err) {
+            console.error("[Budget Template] Error categorizing item:", err);
+          }
         });
-        lines.push("");
-      }
 
-      lines.push("AVAILABLE LINE ITEMS (use these exact costs):");
-      lines.push("");
-
-      const byCategory = budgetLineItems.reduce((acc: Record<string, unknown[]>, item: Record<string, unknown>) => {
-        const cat = item.category as string;
-        if (!acc[cat]) acc[cat] = [];
-        acc[cat].push(item);
-        return acc;
-      }, {});
-
-      Object.entries(byCategory).forEach(([category, items]) => {
-        lines.push(`### ${category}`);
-        (items as Record<string, unknown>[]).forEach((item) => {
-          const cost = `$${Number(item.unitCost).toFixed(2)}`;
-          const unit = item.unitType as string;
-          const qty = item.defaultQuantity ? ` (typical: ${item.defaultQuantity} ${unit})` : "";
-          lines.push(`  - ${item.name}: ${cost}/${unit}${qty}`);
-          if (item.description) lines.push(`    ${item.description}`);
-          if (item.notes) lines.push(`    Note: ${item.notes}`);
+        // Format line items with validation
+        Object.entries(byCategory).forEach(([category, items]) => {
+          try {
+            lines.push(`### ${category}`);
+            (items as Record<string, unknown>[]).forEach((item) => {
+              try {
+                const unitCost = Number(item.unitCost);
+                if (isNaN(unitCost) || unitCost <= 0) {
+                  console.warn("[Budget Template] Invalid unit cost for item:", item.name);
+                  return;
+                }
+                
+                const cost = `$${unitCost.toFixed(2)}`;
+                const unit = (item.unitType as string) || "unit";
+                const qty = item.defaultQuantity ? ` (typical: ${item.defaultQuantity} ${unit})` : "";
+                lines.push(`  - ${item.name || "Unnamed"}: ${cost}/${unit}${qty}`);
+                if (item.description) lines.push(`    ${item.description}`);
+                if (item.notes) lines.push(`    Note: ${item.notes}`);
+              } catch (err) {
+                console.error("[Budget Template] Error formatting line item:", err);
+              }
+            });
+            lines.push("");
+          } catch (err) {
+            console.error("[Budget Template] Error processing category:", category, err);
+          }
         });
-        lines.push("");
-      });
 
-      lines.push("BUDGET RULES:");
-      lines.push("1. Use ONLY the unit costs listed above — never invent costs");
-      lines.push("2. Calculate totals by multiplying unit cost × quantity");
-      lines.push("3. All line items must sum to the requested funding amount");
-      lines.push("4. Include overhead/indirect costs at the template rate");
-      lines.push("5. Justify each line item by tying it to specific project activities");
-      lines.push("6. Show calculations clearly (e.g., 'Senior Developer: $85/hr × 160 hrs = $13,600')");
-      if (requestedAmount) {
-        lines.push(`7. TOTAL BUDGET MUST EQUAL: ${requestedAmount}`);
+        lines.push("BUDGET RULES:");
+        lines.push("1. Use ONLY the unit costs listed above — never invent costs");
+        lines.push("2. Calculate totals by multiplying unit cost × quantity");
+        lines.push("3. All line items must sum to the requested funding amount");
+        lines.push("4. Include overhead/indirect costs at the template rate");
+        lines.push("5. Justify each line item by tying it to specific project activities");
+        lines.push("6. Show calculations clearly (e.g., 'Senior Developer: $85/hr × 160 hrs = $13,600')");
+        if (requestedAmount) {
+          lines.push(`7. TOTAL BUDGET MUST EQUAL: ${requestedAmount}`);
+        }
+
+        return lines.join("\n");
+      } catch (err) {
+        console.error("[Budget Template] Critical error building budget context:", err);
+        return "## BUDGET TEMPLATE ERROR\n\nAn error occurred loading the budget template. Please use general cost estimates based on market rates and justify each line item.";
       }
-
-      return lines.join("\n");
     };
 
     // ── Build funder template block ────────────────────────────────────────
