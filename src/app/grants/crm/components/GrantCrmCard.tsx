@@ -90,7 +90,7 @@ export function GrantCrmCard({ grant, onUpdate }: Props) {
       });
       const data = await res.json();
       if (data.success && data.filled) {
-        await onUpdate(grant.id, data.filled);
+        await onUpdate(grant.id, { ...data.filled, aiResearched: true });
         const count = Object.keys(data.filled).length;
         setResearchMsg(`✓ AI filled ${count} field${count !== 1 ? "s" : ""}`);
       } else {
