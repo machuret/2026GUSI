@@ -260,6 +260,7 @@ DECLARE
   passed_tests INTEGER;
   failed_tests INTEGER;
   pass_rate NUMERIC;
+  rec RECORD;
 BEGIN
   SELECT COUNT(*) INTO total_tests FROM integration_test_results;
   SELECT COUNT(*) INTO passed_tests FROM integration_test_results WHERE status = 'PASS';
