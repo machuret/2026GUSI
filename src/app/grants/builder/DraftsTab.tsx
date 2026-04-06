@@ -9,13 +9,14 @@ interface Props {
   drafts: SavedDraft[];
   onLoad: (id: string) => void;
   onDelete: (id: string) => void;
+  onDeleteNoConfirm: (id: string) => Promise<void>;
   onRedo: (draft: SavedDraft) => void;
   onBulkExport: (ids: string[]) => Promise<void>;
   exportingIds: Set<string>;
   onRestoreSnapshot: (snapshot: { sections: Record<string, string>; brief: Record<string, unknown> | null; tone: string; length: string; grantId: string }) => void;
 }
 
-export default function DraftsTab({ drafts, onLoad, onDelete, onRedo, onBulkExport, exportingIds, onRestoreSnapshot }: Props) {
+export default function DraftsTab({ drafts, onLoad, onDelete, onDeleteNoConfirm, onRedo, onBulkExport, exportingIds, onRestoreSnapshot }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [historyOpen, setHistoryOpen] = useState<string | null>(null);
   const [snapshots, setSnapshots] = useState<Record<string, DraftSnapshot[]>>({});
@@ -86,10 +87,12 @@ export default function DraftsTab({ drafts, onLoad, onDelete, onRedo, onBulkExpo
             onClick={async () => {
               if (!confirm(`Delete ${selected.size} selected draft${selected.size === 1 ? '' : 's'}?\n\nThis action cannot be undone.`)) return;
               const ids = Array.from(selected);
-              for (const id of ids) {
-                await onDelete(id);
+              try {
+                await Promise.all(ids.map(id => onDeleteNoConfirm(id)));
+                setSelected(new Set());
+              } catch (err) {
+                alert(`Failed to delete some drafts: ${err instanceof Error ? err.message : 'Unknown error'}`);
               }
-              setSelected(new Set());
             }}
             className="flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100"
           >

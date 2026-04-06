@@ -127,6 +127,12 @@ export function useBuilderDrafts({
     setDrafts((prev) => prev.filter((d) => d.id !== draftId));
   }, [setDrafts]);
 
+  const deleteDraftNoConfirm = useCallback(async (draftId: string) => {
+    const res = await authFetch(`/api/grants/drafts/${draftId}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Delete failed");
+    setDrafts((prev) => prev.filter((d) => d.id !== draftId));
+  }, [setDrafts]);
+
   const redoDraft = useCallback(async (draft: SavedDraft) => {
     if (!confirm(`Re-do "${draft.grantName}" from scratch?\n\nThis will delete the current draft and let you regenerate it.`)) return;
     const res = await authFetch(`/api/grants/drafts/${draft.id}`, { method: "DELETE" });
@@ -199,7 +205,7 @@ export function useBuilderDrafts({
   return {
     saving, saveMsg,
     exportingDoc, exportingPdf, exportingIds,
-    saveDraft, loadDraft, restoreSnapshot, deleteDraft, redoDraft,
+    saveDraft, loadDraft, restoreSnapshot, deleteDraft, deleteDraftNoConfirm, redoDraft,
     exportDoc, bulkExportDrafts, handleDownloadPdf,
   };
 }

@@ -210,6 +210,7 @@ export default function GrantBuilderPage() {
           drafts={drafts}
           onLoad={draftOps.loadDraft}
           onDelete={draftOps.deleteDraft}
+          onDeleteNoConfirm={draftOps.deleteDraftNoConfirm}
           onRedo={draftOps.redoDraft}
           onBulkExport={draftOps.bulkExportDrafts}
           exportingIds={draftOps.exportingIds}
