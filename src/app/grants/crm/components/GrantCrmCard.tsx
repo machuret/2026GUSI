@@ -6,7 +6,7 @@ import {
   PenLine, Sparkles, ExternalLink, Loader2,
   ChevronDown, ChevronUp, StickyNote, X, AlertTriangle, History,
 } from "lucide-react";
-import { authFetch } from "@/lib/authFetch";
+import { authFetch, edgeFn } from "@/lib/authFetch";
 import type { Grant } from "@/hooks/GrantsContext";
 import type { GrantHistoryRow } from "@/app/grants/history/components/types";
 import { COLUMNS, STATUS_OPTIONS, type CrmStatus, type ColumnDef } from "./crmConstants";
@@ -83,10 +83,10 @@ export function GrantCrmCard({ grant, onUpdate }: Props) {
     setResearchErr(null);
     setResearchMsg(null);
     try {
-      const res = await authFetch("/api/grants/research", {
+      const res = await authFetch(edgeFn("grant-research"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: grant.name, url: grant.url, founder: grant.founder, existingData: grant }),
+        body: JSON.stringify({ grantId: grant.id, name: grant.name, url: grant.url, founder: grant.founder, existingData: grant }),
       });
       const data = await res.json();
       if (data.success && data.filled) {
