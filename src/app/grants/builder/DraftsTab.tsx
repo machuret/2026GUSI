@@ -82,6 +82,20 @@ export default function DraftsTab({ drafts, onLoad, onDelete, onRedo, onBulkExpo
             {busyExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileUp className="h-3.5 w-3.5" />}
             Export to Google Docs
           </button>
+          <button
+            onClick={async () => {
+              if (!confirm(`Delete ${selected.size} selected draft${selected.size === 1 ? '' : 's'}?\n\nThis action cannot be undone.`)) return;
+              const ids = Array.from(selected);
+              for (const id of ids) {
+                await onDelete(id);
+              }
+              setSelected(new Set());
+            }}
+            className="flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete Selected
+          </button>
           <button onClick={() => setSelected(new Set())} className="ml-auto text-xs text-blue-400 hover:text-blue-700">Clear</button>
         </div>
       )}
