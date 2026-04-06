@@ -56,7 +56,7 @@ export function useBuilderBrief({ selectedGrantId, grants }: Options) {
         fetchRequirements(selectedGrantId);
         return;
       }
-      const res  = await authFetch("/api/grants/write", {
+      const res  = await authFetch(edgeFn("grant-write"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ grantId: selectedGrantId, mode: "brief" }),
