@@ -40,12 +40,15 @@ export async function verifyRequest(
     return null;
   }
 
+  const token = authHeader.slice("Bearer ".length);
+
   const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } },
     auth: { persistSession: false },
   });
 
-  const { data: { user }, error } = await userClient.auth.getUser();
+  // Pass token explicitly — getUser() with no args reads stored session
+  // which does not exist in a stateless Edge Function.
+  const { data: { user }, error } = await userClient.auth.getUser(token);
   if (error || !user) {
     log.warn("JWT verification failed", { error: error?.message });
     return null;
