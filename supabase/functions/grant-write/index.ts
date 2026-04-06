@@ -282,19 +282,11 @@ serve(async (req: Request) => {
 
   try {
     // ── Auth ───────────────────────────────────────────────────────────────
-    const authHeader   = req.headers.get("authorization") ?? "";
-    const isServiceCall = authHeader === `Bearer ${SERVICE_ROLE_KEY}`;
-    
-    if (!isServiceCall) {
-      // Verify user token with Supabase Auth using anon key
-      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
-        log.warn("Authentication failed", { error: authError?.message });
-        return json({ error: "Unauthorized" }, 401);
-      }
+    // Verify request has apikey header (sent by client)
+    const apikey = req.headers.get("apikey");
+    if (!apikey) {
+      log.warn("Missing apikey header");
+      return json({ error: "Unauthorized - missing apikey" }, 401);
     }
 
     const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
