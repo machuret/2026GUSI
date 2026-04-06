@@ -283,9 +283,17 @@ serve(async (req: Request) => {
     // ── Auth ───────────────────────────────────────────────────────────────
     const authHeader   = req.headers.get("authorization") ?? "";
     const isServiceCall = authHeader === `Bearer ${SERVICE_ROLE_KEY}`;
+    
     if (!isServiceCall) {
-      const token = authHeader.replace("Bearer ", "").trim();
-      if (token.length < 10) return json({ error: "Unauthorized" }, 401);
+      // Verify user token with Supabase Auth
+      const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        log.warn("Authentication failed", { error: authError?.message });
+        return json({ error: "Unauthorized" }, 401);
+      }
     }
 
     const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
