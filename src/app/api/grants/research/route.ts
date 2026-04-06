@@ -151,7 +151,9 @@ Fill in as many fields as you can.`;
       }).eq("id", grantId);
     }
 
-    return NextResponse.json({ success: true, filled });
+    // Include aiResearched in response so UI can update immediately
+    const response = grantId ? { ...filled, aiResearched: true } : filled;
+    return NextResponse.json({ success: true, filled: response });
   } catch (err) {
     return handleApiError(err, "Grant Research");
   }
