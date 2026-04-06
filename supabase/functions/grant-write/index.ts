@@ -11,8 +11,9 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildProfileContext, buildCriteriaBlock, crawlUrl, getFunderTemplateBlock, getSemanticVaultBlock, getCompanyBlock, getLessonsBlock, getExamplesBlock } from "../_shared/grantContext.ts";
 import { callOpenAIStream } from "../_shared/openai.ts";
-import { WORD_TARGETS, MAX_TOKEN_TARGETS, EMPHASIS_MAP, SECTION_INSTRUCTIONS } from "../_shared/sectionPrompts.ts";
+import { WORD_TARGETS, MAX_TOKEN_TARGETS, EMPHASIS_MAP, getSectionInstruction } from "../_shared/sectionPrompts.ts";
 import { buildGrantContext, buildGusiFacts, buildDateContextBlock } from "../_shared/grantBuilders.ts";
+import { verifyRequest } from "../_shared/auth.ts";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("grant-write");
@@ -20,7 +21,8 @@ const log = createLogger("grant-write");
 // ── Environment ───────────────────────────────────────────────────────────────
 
 const SUPABASE_URL     = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const OPENAI_API_KEY    = Deno.env.get("OPENAI_API_KEY")!;
 const DEMO_COMPANY_ID   = Deno.env.get("DEMO_COMPANY_ID") ?? "demo";
 
@@ -45,20 +47,18 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    // ── Auth: verify Bearer token is present ──────────────────────────────
-    const authHeader = req.headers.get("authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ") || authHeader.length < 20) {
-      log.warn("Missing or invalid authorization header");
-      return json({ error: "Unauthorized" }, 401);
-    }
+    // ── Auth: verify JWT via Supabase Auth ───────────────────────────────
+    const auth = await verifyRequest(req, SUPABASE_URL, SUPABASE_ANON_KEY);
+    if (!auth) return json({ error: "Unauthorized" }, 401);
 
     const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     // ── Parse body ─────────────────────────────────────────────────────────
-    const body = await req.json();
-    const { grantId, mode } = body as Record<string, unknown>;
+    const body = await req.json() as Record<string, unknown>;
+    const { grantId, mode, section: rawSection } = body;
     if (!grantId || typeof grantId !== "string") return json({ error: "grantId required" }, 400);
     if (mode !== "section") return json({ error: "mode must be section. Use grant-brief for brief/requirements." }, 400);
+    if (!rawSection || typeof rawSection !== "string") return json({ error: "section required" }, 400);
 
     // ── Parallel data fetch ────────────────────────────────────────────────
     const [grantRes, profileRes, company] = await Promise.all([
@@ -74,7 +74,7 @@ serve(async (req: Request) => {
 
     // ── Fetch context ──────────────────────────────────────────────────────
     const [examplesBlock, funderTemplateBlock, lessonsBlock] = await Promise.all([
-      getExamplesBlock(db, DEMO_COMPANY_ID, body.section as string | undefined),
+      getExamplesBlock(db, DEMO_COMPANY_ID, rawSection),
       getFunderTemplateBlock(db, DEMO_COMPANY_ID, (grant.founder as string | null) ?? null),
       getLessonsBlock(db, DEMO_COMPANY_ID, "grant"),
     ]);
@@ -85,28 +85,16 @@ serve(async (req: Request) => {
     const dateContextBlock = buildDateContextBlock(grant);
 
     // ── MODE: section ──────────────────────────────────────────────────────
-    const {
-      section,
-      brief,
-      tone             = "first_person",
-      length           = "standard",
-      previousSections = {},
-      customInstructions,
-      regenNote,
-      requirements,
-    } = body as {
-      section: string;
-      brief: Record<string, unknown>;
-      tone?: string;
-      length?: string;
-      previousSections?: Record<string, string>;
-      customInstructions?: string;
-      regenNote?: string;
-      requirements?: Record<string, unknown>;
-    };
+    const section           = rawSection;
+    const brief             = body.brief as Record<string, unknown> | undefined;
+    const tone              = (body.tone              as string | undefined) ?? "first_person";
+    const length            = (body.length            as string | undefined) ?? "standard";
+    const previousSections  = (body.previousSections  as Record<string, string> | undefined) ?? {};
+    const customInstructions = body.customInstructions as string | undefined;
+    const regenNote          = body.regenNote          as string | undefined;
+    const requirements       = body.requirements       as Record<string, unknown> | undefined;
 
-    if (!section) return json({ error: "section required in section mode" }, 400);
-    if (!brief)   return json({ error: "brief required in section mode" }, 400);
+    if (!brief) return json({ error: "brief required in section mode" }, 400);
 
     // ── Contact Details: assembled directly from profile, no AI ───────────
     if (section === "Contact Details") {
@@ -138,7 +126,7 @@ serve(async (req: Request) => {
     // ── Semantic vault for this section ────────────────────────────────────
     const vaultBlock = await getSemanticVaultBlock(
       db, DEMO_COMPANY_ID,
-      `${grant.name as string} ${section} ${(brief.keyThemes as string[] | undefined)?.join(" ") ?? ""}`,
+      `${grant.name as string} ${section} ${(brief?.keyThemes as string[] | undefined)?.join(" ") ?? ""}`,
       OPENAI_API_KEY,
     );
 
@@ -212,7 +200,7 @@ WRITING RULES:
     const userPrompt = `Write the "${section}" section of this grant application.
 
 SECTION INSTRUCTIONS:
-${SECTION_INSTRUCTIONS[section] ?? "Write a professional, evidence-based section for this grant application."}
+${getSectionInstruction(section)}
 
 ${dateContextBlock}
 

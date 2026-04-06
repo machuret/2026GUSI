@@ -1,11 +1,27 @@
 /**
  * _shared/sectionPrompts.ts
  * Grant section writing constants shared across grant edge functions.
+ *
+ * Exports:
+ *  - WORD_TARGETS          — word count limits per length setting
+ *  - MAX_TOKEN_TARGETS     — OpenAI token limits per length setting
+ *  - EMPHASIS_MAP          — per-focus-area lead/suppress/keyword rules
+ *  - SECTION_INSTRUCTIONS  — per-section writing instructions for AI
+ *  - FOCUS_CATEGORIES      — canonical list of focus area names (typed array)
+ *  - FOCUS_CATEGORY_LIST   — pipe-delimited string for prompt injection
+ *  - getSectionInstruction — type-safe lookup with unknown-section logging
  */
+
+import { createLogger } from "./logger.ts";
+
+const log = createLogger("sectionPrompts");
 
 // ── Word / token targets ──────────────────────────────────────────────────────
 
-export const WORD_TARGETS: Record<string, number>      = { concise: 150, standard: 300, detailed: 500 };
+/** Word count ceilings per length setting sent from the client. */
+export const WORD_TARGETS: Record<string, number> = { concise: 150, standard: 300, detailed: 500 };
+
+/** OpenAI max_tokens per length setting (approx 4 chars/token). */
 export const MAX_TOKEN_TARGETS: Record<string, number> = { concise: 600, standard: 1200, detailed: 2000 };
 
 // ── Focus area emphasis rules ─────────────────────────────────────────────────
@@ -42,9 +58,30 @@ export const SECTION_INSTRUCTIONS: Record<string, string> = {
 
 // ── Focus category list ───────────────────────────────────────────────────────
 
-export const FOCUS_CATEGORY_LIST = [
+/** Canonical focus-area names as a typed tuple. Use for validation or iteration. */
+export const FOCUS_CATEGORIES = [
   "Training & Capacity Building", "Technology & Innovation", "Research & Development",
   "Community Development", "Health & Wellbeing", "Environment & Sustainability",
   "Education & Youth", "Arts & Culture", "Housing & Infrastructure",
   "Economic Development", "Emergency Relief", "Diversity & Inclusion", "Other",
-].join(" | ");
+] as const;
+
+/** Pipe-delimited string derived from FOCUS_CATEGORIES for prompt injection. */
+export const FOCUS_CATEGORY_LIST: string = FOCUS_CATEGORIES.join(" | ");
+
+// ── Type-safe section instruction lookup ──────────────────────────────────────
+
+/**
+ * Returns the writing instruction for a named grant section.
+ * Logs a warning for unknown section names instead of silently returning undefined.
+ *
+ * @param section  The section name as received from the client.
+ */
+export function getSectionInstruction(section: string): string {
+  const instruction = SECTION_INSTRUCTIONS[section];
+  if (!instruction) {
+    log.warn("Unknown section name — using generic instruction", { section });
+    return "Write a professional, evidence-based section for this grant application.";
+  }
+  return instruction;
+}

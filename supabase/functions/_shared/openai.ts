@@ -1,13 +1,31 @@
 /**
  * _shared/openai.ts
  * OpenAI API helpers shared across grant edge functions.
+ *
+ * Exports:
+ *  - MODEL              — canonical model name (single source of truth)
+ *  - callOpenAIJson     — non-streaming JSON completion with retry
+ *  - callOpenAIStream   — streaming SSE completion as a ReadableStream
  */
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
-export const MODEL   = "gpt-4o-mini";
+
+/** Canonical OpenAI model used by all grant functions. */
+export const MODEL = "gpt-4o-mini";
 
 // ── JSON completion ────────────────────────────────────────────────────────────
 
+/**
+ * Calls the OpenAI Chat Completions API and returns the full JSON response.
+ * Retries up to 2 times with exponential back-off on rate-limit / server errors.
+ *
+ * @param systemPrompt  The system instruction message.
+ * @param userPrompt    The user content message.
+ * @param maxTokens     Maximum output tokens.
+ * @param temperature   Sampling temperature (0 = deterministic).
+ * @returns Parsed content string plus token usage counts.
+ * @throws  If all retries are exhausted or a non-retryable HTTP error occurs.
+ */
 export async function callOpenAIJson(
   systemPrompt: string,
   userPrompt: string,
@@ -46,6 +64,16 @@ export async function callOpenAIJson(
 
 // ── Streaming completion ───────────────────────────────────────────────────────
 
+/**
+ * Calls the OpenAI Chat Completions API with `stream: true` and returns a
+ * `ReadableStream<Uint8Array>` of raw UTF-8 text chunks for the caller to
+ * pipe directly as an HTTP response body.
+ *
+ * @param systemPrompt  The system instruction message.
+ * @param userPrompt    The user content message.
+ * @param maxTokens     Maximum output tokens.
+ * @param temperature   Sampling temperature.
+ */
 export function callOpenAIStream(
   systemPrompt: string,
   userPrompt: string,
@@ -55,6 +83,8 @@ export function callOpenAIStream(
   const encoder = new TextEncoder();
   return new ReadableStream<Uint8Array>({
     async start(controller) {
+      let closed = false;
+      const close = () => { if (!closed) { closed = true; controller.close(); } };
       try {
         const res = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
@@ -84,10 +114,10 @@ export function callOpenAIStream(
           for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed.startsWith("data: ")) continue;
-            const data = trimmed.slice(6).trim();
-            if (data === "[DONE]") { controller.close(); return; }
+            const chunk = trimmed.slice(6).trim();
+            if (chunk === "[DONE]") { close(); return; }
             try {
-              const parsed = JSON.parse(data);
+              const parsed = JSON.parse(chunk);
               const delta  = parsed.choices?.[0]?.delta?.content ?? "";
               if (delta) controller.enqueue(encoder.encode(delta));
             } catch { /* skip malformed SSE chunk */ }
@@ -96,9 +126,8 @@ export function callOpenAIStream(
       } catch (err) {
         controller.error(err);
       } finally {
-        controller.close();
+        close();
       }
     },
   });
 }
-

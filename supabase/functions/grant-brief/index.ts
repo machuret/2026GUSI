@@ -13,15 +13,17 @@ import { callOpenAIJson } from "../_shared/openai.ts";
 import { logUsage } from "../_shared/db.ts";
 import { FOCUS_CATEGORY_LIST } from "../_shared/sectionPrompts.ts";
 import { buildGrantContext, buildGusiFacts, buildDateContextBlock } from "../_shared/grantBuilders.ts";
+import { verifyRequest } from "../_shared/auth.ts";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("grant-brief");
 
 // ── Environment ───────────────────────────────────────────────────────────────
 
-const SUPABASE_URL     = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const DEMO_COMPANY_ID  = Deno.env.get("DEMO_COMPANY_ID") ?? "demo";
+const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY  = Deno.env.get("SUPABASE_ANON_KEY")!;
+const SERVICE_ROLE_KEY   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const DEMO_COMPANY_ID    = Deno.env.get("DEMO_COMPANY_ID") ?? "demo";
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 
@@ -44,12 +46,9 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    // ── Auth: just verify a Bearer token is present ─────────────────────────
-    const authHeader = req.headers.get("authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ") || authHeader.length < 20) {
-      log.warn("Missing or invalid authorization header");
-      return json({ error: "Unauthorized" }, 401);
-    }
+    // ── Auth: verify JWT via Supabase Auth ───────────────────────────────
+    const auth = await verifyRequest(req, SUPABASE_URL, SUPABASE_ANON_KEY);
+    if (!auth) return json({ error: "Unauthorized" }, 401);
 
     const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -122,7 +121,7 @@ serve(async (req: Request) => {
 
     const usrPrompt = `Analyse this grant opportunity and organisation profile, then produce the strategic writing brief.\n\n${dateContextBlock}\n\n${masterContext}${examplesBlock ? `\n\n${examplesBlock}` : ""}`;
 
-    const result = await callOpenAIJson(sysPrompt, usrPrompt, 600, 0.2);
+    const result = await callOpenAIJson(sysPrompt, usrPrompt, 800, 0.2);
     logUsage(db, DEMO_COMPANY_ID, "grants_write_brief", result.promptTokens, result.completionTokens);
 
     let brief: Record<string, unknown>;

@@ -1,10 +1,21 @@
 /**
  * _shared/grantBuilders.ts
- * Context block builders for grant + org data shared across grant edge functions.
+ * Context block builders for grant + organisation data.
+ *
+ * Exports:
+ *  - buildGrantContext     — formats a Grant row as a markdown context block
+ *  - buildGusiFacts        — builds the GUSI FACTS block from profile + company
+ *  - buildDateContextBlock — builds today/deadline/duration date block
  */
 
 // ── Grant context block ───────────────────────────────────────────────────────
 
+/**
+ * Formats a Grant database row as a structured markdown context block
+ * suitable for injection into an AI prompt.
+ *
+ * @param grant  Raw grant row from the database.
+ */
 export function buildGrantContext(grant: Record<string, unknown>): string {
   const lines = [
     `Grant Name: ${grant.name}`,
@@ -29,9 +40,16 @@ export function buildGrantContext(grant: Record<string, unknown>): string {
 
 // ── GUSI facts block ──────────────────────────────────────────────────────────
 
+/**
+ * Builds the GUSI FACTS block used to ground AI section writing in real
+ * organisation data. Includes a ⚠ NOT DOCUMENTED list to prevent hallucination.
+ *
+ * @param profile  GrantProfile row, or null if not yet filled in.
+ * @param company  Basic company info from getCompanyBlock().
+ */
 export function buildGusiFacts(
   profile: Record<string, unknown> | null,
-  company: { name: string; industry: string; website: string },
+  company: { name: string; website: string },
 ): string {
   if (!profile && !company.name) return "";
   const lines: string[] = [];
@@ -73,6 +91,13 @@ export function buildGusiFacts(
 
 // ── Date context block ────────────────────────────────────────────────────────
 
+/**
+ * Builds a DATE CONTEXT block for AI prompts containing today's date,
+ * the grant deadline (with days-remaining label), and the project duration.
+ * Includes strict date rules to prevent the AI inventing or misusing dates.
+ *
+ * @param grant  Raw grant row — uses deadlineDate and projectDuration fields.
+ */
 export function buildDateContextBlock(grant: Record<string, unknown>): string {
   const now        = new Date();
   const todayStr   = now.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
