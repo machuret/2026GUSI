@@ -82,17 +82,6 @@ serve(async (req: Request) => {
     const profileBlock   = profile ? buildProfileContext(profile) : "";
     const grantBlock     = buildGrantContext(grant);
     const gusiFactsBlock = buildGusiFacts(profile, company);
-
-    const masterContext = [
-      grantBlock,
-      gusiFactsBlock,
-      profileBlock,
-      funderTemplateBlock,
-      company.block,
-      lessonsBlock,
-      crawledContent ? `## LIVE GRANT PAGE CONTENT (crawled from ${grant.url})\n${crawledContent}` : "",
-    ].filter(Boolean).join("\n\n");
-
     const dateContextBlock = buildDateContextBlock(grant);
 
     // ── MODE: section ──────────────────────────────────────────────────────

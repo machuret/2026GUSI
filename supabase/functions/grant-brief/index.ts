@@ -9,9 +9,10 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildProfileContext, crawlUrl, getFunderTemplateBlock, getCompanyBlock, getLessonsBlock, getExamplesBlock } from "../_shared/grantContext.ts";
-import { callOpenAIJson, logUsage } from "../_shared/openai.ts";
+import { callOpenAIJson } from "../_shared/openai.ts";
+import { logUsage } from "../_shared/db.ts";
 import { FOCUS_CATEGORY_LIST } from "../_shared/sectionPrompts.ts";
-import { buildGrantContext, buildDateContextBlock } from "../_shared/grantBuilders.ts";
+import { buildGrantContext, buildGusiFacts, buildDateContextBlock } from "../_shared/grantBuilders.ts";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("grant-brief");
@@ -87,7 +88,7 @@ serve(async (req: Request) => {
         const result = await callOpenAIJson(sysPrompt, usrPrompt, 800, 0);
         logUsage(db, DEMO_COMPANY_ID, "grants_requirements", result.promptTokens, result.completionTokens);
         requirements = JSON.parse(result.content);
-      } catch { /* return empty on failure */ }
+      } catch (reqErr) { log.warn("Requirements extraction failed", { error: String(reqErr) }); }
       await db.from("Grant").update({ aiRequirements: requirements, updatedAt: new Date().toISOString() }).eq("id", grantId);
       return json({ success: true, requirements });
     }
@@ -101,13 +102,15 @@ serve(async (req: Request) => {
       getLessonsBlock(db, DEMO_COMPANY_ID, "grant"),
     ]);
 
-    const profileBlock   = profile ? buildProfileContext(profile) : "";
-    const grantBlock     = buildGrantContext(grant);
+    const profileBlock    = profile ? buildProfileContext(profile) : "";
+    const grantBlock      = buildGrantContext(grant);
+    const gusiFactsBlock  = buildGusiFacts(profile, company);
 
     const dateContextBlock = buildDateContextBlock(grant);
 
     const masterContext = [
       grantBlock,
+      gusiFactsBlock,
       profileBlock,
       funderTemplateBlock,
       company.block,
