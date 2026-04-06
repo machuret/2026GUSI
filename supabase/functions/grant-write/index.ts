@@ -29,6 +29,7 @@ const log = createLogger("grant-write");
 // ── Environment ───────────────────────────────────────────────────────────────
 
 const SUPABASE_URL     = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const OPENAI_API_KEY    = Deno.env.get("OPENAI_API_KEY")!;
 const DEMO_COMPANY_ID   = Deno.env.get("DEMO_COMPANY_ID") ?? "demo";
@@ -285,8 +286,8 @@ serve(async (req: Request) => {
     const isServiceCall = authHeader === `Bearer ${SERVICE_ROLE_KEY}`;
     
     if (!isServiceCall) {
-      // Verify user token with Supabase Auth
-      const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      // Verify user token with Supabase Auth using anon key
+      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         global: { headers: { Authorization: authHeader } },
       });
       const { data: { user }, error: authError } = await supabase.auth.getUser();
