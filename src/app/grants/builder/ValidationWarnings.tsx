@@ -28,9 +28,12 @@ export function ValidationWarnings({
           <div className="flex items-start gap-3">
             <XCircle className="h-5 w-5 text-red-600 dark:text-red-500 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-semibold text-red-900 dark:text-red-200 mb-2">
-                Cannot Generate Application ({validation.errors.length} critical {validation.errors.length === 1 ? "issue" : "issues"})
+              <h3 className="text-sm font-semibold text-red-900 dark:text-red-200 mb-1">
+                🛡️ Pre-Generation Audit Failed
               </h3>
+              <p className="text-xs text-red-700 dark:text-red-400 mb-2">
+                Data integrity issues detected. These must be fixed before generating to prevent embedding errors in the final document.
+              </p>
               <ul className="space-y-1.5">
                 {validation.errors.map((issue, i) => (
                   <li key={i} className="text-sm text-red-800 dark:text-red-300 flex items-start gap-2">
@@ -40,7 +43,7 @@ export function ValidationWarnings({
                 ))}
               </ul>
               <p className="text-xs text-red-700 dark:text-red-400 mt-3 font-medium">
-                Fix these issues before generating the application.
+                ⚠️ {validation.errors.length} critical {validation.errors.length === 1 ? "issue" : "issues"} blocking generation
               </p>
             </div>
           </div>
@@ -53,9 +56,12 @@ export function ValidationWarnings({
           <div className="flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-200 mb-2">
-                {validation.warnings.length} {validation.warnings.length === 1 ? "Warning" : "Warnings"}
+              <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-200 mb-1">
+                🛡️ Pre-Generation Audit Warnings
               </h3>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
+                Data quality issues detected. Recommended to fix before generating, but you can proceed if needed.
+              </p>
               <ul className="space-y-1.5">
                 {validation.warnings.map((issue, i) => (
                   <li key={i} className="text-sm text-amber-800 dark:text-amber-300 flex items-start gap-2">

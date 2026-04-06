@@ -186,6 +186,36 @@ export function useBuilderValidation({ grant }: UseBuilderValidationOptions): Va
       });
     }
 
+    // ── ADDITIONAL DATA INTEGRITY CHECKS ──────────────────────────────────
+
+    // 10. Contact information verification
+    // Note: This would require contact data structure - placeholder for now
+    // TODO: Add contact verification when contact data structure is available
+
+    // 11. Budget template availability check
+    // Note: This would require checking if budget templates exist
+    // TODO: Add budget template check when integrated with Builder
+
+    // 12. Conflicting data check
+    if (grant.decision === "Apply" && grant.crmStatus === "Lost") {
+      issues.push({
+        severity: "warning",
+        category: "data",
+        message: 'Conflicting data: Decision is "Apply" but CRM status is "Lost"',
+        field: "decision",
+      });
+    }
+
+    // 13. Missing AI analysis for complex grants
+    if (!grant.aiScore && !grant.aiVerdict && grant.complexityLabel === "High") {
+      issues.push({
+        severity: "warning",
+        category: "data",
+        message: "High complexity grant without AI analysis - may miss strategic insights",
+        field: "complexityLabel",
+      });
+    }
+
     // ── CATEGORIZE ISSUES ─────────────────────────────────────────────────
     const errors = issues.filter((i) => i.severity === "error");
     const warnings = issues.filter((i) => i.severity === "warning");
