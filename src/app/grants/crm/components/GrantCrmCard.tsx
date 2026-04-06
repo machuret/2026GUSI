@@ -30,6 +30,9 @@ export function GrantCrmCard({ grant, onUpdate }: Props) {
   const historyFetched = useRef(false);
   const prevFounderRef = useRef(grant.founder);
 
+  // DEBUG: Log aiResearched status
+  console.log(`[${grant.name.slice(0, 30)}] aiResearched:`, grant.aiResearched, typeof grant.aiResearched);
+
   // Sync local state when parent grant prop changes (e.g. after research auto-fill)
   useEffect(() => { setNotes(grant.crmNotes ?? ""); }, [grant.crmNotes]);
   useEffect(() => { setStatus(grant.crmStatus ?? null); }, [grant.crmStatus]);
