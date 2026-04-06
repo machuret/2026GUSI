@@ -62,11 +62,19 @@ export function useBuilderBrief({ selectedGrantId, grants }: Options) {
         body: JSON.stringify({ grantId: selectedGrantId, mode: "brief" }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Brief failed");
+      if (!res.ok) {
+        console.error("[Intelligence Brief] Error response:", data);
+        throw new Error(data.error || `Brief failed (${res.status})`);
+      }
+      if (!data.brief) {
+        console.error("[Intelligence Brief] No brief in response:", data);
+        throw new Error("No brief data returned from API");
+      }
       setBrief(data.brief);
       setBriefExpanded(true);
       fetchRequirements(selectedGrantId);
     } catch (err) {
+      console.error("[Intelligence Brief] Exception:", err);
       setBriefError(err instanceof Error ? err.message : "Brief failed");
     } finally {
       setBriefLoading(false);
