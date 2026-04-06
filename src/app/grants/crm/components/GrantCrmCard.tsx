@@ -181,10 +181,14 @@ export function GrantCrmCard({ grant, onUpdate }: Props) {
               <ExternalLink className="h-3 w-3" /> URL
             </a>
           )}
-          <button onClick={handleResearch} disabled={researching} title="AI Research"
-            className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:text-brand-600 hover:border-brand-300 disabled:opacity-40">
+          <button onClick={handleResearch} disabled={researching} title={grant.aiResearched ? "Already researched - click to re-research" : "AI Research"}
+            className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium disabled:opacity-40 ${
+              grant.aiResearched 
+                ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100" 
+                : "border-gray-200 text-gray-500 hover:text-brand-600 hover:border-brand-300"
+            }`}>
             {researching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-            {researching ? "Researching…" : "Research"}
+            {researching ? "Researching…" : grant.aiResearched ? "Researched ✓" : "Research"}
           </button>
           <Link href={`/grants/builder?grantId=${grant.id}`}
             className="flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100">
