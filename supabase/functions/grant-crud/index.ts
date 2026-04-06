@@ -12,7 +12,7 @@ const log = createLogger("grant-crud");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const DEMO_COMPANY_ID = "demo";
+const DEMO_COMPANY_ID = Deno.env.get("DEMO_COMPANY_ID") ?? "demo";
 
 const VALID_CRM = ["Researching", "Pipeline", "Active", "Submitted", "Won", "Lost"];
 const VALID_DECISION = ["Apply", "Maybe", "No", "Rejected"];
@@ -134,7 +134,7 @@ serve(async (req: Request) => {
 
     return json({ error: "Method not allowed" }, 405);
   } catch (err) {
-    log.error("Unhandled error", { error: String(err) });
+    log.error("Unhandled error", { error: String(err), stack: err instanceof Error ? err.stack : undefined });
     return json({ error: String(err) }, 500);
   }
 });

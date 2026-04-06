@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Sparkles, Loader2, Copy, RefreshCw, CheckCircle, Download, Save, FileUp, FileDown, RotateCcw, ShieldCheck, ChevronsRight, ClipboardList, MessageSquarePlus, X } from "lucide-react";
+import { Sparkles, Loader2, Copy, RefreshCw, CheckCircle, Download, Save, FileUp, FileDown, RotateCcw, ShieldCheck, ChevronsRight, ClipboardList, MessageSquarePlus, X, AlertTriangle } from "lucide-react";
 import { SECTION_META, SectionName, wordCount, FunderRequirements } from "./types";
 
 interface Props {
@@ -28,6 +28,10 @@ interface Props {
   hasSections: boolean;
   requirements: FunderRequirements | null;
   checkedCriteria: Set<string>;
+  customInstructions: Record<string, string>;
+  onCustomInstructions: (v: Record<string, string>) => void;
+  fundingConflicts?: Record<string, string>;
+  onClearFundingConflict?: (section: string) => void;
 }
 
 export default function DocumentPanel({
@@ -36,6 +40,8 @@ export default function DocumentPanel({
   onCopySection, onCopyAll, onRegenSection, onRegenAll, onEditSection,
   onDownload, onDownloadPdf, exportingPdf, onSaveDraft, onExportDoc, exportingDoc, hasSections,
   requirements, checkedCriteria,
+  customInstructions, onCustomInstructions,
+  fundingConflicts = {}, onClearFundingConflict,
 }: Props) {
   const [regenNotes, setRegenNotes] = useState<Partial<Record<SectionName, string>>>({});
   const [openNotes, setOpenNotes] = useState<Set<SectionName>>(new Set());
@@ -213,9 +219,18 @@ export default function DocumentPanel({
                       <Loader2 className="h-3.5 w-3.5 animate-spin" /> Writing…
                     </span>
                   )}
+                  {!isGenerating && fundingConflicts[s] && (
+                    <button
+                      onClick={() => onClearFundingConflict?.(s)}
+                      title={fundingConflicts[s]}
+                      className="ml-1 flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700 hover:bg-amber-100"
+                    >
+                      <AlertTriangle className="h-3 w-3 shrink-0" /> Amount mismatch
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
-                  {hasContent && (
+                  {hasContent ? (
                     <>
                       <button
                         onClick={() => onCopySection(s, content)}
@@ -232,7 +247,7 @@ export default function DocumentPanel({
                         title={openNotes.has(s) ? "Hide instruction" : "Add regen instruction"}
                         aria-label={openNotes.has(s) ? "Hide regen instruction" : "Add regen instruction"}
                         className={`rounded p-1 transition-colors disabled:opacity-40 ${
-                          openNotes.has(s)
+                          openNotes.has(s) || regenNotes[s]?.trim()
                             ? "text-violet-600 bg-violet-50"
                             : "text-gray-400 hover:text-violet-600 hover:bg-violet-50"
                         }`}
@@ -248,34 +263,72 @@ export default function DocumentPanel({
                         <RefreshCw className="h-4 w-4" />
                       </button>
                     </>
+                  ) : (
+                    <button
+                      onClick={() => toggleNote(s)}
+                      disabled={!!generatingSection || generating}
+                      title={openNotes.has(s) ? "Hide instructions" : "Add instructions for this section"}
+                      aria-label={openNotes.has(s) ? "Hide pre-generation instructions" : "Add pre-generation instructions"}
+                      className={`rounded p-1 transition-colors disabled:opacity-40 ${
+                        openNotes.has(s) || customInstructions[s]?.trim()
+                          ? "text-violet-600 bg-violet-50"
+                          : "text-gray-300 hover:text-violet-500 hover:bg-violet-50"
+                      }`}
+                    >
+                      <MessageSquarePlus className="h-4 w-4" />
+                    </button>
                   )}
                 </div>
               </div>
 
-              {/* Inline regen instruction */}
+              {/* Instruction area — regen note (has content) or pre-generation custom instruction (empty) */}
               {openNotes.has(s) && (
-                <div className="border-b border-violet-100 bg-violet-50/60 px-4 py-2.5 flex items-start gap-2">
-                  <MessageSquarePlus className="h-3.5 w-3.5 mt-2 shrink-0 text-violet-400" />
-                  <div className="flex-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500 mb-1">Regen instruction</p>
-                    <textarea
-                      value={regenNotes[s] ?? ""}
-                      onChange={(e) => setRegenNotes((prev) => ({ ...prev, [s]: e.target.value }))}
-                      onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !generatingSection) { e.preventDefault(); handleRegen(s); } }}
-                      placeholder="e.g. Fix org type to NGO, update impact numbers, emphasise youth reach… (Ctrl+Enter to regen)"
-                      rows={2}
-                      className="w-full resize-none rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs text-gray-700 placeholder:text-gray-300 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
-                    />
+                hasContent ? (
+                  <div className="border-b border-violet-100 bg-violet-50/60 px-4 py-2.5 flex items-start gap-2">
+                    <MessageSquarePlus className="h-3.5 w-3.5 mt-2 shrink-0 text-violet-400" />
+                    <div className="flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-500 mb-1">Regen instruction — one-shot note for next regeneration</p>
+                      <textarea
+                        value={regenNotes[s] ?? ""}
+                        onChange={(e) => setRegenNotes((prev) => ({ ...prev, [s]: e.target.value }))}
+                        onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !generatingSection) { e.preventDefault(); handleRegen(s); } }}
+                        placeholder="e.g. Fix org type to NGO, update impact numbers, emphasise youth reach… (Ctrl+Enter to regen)"
+                        rows={2}
+                        className="w-full resize-none rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs text-gray-700 placeholder:text-gray-300 focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                      />
+                    </div>
+                    <button
+                      onClick={() => toggleNote(s)}
+                      aria-label="Close regen instruction"
+                      className="mt-1 text-violet-300 hover:text-violet-500"
+                      title="Close"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => toggleNote(s)}
-                    aria-label="Close regen instruction"
-                    className="mt-1 text-violet-300 hover:text-violet-500"
-                    title="Close"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                ) : (
+                  <div className="border-b border-indigo-100 bg-indigo-50/50 px-4 py-2.5 flex items-start gap-2">
+                    <MessageSquarePlus className="h-3.5 w-3.5 mt-2 shrink-0 text-indigo-400" />
+                    <div className="flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-500 mb-1">Pre-generation instructions — applied every time this section is generated</p>
+                      <textarea
+                        value={customInstructions[s] ?? ""}
+                        onChange={(e) => onCustomInstructions({ ...customInstructions, [s]: e.target.value })}
+                        placeholder="e.g. Emphasise rural reach, mention UQ partnership, keep under 300 words…"
+                        rows={2}
+                        className="w-full resize-none rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs text-gray-700 placeholder:text-gray-300 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                      />
+                    </div>
+                    <button
+                      onClick={() => toggleNote(s)}
+                      aria-label="Close instructions"
+                      className="mt-1 text-indigo-300 hover:text-indigo-500"
+                      title="Close"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )
               )}
 
               {/* Section body */}

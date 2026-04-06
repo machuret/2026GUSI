@@ -2,6 +2,24 @@ import type { Grant as FullGrant } from "@/hooks/GrantsContext";
 
 export type Grant = Pick<FullGrant, "id" | "name" | "founder" | "amount" | "deadlineDate" | "matchScore" | "aiVerdict" | "url" | "decision" | "crmStatus" | "aiBrief" | "geographicScope" | "complexityLabel" | "fitScore">;
 
+export const FOCUS_CATEGORIES = {
+  "Training & Capacity Building": { color: "bg-blue-100 text-blue-700 border-blue-200",     icon: "🎓" },
+  "Technology & Innovation":      { color: "bg-violet-100 text-violet-700 border-violet-200", icon: "💡" },
+  "Research & Development":       { color: "bg-indigo-100 text-indigo-700 border-indigo-200", icon: "🔬" },
+  "Community Development":        { color: "bg-emerald-100 text-emerald-700 border-emerald-200", icon: "🤝" },
+  "Health & Wellbeing":           { color: "bg-pink-100 text-pink-700 border-pink-200",       icon: "❤️" },
+  "Environment & Sustainability": { color: "bg-green-100 text-green-700 border-green-200",    icon: "🌿" },
+  "Education & Youth":            { color: "bg-sky-100 text-sky-700 border-sky-200",           icon: "📚" },
+  "Arts & Culture":               { color: "bg-orange-100 text-orange-700 border-orange-200",  icon: "🎨" },
+  "Housing & Infrastructure":     { color: "bg-stone-100 text-stone-700 border-stone-200",    icon: "🏗️" },
+  "Economic Development":         { color: "bg-amber-100 text-amber-700 border-amber-200",    icon: "📈" },
+  "Emergency Relief":             { color: "bg-red-100 text-red-700 border-red-200",           icon: "🆘" },
+  "Diversity & Inclusion":        { color: "bg-purple-100 text-purple-700 border-purple-200", icon: "🌈" },
+  "Other":                        { color: "bg-gray-100 text-gray-600 border-gray-200",        icon: "📋" },
+} as const;
+
+export type FocusCategory = keyof typeof FOCUS_CATEGORIES;
+
 export interface WritingBrief {
   funderPriorities: string[];
   keyThemes: string[];
@@ -11,6 +29,10 @@ export interface WritingBrief {
   toneGuidance: string;
   winningAngle: string;
   keywordsToUse: string[];
+  focusArea?: {
+    primary: FocusCategory;
+    tags: string[];
+  };
 }
 
 export interface FunderRequirements {

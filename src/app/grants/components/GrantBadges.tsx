@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DECISION_STYLES, EFFORT_STYLES, type Decision, type Effort } from "./grantTypes";
+import { FOCUS_CATEGORIES, type FocusCategory } from "@/app/grants/builder/types";
 
 export function FitStars({ value, onChange }: { value?: number | null; onChange?: (v: number) => void }) {
   const [hover, setHover] = useState(0);
@@ -76,6 +77,23 @@ export function DeadlineBadge({ date }: { date?: string | null }) {
     <span className={`text-xs ${cls}`}>
       {fmt}
       {daysLeft >= 0 && daysLeft <= 60 && <span className="ml-1 text-gray-400">({daysLeft}d)</span>}
+    </span>
+  );
+}
+
+export function FocusBadge({ primary, tags, size = "sm" }: {
+  primary?: string | null;
+  tags?: string[] | null;
+  size?: "xs" | "sm";
+}) {
+  if (!primary) return null;
+  const meta = FOCUS_CATEGORIES[primary as FocusCategory] ?? FOCUS_CATEGORIES["Other"];
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-semibold ${meta.color} ${size === "xs" ? "text-[10px]" : "text-xs"}`}
+      title={tags && tags.length > 0 ? `Focus: ${primary} · ${tags.join(", ")}` : `Focus: ${primary}`}
+    >
+      {meta.icon} {primary}
     </span>
   );
 }

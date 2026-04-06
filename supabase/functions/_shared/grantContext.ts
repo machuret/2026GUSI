@@ -153,6 +153,158 @@ export async function crawlUrl(url: string, maxChars = 4000): Promise<string> {
   }
 }
 
+// ── Semantic vault ────────────────────────────────────────────────────────────
+
+/**
+ * Tries semantic vault retrieval via pgvector match_document_chunks RPC.
+ * Falls back to getVaultBlock (recent docs) on any failure — safe to call even
+ * if the embedding migration has not been run.
+ */
+export async function getSemanticVaultBlock(
+  db: ReturnType<typeof createClient>,
+  companyId: string,
+  taskHint: string,
+  openaiApiKey: string,
+): Promise<string> {
+  try {
+    const embedRes = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiApiKey}` },
+      body: JSON.stringify({ model: "text-embedding-3-small", input: taskHint }),
+    });
+    if (!embedRes.ok) throw new Error("embedding failed");
+    const embedData = await embedRes.json();
+    const embedding: number[] | undefined = embedData.data?.[0]?.embedding;
+    if (!embedding) throw new Error("no embedding");
+
+    const { data: chunks, error: rpcErr } = await db.rpc("match_document_chunks", {
+      query_embedding: embedding,
+      match_company_id: companyId,
+      match_threshold: 0.6,
+      match_count: 12,
+    } as Record<string, unknown>);
+    if (rpcErr || !chunks || chunks.length === 0) throw new Error("no chunks");
+
+    const docIds = Array.from(new Set(chunks.map((c: { documentId: string }) => c.documentId))) as string[];
+    const { data: docNames } = await db.from("Document").select("id, filename").in("id", docIds);
+    const nameMap = new Map((docNames ?? []).map((d: { id: string; filename: string }) => [d.id, d.filename]));
+
+    let budget = VAULT_BUDGET_CHARS;
+    const parts: string[] = [];
+    for (const chunk of chunks) {
+      if (budget <= 0) break;
+      const fname = nameMap.get(chunk.documentId) ?? "Document";
+      const text = (chunk.content as string).slice(0, Math.min(2000, budget));
+      budget -= text.length;
+      parts.push(`--- ${fname} (relevance: ${((chunk.similarity as number) * 100).toFixed(0)}%) ---\n${text}`);
+    }
+    return parts.length > 0
+      ? `## KNOWLEDGE VAULT (semantically matched)\nThe following excerpts are most relevant to this section:\n\n${parts.join("\n\n")}`
+      : await getVaultBlock(db, companyId);
+  } catch {
+    return getVaultBlock(db, companyId);
+  }
+}
+
+// ── Company ───────────────────────────────────────────────────────────────────
+
+/**
+ * Loads Company + CompanyInfo and returns a formatted prompt block.
+ */
+export async function getCompanyBlock(
+  db: ReturnType<typeof createClient>,
+  companyId: string,
+): Promise<{ name: string; industry: string; website: string; block: string }> {
+  const [{ data: company }, { data: info }] = await Promise.all([
+    db.from("Company").select("name, industry, website").eq("id", companyId).maybeSingle(),
+    db.from("CompanyInfo").select("*").eq("companyId", companyId).maybeSingle(),
+  ]);
+  const parts: string[] = [];
+  if (company?.name)        parts.push(`Company: ${company.name}`);
+  if (company?.industry)    parts.push(`Industry: ${company.industry}`);
+  if (company?.website)     parts.push(`Website: ${company.website}`);
+  if (info?.products)       parts.push(`Products/Services: ${info.products}`);
+  if (info?.values)         parts.push(`Values: ${info.values}`);
+  if (info?.corePhilosophy) parts.push(`Philosophy: ${info.corePhilosophy}`);
+  if (info?.founders)       parts.push(`Founders/Team: ${info.founders}`);
+  if (info?.history)        parts.push(`History: ${info.history}`);
+  if (info?.achievements)   parts.push(`Achievements: ${info.achievements}`);
+  if (info?.bulkContent)    parts.push(`\nWRITING DNA:\n${info.bulkContent}`);
+  return {
+    name:     company?.name     ?? "the organisation",
+    industry: company?.industry ?? "",
+    website:  company?.website  ?? "",
+    block: parts.length > 0 ? `## COMPANY INFORMATION\n${parts.join("\n")}` : "",
+  };
+}
+
+// ── Lessons ───────────────────────────────────────────────────────────────────
+
+/**
+ * Loads active Lessons for a company and returns a formatted prompt block.
+ * Optionally filtered by contentType (loads global + matching type).
+ */
+export async function getLessonsBlock(
+  db: ReturnType<typeof createClient>,
+  companyId: string,
+  contentType?: string,
+): Promise<string> {
+  const { data: lessons } = await db
+    .from("Lesson")
+    .select("feedback, severity, contentType")
+    .eq("companyId", companyId)
+    .eq("active", true)
+    .order("severity", { ascending: false })
+    .limit(50);
+  if (!lessons || lessons.length === 0) return "";
+  const filtered = contentType
+    ? (lessons as { feedback: string; severity: string; contentType: string | null }[])
+        .filter((l) => !l.contentType || l.contentType === contentType)
+    : (lessons as { feedback: string; severity: string; contentType: string | null }[]);
+  if (filtered.length === 0) return "";
+  const lines = filtered.map((l) => {
+    const p = l.severity === "high" ? "MUST" : l.severity === "medium" ? "SHOULD" : "PREFER";
+    return `- [${p}] ${l.feedback}`;
+  });
+  return `## LEARNED RULES (apply these to every response)\n${lines.join("\n")}`;
+}
+
+// ── Grant examples ────────────────────────────────────────────────────────────
+
+/**
+ * Loads GrantExamples and returns a formatted prompt block.
+ * Prioritises examples matching sectionFilter, falls back to all examples.
+ */
+export async function getExamplesBlock(
+  db: ReturnType<typeof createClient>,
+  companyId: string,
+  sectionFilter?: string,
+): Promise<string> {
+  const { data: examples } = await db
+    .from("GrantExample")
+    .select("*")
+    .eq("companyId", companyId)
+    .order("updatedAt", { ascending: false })
+    .limit(20);
+  if (!examples || examples.length === 0) return "";
+  type Example = Record<string, unknown>;
+  let relevant: Example[] = sectionFilter
+    ? (examples as Example[]).filter((e) => e.section === sectionFilter || e.section === "Full Application")
+    : (examples as Example[]);
+  if (relevant.length === 0) relevant = examples as Example[];
+  const top = relevant.slice(0, 3);
+  const blocks = top.map((e, i) => {
+    const header = [`EXAMPLE ${i + 1}: ${e.title}`];
+    if (e.grantName) header.push(`Grant: ${e.grantName}`);
+    if (e.funder)    header.push(`Funder: ${e.funder}`);
+    if (e.outcome)   header.push(`Outcome: ${e.outcome}`);
+    if (e.notes)     header.push(`Why it worked: ${e.notes}`);
+    const content = typeof e.content === "string" ? (e.content as string).slice(0, 2000) : "";
+    return `${header.join(" | ")}\n${content}`;
+  });
+  return `## REFERENCE EXAMPLES (study tone, structure, and specificity)\n\n${blocks.join("\n\n---\n\n")}`;
+}
+
 // ── Funder template ───────────────────────────────────────────────────────────
 
 /**

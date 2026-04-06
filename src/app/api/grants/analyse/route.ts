@@ -230,18 +230,16 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation:
     // so a mismatch never reaches the DB or the UI.
     const verdict = verdictFromScore(score);
 
-    // Only auto-set decision if the user hasn't manually chosen one
-    const currentDecision = (grant as Record<string, unknown>).decision as string | null;
-    const autoDecision = verdict === "Strong Fit" || verdict === "Good Fit" ? "Apply"
+    // Derive AI recommendation from verdict (always update, separate from user decision)
+    const aiRecommendation = verdict === "Strong Fit" || verdict === "Good Fit" ? "Apply"
       : verdict === "Not Eligible" ? "No" : "Maybe";
-    const decision = currentDecision ?? autoDecision;
-    const decisionUpdate = currentDecision ? {} : { decision };
 
+    // Update AI assessment fields (never touch user's decision)
     const { error: updateErr } = await db.from("Grant").update({
       aiScore: score,
       aiVerdict: verdict,
+      aiRecommendation: aiRecommendation,
       aiAnalysis: analysis,
-      ...decisionUpdate,
       updatedAt: new Date().toISOString(),
     }).eq("id", grantId);
 
@@ -250,7 +248,11 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation:
       return NextResponse.json({ error: "Analysis succeeded but failed to save — please try again" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, analysis: { ...analysis, verdict }, decision });
+    return NextResponse.json({ 
+      success: true, 
+      analysis: { ...analysis, verdict },
+      aiRecommendation: aiRecommendation,
+    });
   } catch (err) {
     return handleApiError(err, "Grant Analyse");
   }

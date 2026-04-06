@@ -10,7 +10,7 @@ import {
 import { authFetch } from "@/lib/authFetch";
 import type { Grant } from "@/hooks/GrantsContext";
 import type { GrantAnalysis } from "./grantTypes";
-import { FitBadge, DecisionBadge, EffortBadge, DeadlineBadge } from "./GrantBadges";
+import { FitBadge, DecisionBadge, EffortBadge, DeadlineBadge, FocusBadge } from "./GrantBadges";
 import { GrantFormFields } from "./GrantFormFields";
 import { AnalysisPanel } from "./GrantAnalysisPanel";
 import type { Effort } from "./grantTypes";
@@ -219,6 +219,13 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
                     <ShieldX className="h-2.5 w-2.5" /> FAILED
                   </span>
                 )}
+                {grant.aiBrief && (grant.aiBrief as Record<string,unknown>).focusArea
+                  ? <FocusBadge
+                      primary={((grant.aiBrief as Record<string,unknown>).focusArea as { primary: string }).primary}
+                      tags={((grant.aiBrief as Record<string,unknown>).focusArea as { tags?: string[] }).tags}
+                      size="xs"
+                    />
+                  : null}
                 {grant.crmStatus && (
                   <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold border ${
                     grant.crmStatus === "Won"       ? "bg-green-100 text-green-700 border-green-300" :

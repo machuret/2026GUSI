@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import {
   ALL_SECTIONS, SECTION_META, SectionName, Grant, WritingBrief, Tone, Length, FunderTemplate, FunderRequirements,
+  FOCUS_CATEGORIES, type FocusCategory,
 } from "./types";
 import { authFetch } from "@/lib/authFetch";
 
@@ -285,6 +286,24 @@ export default function LeftPanel({
             </>
           ) : briefExpanded ? (
             <div className="space-y-2.5 text-xs">
+              {brief.focusArea?.primary && (() => {
+                const focusMeta = FOCUS_CATEGORIES[brief.focusArea.primary as FocusCategory] ?? FOCUS_CATEGORIES["Other"];
+                return (
+                  <div className="rounded-lg border p-2.5" style={{ background: "white" }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">🏷 Detected Focus</p>
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold ${focusMeta.color}`}>
+                      {focusMeta.icon} {brief.focusArea.primary}
+                    </span>
+                    {brief.focusArea.tags && brief.focusArea.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {brief.focusArea.tags.map((tag: string) => (
+                          <span key={tag} className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600 border border-gray-200">{tag}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="rounded-lg bg-white border border-brand-100 p-2.5">
                 <p className="font-semibold text-brand-800 mb-1">🎯 Winning Angle</p>
                 <p className="text-brand-700 italic leading-relaxed">{brief.winningAngle}</p>

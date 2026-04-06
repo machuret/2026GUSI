@@ -1,5 +1,5 @@
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { handleApiError } from "@/lib/apiHelpers";
@@ -45,6 +45,7 @@ const sectionSchema = z.object({
   length: z.enum(["concise", "standard", "detailed"]).default("standard"),
   previousSections: z.record(z.string()).optional(),
   customInstructions: z.string().optional(),
+  regenNote: z.string().optional(),
   requirements: z.record(z.unknown()).optional(),
 });
 
@@ -60,6 +61,69 @@ const MAX_TOKEN_TARGETS: Record<string, number> = {
   concise: 600,
   standard: 1200,
   detailed: 2000,
+};
+
+const EMPHASIS_MAP: Record<string, { lead: string; suppress: string; keywords: string }> = {
+  "Technology & Innovation": {
+    lead:     "the technical solution, how it works, its novelty/differentiation, scalability, deployment approach, proof-of-concept evidence, and any IP or proprietary methodology",
+    suppress: "anecdotal program stories, general community narrative, and capacity-building examples unrelated to the tech itself",
+    keywords: "platform, algorithm, scalable, system, deploy, data pipeline, proof of concept, technical validation, interoperable",
+  },
+  "Research & Development": {
+    lead:     "research questions, methodology, team credentials/publications, expected outcomes, how findings will be disseminated, and the gap in existing knowledge",
+    suppress: "operational program detail, general community impact stories",
+    keywords: "hypothesis, methodology, peer review, findings, evidence base, pilot study, R&D, commercialisation pathway",
+  },
+  "Training & Capacity Building": {
+    lead:     "curriculum design, learning outcomes, participant numbers, facilitator qualifications, assessment methods, and long-term skill retention evidence",
+    suppress: "technology infrastructure detail, product roadmap, financial projections",
+    keywords: "training, skills development, cohorts, modules, facilitators, accredited, certification, workforce capability",
+  },
+  "Community Development": {
+    lead:     "community need evidence, co-design with community, partnerships, geographic reach, lived-experience voices, and measurable social outcomes",
+    suppress: "technology stack, financial modelling, academic research framing",
+    keywords: "grassroots, community-led, partnership, local, co-design, belonging, social cohesion, inclusion",
+  },
+  "Health & Wellbeing": {
+    lead:     "clinical or wellbeing evidence, target population health needs, intervention approach, health outcome metrics, and alignment with public health priorities",
+    suppress: "technology features without clinical validation, general capacity narrative",
+    keywords: "health outcomes, evidence-based, clinical, wellbeing, prevention, early intervention, population health",
+  },
+  "Education & Youth": {
+    lead:     "learning outcomes, age/cohort specifics, pedagogical approach, teacher/facilitator training, and measurable academic or developmental outcomes",
+    suppress: "technology detail beyond pedagogy, adult workforce framing",
+    keywords: "students, curriculum, pedagogy, learning outcomes, engagement, school, youth, early childhood",
+  },
+  "Environment & Sustainability": {
+    lead:     "environmental impact metrics, carbon/ecological baseline, measurable sustainability outcomes, circular economy principles, and scientific evidence",
+    suppress: "social program stories unrelated to environmental outcomes",
+    keywords: "emissions, biodiversity, circular economy, net zero, ecological, sustainability, regenerative, carbon offset",
+  },
+  "Economic Development": {
+    lead:     "job creation, revenue growth potential, market opportunity, export readiness, supply-chain impact, and economic multiplier evidence",
+    suppress: "community narrative, wellbeing framing not tied to economic outcomes",
+    keywords: "jobs created, revenue, market opportunity, export, commercialisation, investment leverage, economic multiplier",
+  },
+  "Arts & Culture": {
+    lead:     "artistic vision, cultural significance, audience reach, community cultural value, and the credentials/track record of key creatives",
+    suppress: "technology or financial infrastructure detail",
+    keywords: "artistic, cultural, creative, audience, heritage, expression, community engagement, cultural value",
+  },
+  "Housing & Infrastructure": {
+    lead:     "housing need data, construction/delivery approach, partnership with planning/government bodies, affordability model, and tenancy outcomes",
+    suppress: "technology innovation framing, health or education narrative",
+    keywords: "housing supply, affordable, tenancy, infrastructure, planning, construction, social housing, amenity",
+  },
+  "Emergency Relief": {
+    lead:     "immediacy of need, speed of response capability, geographic reach of emergency, coordination with official bodies, and accountability for rapid expenditure",
+    suppress: "long-term program design, research framing",
+    keywords: "emergency, rapid response, relief, crisis, coordination, immediate need, distribution, resilience",
+  },
+  "Diversity & Inclusion": {
+    lead:     "representation data, systemic barriers being addressed, co-design with affected groups, intersectionality, and measurable equity outcomes",
+    suppress: "technology product framing, general program volume statistics",
+    keywords: "equity, inclusion, representation, intersectionality, belonging, cultural safety, accessible, barrier reduction",
+  },
 };
 
 const SECTION_INSTRUCTIONS: Record<Section, string> = {
@@ -111,6 +175,16 @@ function buildGusiFacts(profile: Record<string, unknown> | null, company: { comp
     });
   } else if (profile?.contactName) {
     lines.push(`\nPrimary Contact: ${profile.contactName}${profile.contactRole ? `, ${profile.contactRole}` : ""}`);
+  }
+
+  // ── Signal what is NOT documented so the AI doesn't invent it ──────────────
+  const notDocumented: string[] = [];
+  if (!profile?.keyActivities)  notDocumented.push("specific learner/beneficiary counts");
+  if (!profile?.annualRevenue)  notDocumented.push("annual revenue or financials");
+  if (!profile?.teamSize)       notDocumented.push("exact team size");
+  if (!profile?.pastGrantsWon)  notDocumented.push("specific past grants or funding history");
+  if (notDocumented.length > 0) {
+    lines.push(`\n⚠ NOT DOCUMENTED (do NOT invent these — describe qualitatively or omit):\n${notDocumented.map((x) => `- ${x}`).join("\n")}`);
   }
 
   return `## GUSI FACTS — USE THESE BY NAME IN EVERY SECTION\nThese are real, verified facts about the applicant organisation. Ground your writing in these specifics:\n\n${lines.join("\n")}`;
@@ -318,9 +392,49 @@ ${crawledContent.slice(0, 12000)}`;
 
     const masterContext = contextParts.join("\n\n");
 
+    // ── Date context (injected into every mode) ────────────────────────────
+    const now = new Date();
+    const todayStr = now.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const deadlineDateStr = grant.deadlineDate
+      ? (() => {
+          const d = new Date(grant.deadlineDate as string);
+          const days = Math.ceil((d.getTime() - now.getTime()) / 86400000);
+          const fmt = d.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
+          if (days < 0) return `${fmt} (EXPIRED ${Math.abs(days)} days ago)`;
+          if (days === 0) return `${fmt} (Due TODAY)`;
+          return `${fmt} (${days} days from today)`;
+        })()
+      : "Not specified";
+    const dateContextBlock = `## DATE CONTEXT — CRITICAL
+Today's Date: ${todayStr}
+Grant Deadline: ${deadlineDateStr}${grant.projectDuration ? `\nProject Duration: ${grant.projectDuration as string}` : ""}
+
+DATE RULES:
+- All future dates and timelines you write MUST be calculated from today (${todayStr})
+- Never reference any date in the past as if it is upcoming
+- For project timelines (milestones, deliverables, reporting), calculate real calendar dates using today as Month 1
+- If a deadline is given, work backwards from it to set realistic milestone dates
+- Never invent a year — use the actual current year (${now.getFullYear()}) and near-future years only`;
+
     // ── MODE: brief ────────────────────────────────────────────────────────
     if (mode === "brief") {
       const examplesBlock = buildExamplesContext();
+      const FOCUS_CATEGORY_LIST = [
+        "Training & Capacity Building",
+        "Technology & Innovation",
+        "Research & Development",
+        "Community Development",
+        "Health & Wellbeing",
+        "Environment & Sustainability",
+        "Education & Youth",
+        "Arts & Culture",
+        "Housing & Infrastructure",
+        "Economic Development",
+        "Emergency Relief",
+        "Diversity & Inclusion",
+        "Other",
+      ].join(" | ");
+
       const systemPrompt = `You are a senior grant writing strategist. Analyse the grant and organisation data provided and produce a strategic writing brief that will guide the entire application.${examplesBlock ? "\n\nYou have been given reference examples of real grant applications. Study their tone, structure, and specificity to inform your strategic brief." : ""}
 
 Return ONLY valid JSON — no markdown, no explanation:
@@ -332,19 +446,19 @@ Return ONLY valid JSON — no markdown, no explanation:
   "suggestedAsk": "<amount or range to request>",
   "toneGuidance": "<brief style guidance for this specific funder>",
   "winningAngle": "<the single most compelling narrative angle for this application — 1-2 sentences>",
-  "keywordsToUse": ["<funder keyword 1>", "<funder keyword 2>", "<funder keyword 3>"]
-}`;
+  "keywordsToUse": ["<funder keyword 1>", "<funder keyword 2>", "<funder keyword 3>"],
+  "focusArea": {
+    "primary": "<one of: ${FOCUS_CATEGORY_LIST}>",
+    "tags": ["<specific sub-topic 1>", "<specific sub-topic 2>", "<specific sub-topic 3>"]
+  }
+}
 
-      // Add deadline context to brief
-      const deadlineStr = grant.deadlineDate ? (() => {
-        const d = new Date(grant.deadlineDate as string);
-        const days = Math.ceil((d.getTime() - Date.now()) / 86400000);
-        if (days < 0) return `EXPIRED (${Math.abs(days)} days ago)`;
-        if (days === 0) return "Due TODAY";
-        return `${days} days remaining (${d.toLocaleDateString("en-AU")})`;
-      })() : "No deadline specified";
+focusArea rules:
+- primary: pick exactly ONE category from the list that best describes what this grant funds
+- tags: 2–4 short, specific sub-topics or activity types relevant to this grant (e.g. "digital literacy", "rural outreach", "STEM education")
+- Base detection on the grant name, funder description, eligibility criteria, and crawled page content`;
 
-      const userPrompt = `Analyse this grant opportunity and organisation profile, then produce the strategic writing brief.\n\nDEADLINE: ${deadlineStr}\n\n${masterContext}${examplesBlock ? `\n\n${examplesBlock}` : ""}`;
+      const userPrompt = `Analyse this grant opportunity and organisation profile, then produce the strategic writing brief.\n\n${dateContextBlock}\n\n${masterContext}${examplesBlock ? `\n\n${examplesBlock}` : ""}`;
 
       const result = await callOpenAIWithUsage({
         systemPrompt,
@@ -381,7 +495,7 @@ Return ONLY valid JSON — no markdown, no explanation:
     }
 
     // ── MODE: section ──────────────────────────────────────────────────────
-    const { section, brief, tone, length, previousSections, customInstructions, requirements } = parsed.data as z.infer<typeof sectionSchema>;
+    const { section, brief, tone, length, previousSections, customInstructions, regenNote, requirements } = parsed.data as z.infer<typeof sectionSchema>;
 
     // ── Contact Details: build directly from profile fields — no AI needed ──
     if (section === "Contact Details") {
@@ -427,7 +541,10 @@ Return ONLY valid JSON — no markdown, no explanation:
       ? `\n\n## FUNDER EVALUATION CRITERIA (your writing MUST address each of these)\n${criteria.map((c: string) => `- ${c}`).join("\n")}${evalRubric.length > 0 ? `\n\nScoring Rubric:\n${evalRubric.map((r: string) => `- ${r}`).join("\n")}` : ""}${mandatoryReqs.length > 0 ? `\n\nMandatory Requirements (hard gates — must be addressed):\n${mandatoryReqs.map((r: string) => `- ${r}`).join("\n")}` : ""}`
       : "";
 
-    const briefBlock = `## STRATEGIC WRITING BRIEF\nFunder Priorities: ${(brief.funderPriorities as string[] | undefined)?.join(", ") ?? "N/A"}
+    const suggestedAsk = (brief.suggestedAsk as string | undefined)?.trim() || null;
+
+    const briefBlock = `## STRATEGIC WRITING BRIEF${suggestedAsk ? `\n⚠ REQUESTED FUNDING AMOUNT (LOCKED): ${suggestedAsk} — every section MUST use this exact figure. Never state a different amount anywhere in the application.` : ""}
+Funder Priorities: ${(brief.funderPriorities as string[] | undefined)?.join(", ") ?? "N/A"}
 Key Themes: ${(brief.keyThemes as string[] | undefined)?.join(", ") ?? "N/A"}
 Winning Angle: ${brief.winningAngle ?? "N/A"}
 Tone Guidance: ${brief.toneGuidance ?? "N/A"}
@@ -437,33 +554,52 @@ Eligibility Risks to address: ${(brief.eligibilityRisks as string[] | undefined)
 
     const sectionExamplesBlock = buildExamplesContext(section);
 
+    const focusAreaObj = brief.focusArea as { primary?: string; tags?: string[] } | undefined;
+    const focusPrimary = focusAreaObj?.primary?.trim();
+    const focusTags    = focusAreaObj?.tags?.filter(Boolean) ?? [];
+    const emphasisRule = focusPrimary ? EMPHASIS_MAP[focusPrimary] : null;
+
+    const focusEmphasisBlock = emphasisRule
+      ? `\n\n## CONTENT EMPHASIS FOR THIS GRANT TYPE: ${focusPrimary}${focusTags.length > 0 ? ` (${focusTags.join(", ")})` : ""}
+LEAD WITH: ${emphasisRule.lead}
+SUPPRESS OR MINIMISE: ${emphasisRule.suppress}
+USE THESE DOMAIN KEYWORDS: ${emphasisRule.keywords}
+This is a ${focusPrimary!} grant — every paragraph should reinforce this framing. Do NOT default to generic program storytelling if the funder is looking for ${focusPrimary!.toLowerCase()} outcomes.`
+      : "";
+
     const systemPrompt = `You are a professional grant writer with 15 years of experience winning competitive grants. You write compelling, specific, evidence-based applications that speak directly to funders' priorities.
 
 WRITING RULES:
 - ${toneInstruction}
-- Target word count: ~${wordTarget} words for this section
+- MAXIMUM word count: ${wordTarget} words — stop the moment your point is made. Never pad or repeat to reach a length.
 - Mirror the funder's own language and keywords back to them
 - Be specific — names, numbers, dates, outcomes — never vague
 - Every claim must be grounded in the data provided
 - Do NOT use generic grant-writing clichés ("passionate about", "committed to excellence")
 - Write flowing prose, not bullet points (unless the section calls for a list)
-- This section will be read by a grant assessor — make it easy to assess against criteria${sectionExamplesBlock ? "\n- Study the REFERENCE EXAMPLES provided — match their quality, specificity, and professional tone. Do NOT copy them directly, but learn from their structure and approach." : ""}${customInstructions ? `\n\nUSER INSTRUCTIONS FOR THIS SECTION (follow these closely):\n${customInstructions}` : ""}`;
+- This section will be read by a grant assessor — make it easy to assess against criteria${focusEmphasisBlock}
+- NO REPETITION: every statistic, achievement, or example may appear in only ONE section. If it was used in a previous section, omit it here and choose a different supporting detail
+- DATE ACCURACY (critical): all dates, years, and project timelines must be grounded in the DATE CONTEXT block in the user prompt — never use past dates as future ones, never guess a year
+- NUMBERS INTEGRITY (critical): never invent specific figures — learner counts, beneficiary numbers, program reach, revenue, team size, grant history — unless the exact number is explicitly stated in the GUSI FACTS, vault, or profile. If a number is not documented, describe impact qualitatively (e.g. "across multiple cohorts", "serving regional communities") or state that data collection is underway. Invented statistics that contradict real records will disqualify an application${suggestedAsk ? `
+- FUNDING CONSISTENCY (critical): The total funding request is ${suggestedAsk}. Every section must state this same figure. Never reference a different amount — assessors will reject applications with inconsistent numbers.${section === "Budget & Budget Narrative" ? ` For this Budget section, all line items MUST sum exactly to ${suggestedAsk}.` : ""}` : ""}${sectionExamplesBlock ? "\n- Study the REFERENCE EXAMPLES provided — match their quality, specificity, and professional tone. Do NOT copy them directly, but learn from their structure and approach." : ""}${customInstructions ? `\n\nPERMANENT SECTION INSTRUCTIONS (applied every time this section is generated — follow closely):\n${customInstructions}` : ""}${regenNote ? `\n\nONE-SHOT REGEN NOTE (for this regeneration only — override or extend the permanent instructions above as needed):\n${regenNote}` : ""}`;
 
     // Build previousSections context block
     let prevSectionsBlock = "";
     if (previousSections && Object.keys(previousSections).length > 0) {
       const entries = Object.entries(previousSections).map(([name, text]) => {
         const words = text.trim().split(/\s+/).length;
-        const preview = text.slice(0, 300).trim();
-        return `### ${name} (${words} words)\n${preview}${text.length > 300 ? "…" : ""}`;
+        const preview = text.slice(0, 2500).trim();
+        return `### ${name} (${words} words)\n${preview}${text.length > 2500 ? "\u2026" : ""}`;
       });
-      prevSectionsBlock = `\n\n## PREVIOUSLY WRITTEN SECTIONS (maintain consistency — do not repeat the same phrases or examples)\n${entries.join("\n\n")}`;
+      prevSectionsBlock = `\n\n## PREVIOUSLY WRITTEN SECTIONS\nCRITICAL — scan every section below before writing. Do NOT reuse any specific statistic, percentage, dollar figure, program name, achievement, or anecdote that already appears here. Each section must introduce only new, distinct information.\n${entries.join("\n\n")}`;
     }
 
     const userPrompt = `Write the "${section}" section of this grant application.
 
 SECTION INSTRUCTIONS:
 ${SECTION_INSTRUCTIONS[section]}
+
+${dateContextBlock}
 
 ${briefBlock}
 
