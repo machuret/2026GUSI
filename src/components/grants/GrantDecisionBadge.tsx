@@ -35,15 +35,19 @@ export function GrantDecisionBadge({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" role="region" aria-label="Grant decision information">
       {/* AI Recommendation */}
       {aiRecommendation && (
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500 font-medium">AI Recommends:</span>
-          <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${getBadgeColor(aiRecommendation)}`}>
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">AI Recommends:</span>
+          <span 
+            className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${getBadgeColor(aiRecommendation)}`}
+            role="status"
+            aria-label={`AI recommendation: ${aiRecommendation}${aiScore ? ` with ${aiScore}% fit score` : ''}`}
+          >
             {aiRecommendation}
             {aiScore !== null && aiScore !== undefined && (
-              <span className="opacity-70">({aiScore}%)</span>
+              <span className="opacity-70" aria-hidden="true">({aiScore}%)</span>
             )}
           </span>
         </div>
@@ -52,8 +56,12 @@ export function GrantDecisionBadge({
       {/* User Decision */}
       {decision && (
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500 font-medium">Your Decision:</span>
-          <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${getBadgeColor(decision)}`}>
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Your Decision:</span>
+          <span 
+            className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${getBadgeColor(decision)}`}
+            role="status"
+            aria-label={`Your decision: ${decision}`}
+          >
             {decision}
           </span>
         </div>
@@ -61,14 +69,19 @@ export function GrantDecisionBadge({
 
       {/* Override Warning */}
       {isOverride && showOverrideWarning && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2">
-          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+        <div 
+          className="flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-2"
+          role="alert"
+          aria-live="polite"
+          aria-label="AI recommendation override warning"
+        >
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" aria-hidden="true" />
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-amber-900">
+            <p className="text-xs font-medium text-amber-900 dark:text-amber-200">
               You overrode AI recommendation
             </p>
             {decisionReason && (
-              <p className="text-xs text-amber-700 mt-0.5">
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
                 Reason: {decisionReason}
               </p>
             )}
@@ -78,7 +91,7 @@ export function GrantDecisionBadge({
 
       {/* No AI Recommendation Yet */}
       {!aiRecommendation && !decision && (
-        <div className="text-xs text-gray-400 italic">
+        <div className="text-xs text-gray-400 dark:text-gray-500 italic" role="status">
           Run AI analysis to get recommendation
         </div>
       )}

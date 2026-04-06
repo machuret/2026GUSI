@@ -13,6 +13,7 @@ import type { GrantAnalysis } from "./grantTypes";
 import { FitBadge, DecisionBadge, EffortBadge, DeadlineBadge, FocusBadge } from "./GrantBadges";
 import { GrantFormFields } from "./GrantFormFields";
 import { AnalysisPanel } from "./GrantAnalysisPanel";
+import { GrantDecisionBadge } from "@/components/grants/GrantDecisionBadge";
 import type { Effort } from "./grantTypes";
 
 interface Props {
@@ -388,6 +389,19 @@ export function GrantRow({ grant, onUpdate, onDelete, companyDNA, selected, onTo
                 {analysing ? "AI is analysing your fit for this grant…" : "AI is researching and filling missing fields…"}
               </div>
             )}
+            {/* AI Recommendation vs User Decision */}
+            {(grant.aiRecommendation || grant.decision) && (
+              <div className="mb-4">
+                <GrantDecisionBadge
+                  aiRecommendation={grant.aiRecommendation}
+                  decision={grant.decision}
+                  decisionReason={grant.decisionReason}
+                  aiScore={grant.aiScore}
+                  showOverrideWarning={true}
+                />
+              </div>
+            )}
+            
             {analysis && (
               <>
                 <AnalysisPanel
