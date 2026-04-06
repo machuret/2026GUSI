@@ -256,6 +256,8 @@ export async function POST(req: NextRequest) {
       { data: allExamples },
       lessons,
       { data: funderTemplates },
+      { data: budgetLineItems },
+      { data: budgetTemplates },
     ] = await Promise.all([
       db.from("Grant").select("*").eq("id", grantId).maybeSingle(),
       db.from("GrantProfile").select("*").eq("companyId", DEMO_COMPANY_ID).maybeSingle(),
@@ -264,6 +266,8 @@ export async function POST(req: NextRequest) {
       db.from("GrantExample").select("*").eq("companyId", DEMO_COMPANY_ID).order("updatedAt", { ascending: false }).limit(20),
       getLessonsContext({ companyId: DEMO_COMPANY_ID, contentType: "grant" }),
       db.from("FunderTemplate").select("*").eq("companyId", DEMO_COMPANY_ID),
+      db.from("BudgetLineItem").select("*").eq("companyId", DEMO_COMPANY_ID).eq("active", true).order("category", { ascending: true }),
+      db.from("BudgetTemplate").select("*").eq("companyId", DEMO_COMPANY_ID).eq("active", true),
     ]);
 
     if (grantErr || !grant) {
@@ -356,6 +360,74 @@ ${crawledContent.slice(0, 12000)}`;
       });
       return `## REFERENCE EXAMPLES (real grant applications — study the tone, structure, and specificity)\n\n${blocks.join("\n\n---\n\n")}`;
     }
+
+    // ── Build budget template block ────────────────────────────────────────
+    const buildBudgetContext = (grantType?: string, requestedAmount?: string): string => {
+      if (!budgetLineItems || budgetLineItems.length === 0) return "";
+      
+      // Find matching template by grant type
+      const focusAreaObj = (grant.aiBrief as Record<string, unknown> | null)?.focusArea as { primary?: string } | undefined;
+      const grantFocusArea = grantType || focusAreaObj?.primary;
+      const matchingTemplate = budgetTemplates?.find(
+        (t: Record<string, unknown>) => t.grantType === grantFocusArea
+      ) || budgetTemplates?.find((t: Record<string, unknown>) => t.grantType === "General");
+
+      const lines: string[] = [
+        "## GUSI BUDGET TEMPLATE — REAL UNIT COSTS",
+        "⚠ CRITICAL: Use these ACTUAL costs, not AI estimates. Every budget line item must be grounded in this template.",
+        ""
+      ];
+
+      if (matchingTemplate) {
+        lines.push(`Template: ${matchingTemplate.name}`);
+        lines.push(`Grant Type: ${matchingTemplate.grantType}`);
+        lines.push(`Typical Range: ${matchingTemplate.typicalAmount}`);
+        lines.push(`Overhead Rate: ${matchingTemplate.overheadRate}%`);
+        lines.push("");
+        lines.push("Recommended Allocation:");
+        const allocations = matchingTemplate.allocations as { category: string; percentage: number; notes: string }[];
+        allocations.forEach((a) => {
+          lines.push(`  - ${a.category}: ${a.percentage}% — ${a.notes}`);
+        });
+        lines.push("");
+      }
+
+      lines.push("AVAILABLE LINE ITEMS (use these exact costs):");
+      lines.push("");
+
+      const byCategory = budgetLineItems.reduce((acc: Record<string, unknown[]>, item: Record<string, unknown>) => {
+        const cat = item.category as string;
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(item);
+        return acc;
+      }, {});
+
+      Object.entries(byCategory).forEach(([category, items]) => {
+        lines.push(`### ${category}`);
+        (items as Record<string, unknown>[]).forEach((item) => {
+          const cost = `$${Number(item.unitCost).toFixed(2)}`;
+          const unit = item.unitType as string;
+          const qty = item.defaultQuantity ? ` (typical: ${item.defaultQuantity} ${unit})` : "";
+          lines.push(`  - ${item.name}: ${cost}/${unit}${qty}`);
+          if (item.description) lines.push(`    ${item.description}`);
+          if (item.notes) lines.push(`    Note: ${item.notes}`);
+        });
+        lines.push("");
+      });
+
+      lines.push("BUDGET RULES:");
+      lines.push("1. Use ONLY the unit costs listed above — never invent costs");
+      lines.push("2. Calculate totals by multiplying unit cost × quantity");
+      lines.push("3. All line items must sum to the requested funding amount");
+      lines.push("4. Include overhead/indirect costs at the template rate");
+      lines.push("5. Justify each line item by tying it to specific project activities");
+      lines.push("6. Show calculations clearly (e.g., 'Senior Developer: $85/hr × 160 hrs = $13,600')");
+      if (requestedAmount) {
+        lines.push(`7. TOTAL BUDGET MUST EQUAL: ${requestedAmount}`);
+      }
+
+      return lines.join("\n");
+    };
 
     // ── Build funder template block ────────────────────────────────────────
     let funderTemplateBlock = "";
@@ -594,6 +666,11 @@ WRITING RULES:
       prevSectionsBlock = `\n\n## PREVIOUSLY WRITTEN SECTIONS\nCRITICAL — scan every section below before writing. Do NOT reuse any specific statistic, percentage, dollar figure, program name, achievement, or anecdote that already appears here. Each section must introduce only new, distinct information.\n${entries.join("\n\n")}`;
     }
 
+    // Build budget context block for Budget & Budget Narrative section
+    const budgetContextBlock = section === "Budget & Budget Narrative" 
+      ? `\n\n${buildBudgetContext(focusPrimary, suggestedAsk ?? undefined)}`
+      : "";
+
     const userPrompt = `Write the "${section}" section of this grant application.
 
 SECTION INSTRUCTIONS:
@@ -601,7 +678,7 @@ ${SECTION_INSTRUCTIONS[section]}
 
 ${dateContextBlock}
 
-${briefBlock}
+${briefBlock}${budgetContextBlock}
 
 FULL CONTEXT:
 ${masterContext}
