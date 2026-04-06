@@ -13,6 +13,8 @@ import DraftsTab from "./DraftsTab";
 import { useBuilderBrief } from "./useBuilderBrief";
 import { useBuilderGeneration } from "./useBuilderGeneration";
 import { useBuilderDrafts } from "./useBuilderDrafts";
+import { useBuilderValidation } from "./useBuilderValidation";
+import { ValidationWarnings } from "./ValidationWarnings";
 
 export default function GrantBuilderPage() {
   const searchParams  = useSearchParams();
@@ -31,6 +33,7 @@ export default function GrantBuilderPage() {
   const [saved,     setSaved]     = useState(false);
   const [activeTab, setActiveTab] = useState<"builder" | "drafts">("builder");
   const [copied,    setCopied]    = useState<string | null>(null);
+  const [validationAcknowledged, setValidationAcknowledged] = useState(false);
 
   // ── Derived (memoized to avoid redundant recomputation on every render) ──────
   const selectedGrant = useMemo(() => grants.find((g) => g.id === selectedGrantId) ?? null, [grants, selectedGrantId]);
@@ -70,6 +73,8 @@ export default function GrantBuilderPage() {
   // ── Feature hooks ────────────────────────────────────────────────────────────
   const brief = useBuilderBrief({ selectedGrantId, grants });
 
+  const validation = useBuilderValidation({ grant: selectedGrant });
+
   const generation = useBuilderGeneration({
     selectedGrantId, brief: brief.brief, enabledList, tone, length,
     sections, setSections, setSaved, customInstructions,
@@ -93,6 +98,7 @@ export default function GrantBuilderPage() {
     setSections({});
     setCustomInstructions({});
     generation.resetGenerationState();
+    setValidationAcknowledged(false);
   }, [brief.setBrief, brief.clearBriefError, generation.resetGenerationState]);
 
   const handleToggleSection = useCallback((s: SectionName, on: boolean) => {
@@ -250,6 +256,9 @@ export default function GrantBuilderPage() {
               next.has(c) ? next.delete(c) : next.add(c);
               return next;
             })}
+            validation={validation}
+            validationAcknowledged={validationAcknowledged}
+            onAcknowledgeValidation={() => setValidationAcknowledged(true)}
           />
           <DocumentPanel
             enabledList={enabledList}

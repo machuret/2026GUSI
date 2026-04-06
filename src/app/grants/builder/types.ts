@@ -1,6 +1,6 @@
 import type { Grant as FullGrant } from "@/hooks/GrantsContext";
 
-export type Grant = Pick<FullGrant, "id" | "name" | "founder" | "amount" | "deadlineDate" | "matchScore" | "aiVerdict" | "url" | "decision" | "crmStatus" | "aiBrief" | "geographicScope" | "complexityLabel" | "fitScore">;
+export type Grant = Pick<FullGrant, "id" | "name" | "founder" | "amount" | "deadlineDate" | "matchScore" | "aiVerdict" | "url" | "decision" | "crmStatus" | "aiBrief" | "geographicScope" | "complexityLabel" | "fitScore" | "aiScore" | "validationStatus" | "eligibility">;
 
 export const FOCUS_CATEGORIES = {
   "Training & Capacity Building": { color: "bg-blue-100 text-blue-700 border-blue-200",     icon: "🎓" },
