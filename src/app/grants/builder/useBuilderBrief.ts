@@ -28,7 +28,7 @@ export function useBuilderBrief({ selectedGrantId, grants }: Options) {
         setCheckedCriteria(new Set());
         return;
       }
-      const res  = await authFetch(edgeFn("grant-write"), {
+      const res  = await authFetch(edgeFn("grant-brief"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ grantId, mode: "requirements" }),
@@ -56,7 +56,7 @@ export function useBuilderBrief({ selectedGrantId, grants }: Options) {
         fetchRequirements(selectedGrantId);
         return;
       }
-      const res  = await authFetch(edgeFn("grant-write"), {
+      const res  = await authFetch(edgeFn("grant-brief"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ grantId: selectedGrantId, mode: "brief" }),

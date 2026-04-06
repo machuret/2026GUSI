@@ -1,13 +1,10 @@
 /**
  * grant-write — Supabase Edge Function
  *
- * Handles all three grant-writing modes:
- *   brief       → analyse grant + org, return strategic writing brief (JSON)
- *   requirements → extract funder evaluation criteria from crawled page (JSON)
- *   section     → generate a single grant section (streaming text)
+ * Handles one mode:
+ *   section → generate a single grant section (streaming text)
  *
- * Section mode streams raw text back to the client so the user sees live output.
- * Brief and requirements modes return standard JSON responses.
+ * For Intelligence Brief and Requirements, use the grant-brief Edge Function.
  */
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
@@ -29,7 +26,6 @@ const log = createLogger("grant-write");
 // ── Environment ───────────────────────────────────────────────────────────────
 
 const SUPABASE_URL     = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const OPENAI_API_KEY    = Deno.env.get("OPENAI_API_KEY")!;
 const DEMO_COMPANY_ID   = Deno.env.get("DEMO_COMPANY_ID") ?? "demo";
@@ -281,12 +277,11 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    // ── Auth ───────────────────────────────────────────────────────────────
-    // Verify request has apikey header (sent by client)
-    const apikey = req.headers.get("apikey");
-    if (!apikey) {
-      log.warn("Missing apikey header");
-      return json({ error: "Unauthorized - missing apikey" }, 401);
+    // ── Auth: verify Bearer token is present ──────────────────────────────
+    const authHeader = req.headers.get("authorization") ?? "";
+    if (!authHeader.startsWith("Bearer ") || authHeader.length < 20) {
+      log.warn("Missing or invalid authorization header");
+      return json({ error: "Unauthorized" }, 401);
     }
 
     const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -295,8 +290,7 @@ serve(async (req: Request) => {
     const body = await req.json();
     const { grantId, mode } = body as Record<string, unknown>;
     if (!grantId || typeof grantId !== "string") return json({ error: "grantId required" }, 400);
-    if (!mode || !["brief", "requirements", "section"].includes(mode as string))
-      return json({ error: "mode must be brief | requirements | section" }, 400);
+    if (mode !== "section") return json({ error: "mode must be section. Use grant-brief for brief/requirements." }, 400);
 
     // ── Parallel data fetch ────────────────────────────────────────────────
     const [grantRes, profileRes, company] = await Promise.all([
@@ -310,32 +304,15 @@ serve(async (req: Request) => {
 
     const crawledContent = grant.url ? await crawlUrl(grant.url as string, 12000) : "";
 
-    // ── MODE: requirements ─────────────────────────────────────────────────
-    if (mode === "requirements") {
-      if (!crawledContent || crawledContent.length < 100) {
-        return json({ success: true, requirements: { criteria: [], wordLimits: {}, evaluationRubric: [], mandatoryRequirements: [] }, note: "No crawled content — requirements could not be extracted." });
-      }
-      const sysPrompt = `You are a grant requirements analyst. Extract structured application requirements from the grant page content provided.\n\nReturn ONLY valid JSON:\n{\n  "criteria": ["<evaluation criterion 1>"],\n  "wordLimits": { "<Section Name>": <word limit as number> },\n  "evaluationRubric": ["<rubric item>"],\n  "mandatoryRequirements": ["<hard requirement>"]\n}\n\nRULES:\n- criteria: things the funder will assess — extract from headings, scoring guides, FAQs. Up to 12.\n- wordLimits: only include if explicit limits are mentioned.\n- evaluationRubric: scoring weights if mentioned.\n- mandatoryRequirements: eligibility hard gates.\n- Never invent criteria not present in the text.`;
-      const usrPrompt = `Extract grant requirements from this page.\nGrant: ${grant.name}\nFunder: ${grant.founder ?? "Unknown"}\n\nPAGE CONTENT:\n${crawledContent.slice(0, 12000)}`;
-      let requirements: Record<string, unknown> = { criteria: [], wordLimits: {}, evaluationRubric: [], mandatoryRequirements: [] };
-      try {
-        const result = await callOpenAIJson(sysPrompt, usrPrompt, 800, 0);
-        logUsage(db, "grants_requirements", result.promptTokens, result.completionTokens);
-        requirements = JSON.parse(result.content);
-      } catch { /* return empty on failure */ }
-      await db.from("Grant").update({ aiRequirements: requirements, updatedAt: new Date().toISOString() }).eq("id", grantId);
-      return json({ success: true, requirements });
-    }
-
-    // ── Fetch remaining context (shared by brief + section) ────────────────
+    // ── Fetch context ──────────────────────────────────────────────────────
     const [examplesBlock, funderTemplateBlock, lessonsBlock] = await Promise.all([
-      getExamplesBlock(db, DEMO_COMPANY_ID, mode === "section" ? (body.section as string | undefined) : undefined),
+      getExamplesBlock(db, DEMO_COMPANY_ID, body.section as string | undefined),
       getFunderTemplateBlock(db, DEMO_COMPANY_ID, (grant.founder as string | null) ?? null),
       getLessonsBlock(db, DEMO_COMPANY_ID, "grant"),
     ]);
 
-    const profileBlock  = profile ? buildProfileContext(profile) : "";
-    const grantBlock    = buildGrantContext(grant);
+    const profileBlock   = profile ? buildProfileContext(profile) : "";
+    const grantBlock     = buildGrantContext(grant);
     const gusiFactsBlock = buildGusiFacts(profile, company);
 
     const masterContext = [
@@ -348,7 +325,6 @@ serve(async (req: Request) => {
       crawledContent ? `## LIVE GRANT PAGE CONTENT (crawled from ${grant.url})\n${crawledContent}` : "",
     ].filter(Boolean).join("\n\n");
 
-    // ── Date context ───────────────────────────────────────────────────────
     const now        = new Date();
     const todayStr   = now.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     const deadlineDateStr = grant.deadlineDate
@@ -362,19 +338,6 @@ serve(async (req: Request) => {
         })()
       : "Not specified";
     const dateContextBlock = `## DATE CONTEXT — CRITICAL\nToday's Date: ${todayStr}\nGrant Deadline: ${deadlineDateStr}${grant.projectDuration ? `\nProject Duration: ${grant.projectDuration}` : ""}\n\nDATE RULES:\n- All future dates MUST be calculated from today (${todayStr})\n- Never reference any date in the past as if it is upcoming\n- For timelines, calculate real calendar dates using today as Month 1\n- Never invent a year — use the actual current year (${now.getFullYear()}) and near-future years only`;
-
-    // ── MODE: brief ────────────────────────────────────────────────────────
-    if (mode === "brief") {
-      const sysPrompt = `You are a senior grant writing strategist. Analyse the grant and organisation data and produce a strategic writing brief.${examplesBlock ? "\n\nYou have been given reference examples of real grant applications. Study their tone, structure, and specificity to inform your brief." : ""}\n\nReturn ONLY valid JSON — no markdown, no explanation:\n{\n  "funderPriorities": ["<priority 1>", "<priority 2>", "<priority 3>"],\n  "keyThemes": ["<theme 1>", "<theme 2>"],\n  "eligibilityStrengths": ["<strength 1>", "<strength 2>"],\n  "eligibilityRisks": ["<risk 1>", "<risk 2>"],\n  "suggestedAsk": "<amount or range to request>",\n  "toneGuidance": "<brief style guidance for this specific funder>",\n  "winningAngle": "<the single most compelling narrative angle — 1-2 sentences>",\n  "keywordsToUse": ["<funder keyword 1>", "<funder keyword 2>", "<funder keyword 3>"],\n  "focusArea": {\n    "primary": "<one of: ${FOCUS_CATEGORY_LIST}>",\n    "tags": ["<specific sub-topic 1>", "<specific sub-topic 2>", "<specific sub-topic 3>"]\n  }\n}\n\nfocusArea rules:\n- primary: pick exactly ONE category from the list that best describes what this grant funds\n- tags: 2–4 short, specific sub-topics relevant to this grant\n- Base detection on the grant name, funder description, eligibility criteria, and crawled page content`;
-      const usrPrompt = `Analyse this grant opportunity and organisation profile, then produce the strategic writing brief.\n\n${dateContextBlock}\n\n${masterContext}${examplesBlock ? `\n\n${examplesBlock}` : ""}`;
-      const result = await callOpenAIJson(sysPrompt, usrPrompt, 600, 0.2);
-      logUsage(db, "grants_write_brief", result.promptTokens, result.completionTokens);
-      let brief: Record<string, unknown>;
-      try { brief = JSON.parse(result.content); }
-      catch { return json({ error: "AI returned invalid brief JSON" }, 500); }
-      await db.from("Grant").update({ aiBrief: brief, updatedAt: new Date().toISOString() }).eq("id", grantId);
-      return json({ success: true, brief, grantName: grant.name });
-    }
 
     // ── MODE: section ──────────────────────────────────────────────────────
     const {
