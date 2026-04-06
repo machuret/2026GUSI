@@ -8,16 +8,10 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import {
-  buildProfileContext,
-  buildCriteriaBlock,
-  crawlUrl,
-  getFunderTemplateBlock,
-  getSemanticVaultBlock,
-  getCompanyBlock,
-  getLessonsBlock,
-  getExamplesBlock,
-} from "../_shared/grantContext.ts";
+import { buildProfileContext, crawlUrl, getFunderTemplateBlock, getCompanyBlock, getLessonsBlock, getExamplesBlock } from "../_shared/grantContext.ts";
+import { callOpenAIJson, logUsage } from "../_shared/openai.ts";
+import { FOCUS_CATEGORY_LIST } from "../_shared/sectionPrompts.ts";
+import { buildGrantContext, buildDateContextBlock } from "../_shared/grantBuilders.ts";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("grant-brief");
@@ -26,9 +20,7 @@ const log = createLogger("grant-brief");
 
 const SUPABASE_URL     = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const OPENAI_API_KEY   = Deno.env.get("OPENAI_API_KEY")!;
 const DEMO_COMPANY_ID  = Deno.env.get("DEMO_COMPANY_ID") ?? "demo";
-const MODEL            = "gpt-4o-mini";
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 
@@ -43,94 +35,6 @@ function json(data: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-// ── OpenAI JSON helper ────────────────────────────────────────────────────────
-
-async function callOpenAIJson(
-  systemPrompt: string,
-  userPrompt: string,
-  maxTokens: number,
-  temperature: number,
-): Promise<{ content: string; promptTokens: number; completionTokens: number }> {
-  const MAX_RETRIES = 2;
-  let lastErr: Error | null = null;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    if (attempt > 0) await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 500));
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-        temperature,
-        max_tokens: maxTokens,
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return {
-        content:          data.choices?.[0]?.message?.content ?? "{}",
-        promptTokens:     data.usage?.prompt_tokens     ?? 0,
-        completionTokens: data.usage?.completion_tokens ?? 0,
-      };
-    }
-    const errText = await res.text();
-    lastErr = new Error(`OpenAI ${res.status}: ${errText.slice(0, 300)}`);
-    if (![429, 500, 502, 503, 504].includes(res.status)) break;
-  }
-  throw lastErr ?? new Error("OpenAI request failed");
-}
-
-// ── Usage logger ──────────────────────────────────────────────────────────────
-
-function logUsage(
-  db: ReturnType<typeof createClient>,
-  feature: string,
-  promptTokens: number,
-  completionTokens: number,
-) {
-  const pricing = { input: 0.15, output: 0.60 };
-  const costUsd  = (promptTokens / 1_000_000) * pricing.input + (completionTokens / 1_000_000) * pricing.output;
-  void db.from("AiUsageLog").insert({
-    companyId: DEMO_COMPANY_ID, model: MODEL, feature,
-    promptTokens, completionTokens,
-    totalTokens: promptTokens + completionTokens, costUsd,
-  });
-}
-
-// ── Focus category list ───────────────────────────────────────────────────────
-
-const FOCUS_CATEGORY_LIST = [
-  "Training & Capacity Building", "Technology & Innovation", "Research & Development",
-  "Community Development", "Health & Wellbeing", "Environment & Sustainability",
-  "Education & Youth", "Arts & Culture", "Housing & Infrastructure",
-  "Economic Development", "Emergency Relief", "Diversity & Inclusion", "Other",
-].join(" | ");
-
-// ── Context builders ──────────────────────────────────────────────────────────
-
-function buildGrantContext(grant: Record<string, unknown>): string {
-  const lines = [
-    `Grant Name: ${grant.name}`,
-    grant.founder         ? `Funder / Organisation: ${grant.founder}` : null,
-    grant.amount          ? `Funding Amount: ${grant.amount}` : null,
-    grant.geographicScope ? `Geographic Scope: ${grant.geographicScope}` : null,
-    grant.eligibility     ? `Eligibility: ${grant.eligibility}` : null,
-    grant.howToApply      ? `How to Apply: ${grant.howToApply}` : null,
-    grant.projectDuration ? `Project Duration: ${grant.projectDuration}` : null,
-    grant.notes           ? `Notes: ${grant.notes}` : null,
-    grant.deadlineDate    ? `Deadline: ${grant.deadlineDate}` : null,
-  ].filter(Boolean);
-  const analysis = grant.aiAnalysis as Record<string, unknown> | null | undefined;
-  if (analysis) {
-    if (Array.isArray(analysis.strengths) && analysis.strengths.length > 0)
-      lines.push(`\nAI-Identified Strengths:\n${(analysis.strengths as string[]).map((s) => `- ${s}`).join("\n")}`);
-    if (Array.isArray(analysis.gaps) && analysis.gaps.length > 0)
-      lines.push(`\nAI-Identified Gaps/Risks:\n${(analysis.gaps as string[]).map((g) => `- ${g}`).join("\n")}`);
-  }
-  return `## GRANT DETAILS\n${lines.join("\n")}`;
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -181,7 +85,7 @@ serve(async (req: Request) => {
       let requirements: Record<string, unknown> = { criteria: [], wordLimits: {}, evaluationRubric: [], mandatoryRequirements: [] };
       try {
         const result = await callOpenAIJson(sysPrompt, usrPrompt, 800, 0);
-        logUsage(db, "grants_requirements", result.promptTokens, result.completionTokens);
+        logUsage(db, DEMO_COMPANY_ID, "grants_requirements", result.promptTokens, result.completionTokens);
         requirements = JSON.parse(result.content);
       } catch { /* return empty on failure */ }
       await db.from("Grant").update({ aiRequirements: requirements, updatedAt: new Date().toISOString() }).eq("id", grantId);
@@ -200,19 +104,7 @@ serve(async (req: Request) => {
     const profileBlock   = profile ? buildProfileContext(profile) : "";
     const grantBlock     = buildGrantContext(grant);
 
-    const now      = new Date();
-    const todayStr = now.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-    const deadlineDateStr = grant.deadlineDate
-      ? (() => {
-          const d    = new Date(grant.deadlineDate as string);
-          const days = Math.ceil((d.getTime() - now.getTime()) / 86400000);
-          const fmt  = d.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
-          if (days < 0) return `${fmt} (EXPIRED ${Math.abs(days)} days ago)`;
-          if (days === 0) return `${fmt} (Due TODAY)`;
-          return `${fmt} (${days} days from today)`;
-        })()
-      : "Not specified";
-    const dateContextBlock = `## DATE CONTEXT\nToday: ${todayStr}\nGrant Deadline: ${deadlineDateStr}`;
+    const dateContextBlock = buildDateContextBlock(grant);
 
     const masterContext = [
       grantBlock,
@@ -228,7 +120,7 @@ serve(async (req: Request) => {
     const usrPrompt = `Analyse this grant opportunity and organisation profile, then produce the strategic writing brief.\n\n${dateContextBlock}\n\n${masterContext}${examplesBlock ? `\n\n${examplesBlock}` : ""}`;
 
     const result = await callOpenAIJson(sysPrompt, usrPrompt, 600, 0.2);
-    logUsage(db, "grants_write_brief", result.promptTokens, result.completionTokens);
+    logUsage(db, DEMO_COMPANY_ID, "grants_write_brief", result.promptTokens, result.completionTokens);
 
     let brief: Record<string, unknown>;
     try { brief = JSON.parse(result.content); }
