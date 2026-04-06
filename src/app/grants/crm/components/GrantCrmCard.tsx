@@ -90,9 +90,13 @@ export function GrantCrmCard({ grant, onUpdate }: Props) {
       });
       const data = await res.json();
       if (data.success && data.filled) {
-        await onUpdate(grant.id, { ...data.filled, aiResearched: true });
-        const count = Object.keys(data.filled).length;
-        setResearchMsg(`✓ AI filled ${count} field${count !== 1 ? "s" : ""}`);
+        const updateResult = await onUpdate(grant.id, { ...data.filled, aiResearched: true }) as { success?: boolean; error?: string };
+        if (updateResult?.success !== false) {
+          const count = Object.keys(data.filled).length;
+          setResearchMsg(`✓ AI filled ${count} field${count !== 1 ? "s" : ""}`);
+        } else {
+          setResearchErr(updateResult.error || "Failed to update grant");
+        }
       } else {
         setResearchErr(data.error || "Research failed");
       }
