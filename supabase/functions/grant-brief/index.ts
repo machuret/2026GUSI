@@ -46,8 +46,8 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    // ── Auth: verify JWT via Supabase Auth ───────────────────────────────
-    const auth = await verifyRequest(req, SUPABASE_URL, SUPABASE_ANON_KEY);
+    // ── Auth: single-tenant presence check (apikey or Bearer) ────────────
+    const auth = verifyRequest(req, SUPABASE_ANON_KEY);
     if (!auth) return json({ error: "Unauthorized" }, 401);
 
     const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);

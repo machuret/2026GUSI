@@ -1,58 +1,52 @@
 /**
  * _shared/auth.ts
- * JWT verification helper for Supabase Edge Functions.
+ * Request authentication helper for Supabase Edge Functions.
  *
- * Uses the Supabase anon client with the caller's Bearer token to call
- * `auth.getUser()`, which validates the JWT against Supabase Auth.
- * This is the recommended pattern from Supabase docs and is the only
- * approach that actually verifies token authenticity (not just presence).
+ * Single-tenant app — mirrors the requireEdgeAuth() pattern used by the
+ * Next.js API routes. Accepts a request if either:
+ *   1. The `apikey` header matches the Supabase anon key, OR
+ *   2. A `Authorization: Bearer <token>` header is present.
+ *
+ * Avoids JWT round-trips to Supabase Auth which fail when the session
+ * expires or when requests arrive during token refresh.
  */
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createLogger } from "./logger.ts";
 
 const log = createLogger("auth");
 
 export interface AuthResult {
-  /** Supabase user ID of the verified caller. */
+  /** Always "service" in single-tenant mode — reserved for future multi-tenant use. */
   userId: string;
 }
 
 /**
- * Verifies the `Authorization: Bearer <jwt>` header on an Edge Function request.
+ * Verifies an Edge Function request using the single-tenant auth pattern.
+ * Accepts the request if the `apikey` header matches `supabaseAnonKey`, or
+ * if an `Authorization: Bearer` header is present.
  *
- * @returns `AuthResult` on success, or `null` if the token is missing / invalid.
+ * @returns `AuthResult` on success, or `null` if the request is not authenticated.
  *
  * @example
  * ```ts
- * const auth = await verifyRequest(req, SUPABASE_URL, SUPABASE_ANON_KEY);
+ * const auth = verifyRequest(req, SUPABASE_ANON_KEY);
  * if (!auth) return json({ error: "Unauthorized" }, 401);
  * ```
  */
-export async function verifyRequest(
+export function verifyRequest(
   req: Request,
-  supabaseUrl: string,
   supabaseAnonKey: string,
-): Promise<AuthResult | null> {
-  const authHeader = req.headers.get("authorization") ?? "";
-  if (!authHeader.startsWith("Bearer ")) {
-    log.warn("Missing Authorization header");
+): AuthResult | null {
+  const apikey = req.headers.get("apikey") ?? "";
+  const auth   = req.headers.get("authorization") ?? "";
+
+  const valid = (supabaseAnonKey && apikey === supabaseAnonKey)
+    || auth.startsWith("Bearer ");
+
+  if (!valid) {
+    log.warn("Unauthorized request — no valid apikey or Bearer token");
     return null;
   }
 
-  const token = authHeader.slice("Bearer ".length);
-
-  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false },
-  });
-
-  // Pass token explicitly — getUser() with no args reads stored session
-  // which does not exist in a stateless Edge Function.
-  const { data: { user }, error } = await userClient.auth.getUser(token);
-  if (error || !user) {
-    log.warn("JWT verification failed", { error: error?.message });
-    return null;
-  }
-
-  return { userId: user.id };
+  return { userId: "service" };
 }

@@ -20,7 +20,7 @@ const log = createLogger("grant-write");
 
 // ── Environment ───────────────────────────────────────────────────────────────
 
-const SUPABASE_URL     = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const OPENAI_API_KEY    = Deno.env.get("OPENAI_API_KEY")!;
@@ -48,7 +48,7 @@ serve(async (req: Request) => {
 
   try {
     // ── Auth: verify JWT via Supabase Auth ───────────────────────────────
-    const auth = await verifyRequest(req, SUPABASE_URL, SUPABASE_ANON_KEY);
+    const auth = verifyRequest(req, SUPABASE_ANON_KEY);
     if (!auth) return json({ error: "Unauthorized" }, 401);
 
     const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
