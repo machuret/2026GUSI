@@ -1,0 +1,7 @@
+project_id = "lciaprvesogbwolaowsj"
+
+[functions.grant-brief]
+verify_jwt = false
+
+[functions.grant-write]
+verify_jwt = false
